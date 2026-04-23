@@ -1,0 +1,19 @@
+{
+  "name": "weddingos",
+  "version": "0.1.0",
+  "private": true,
+  "description": "WeddingOS monorepo",
+  "packageManager": "pnpm@10.17.1",
+  "scripts": {
+    "dev": "pnpm -r --if-present run dev",
+    "build": "pnpm -r --if-present run build",
+    "lint": "pnpm -r --if-present run lint",
+    "test": "pnpm -r --if-present run test",
+    "typecheck": "pnpm -r --if-present run lint"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
+  }
+}
