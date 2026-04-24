@@ -1,11 +1,10 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "composite": true,
     "jsx": "preserve",
-    "lib": ["DOM", "ES2022"],
-    "types": ["node"]
+    "moduleResolution": "bundler",
+    "allowJs": true,
+    "noEmit": true
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx"],
-  "exclude": ["node_modules", "dist", ".next"]
+  "include": ["src"]
 }
