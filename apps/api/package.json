@@ -8,5 +8,10 @@
     "build": "tsc -p tsconfig.build.json",
     "lint": "tsc -p tsconfig.json --noEmit",
     "test": "node -e \"console.log('No tests yet for @weddingos/api')\""
+  },
+  "dependencies": {
+    "fastify": "^5.8.5",
+    "fastify-type-provider-zod": "^6.1.0",
+    "zod": "^4.3.6"
   }
 }
