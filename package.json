@@ -3,13 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "description": "WeddingOS monorepo",
-  "packageManager": "pnpm@10.17.1",
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "tools/*"
+  ],
   "scripts": {
-    "dev": "pnpm -r --if-present run dev",
-    "build": "pnpm -r --if-present run build",
-    "lint": "pnpm -r --if-present run lint",
-    "test": "pnpm -r --if-present run test",
-    "typecheck": "pnpm -r --if-present run lint"
+    "dev": "npm run dev --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run lint --workspaces --if-present"
   },
   "devDependencies": {
     "@types/node": "^22.15.21",
