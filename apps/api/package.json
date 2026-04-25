@@ -7,9 +7,12 @@
     "dev": "tsx watch src/main.ts",
     "build": "tsc -p tsconfig.build.json",
     "lint": "tsc -p tsconfig.json --noEmit",
-    "test": "node -e \"console.log('No tests yet for @weddingos/api')\""
+    "test": "node -e \"console.log('No tests yet for @weddingos/api')\"",
+    "storage:smoke": "tsx src/modules/shared/platform/storage/s3-storage-client.smoke.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.908.0",
+    "@aws-sdk/s3-request-presigner": "^3.908.0",
     "@prisma/client": "^7.8.0",
     "fastify": "^5.8.5",
     "fastify-type-provider-zod": "^6.1.0",
