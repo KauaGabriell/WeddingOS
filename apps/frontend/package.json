@@ -9,12 +9,13 @@
     "test": "echo \"no tests yet\""
   },
   "dependencies": {
-    "next": "latest",
-    "react": "latest",
-    "react-dom": "latest"
+    "next": "15.5.5",
+    "react": "19.1.1",
+    "react-dom": "19.1.1",
+    "styled-jsx": "5.1.6"
   },
   "devDependencies": {
-    "@types/react": "latest",
-    "@types/react-dom": "latest"
+    "@types/react": "19.1.12",
+    "@types/react-dom": "19.1.9"
   }
 }

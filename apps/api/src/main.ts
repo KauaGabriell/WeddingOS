@@ -7,15 +7,41 @@ import {
   type ZodTypeProvider,
 } from "fastify-type-provider-zod";
 import { z } from "zod";
+import { createStorageClient } from "./modules/shared/platform/storage/create-storage-client.js";
+
+const booleanFromEnv = z.preprocess((value) => {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true") {
+      return true;
+    }
+    if (normalized === "false") {
+      return false;
+    }
+  }
+
+  return value;
+}, z.boolean());
 
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   API_HOST: z.string().min(1).default("0.0.0.0"),
   API_PORT: z.coerce.number().int().min(1).max(65535).default(3001),
   CORS_ORIGIN: z.string().default("http://localhost:3000"),
+  S3_ENDPOINT: z.string().min(1).default("http://localhost:9000"),
+  S3_REGION: z.string().min(1).default("us-east-1"),
+  S3_BUCKET: z.string().min(1).default("weddingos-photos"),
+  S3_ACCESS_KEY_ID: z.string().min(1).default("minioadmin"),
+  S3_SECRET_ACCESS_KEY: z.string().min(1).default("minioadmin"),
+  S3_FORCE_PATH_STYLE: booleanFromEnv.default(true),
+  S3_SIGNED_URL_EXPIRES_IN_SECONDS: z.coerce.number().int().min(60).default(900),
 });
 
-type AppEnv = z.infer<typeof envSchema> & { corsOrigins: string[] };
+export type AppEnv = z.infer<typeof envSchema> & { corsOrigins: string[] };
 
 export function loadEnv(): AppEnv {
   const parsed = envSchema.parse(process.env);
@@ -32,6 +58,8 @@ export async function buildApp(env: AppEnv) {
   const app = Fastify({
     logger: true,
   });
+  const storageClient = createStorageClient(env);
+  app.decorate("storageClient", storageClient);
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
