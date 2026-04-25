@@ -2,7 +2,7 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "jsx": "preserve",
-    "moduleResolution": "bundler",
+    "moduleResolution": "nodenext",
     "allowJs": true,
     "noEmit": true
   },
