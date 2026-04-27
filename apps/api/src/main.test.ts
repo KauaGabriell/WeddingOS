@@ -1,7 +1,18 @@
 import assert from "node:assert/strict";
 import { PassThrough } from "node:stream";
 import { type AppEnv, buildApp } from "./main.js";
+import type { AuditLog } from "./modules/admin-backoffice/index.js";
+import type { Gift, GiftReservation } from "./modules/gift-registry/index.js";
+import type {
+  Event,
+  EventGuestEligibility,
+  Guest,
+  GuestGroup,
+  RsvpResponse,
+} from "./modules/guests-rsvp/index.js";
+import type { AdminUser, InviteToken } from "./modules/identity-access/index.js";
 import { MODULE_NAMES } from "./modules/index.js";
+import type { PhotoPost } from "./modules/photo-wall/index.js";
 import { REQUEST_ID_HEADER } from "./modules/shared/platform/logging/create-api-logger.js";
 
 function createTestEnv(): AppEnv {
@@ -110,11 +121,185 @@ async function testBuildAppKeepsModuleRegistryConnected(): Promise<void> {
   }
 }
 
+async function testDomainEntitiesAreExportedByModuleBarrels(): Promise<void> {
+  const adminUser: AdminUser = {
+    id: "admin-1",
+    name: "Admin",
+    email: "admin@example.com",
+    authProvider: "email_magic_link",
+    role: "super_admin",
+    status: "active",
+    lastLoginAt: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  const inviteToken: InviteToken = {
+    id: "invite-1",
+    guestGroupId: "group-1",
+    guestId: null,
+    tokenHash: "hash",
+    shortCode: "ABC123",
+    channel: "manual",
+    status: "issued",
+    issuedAt: new Date(),
+    expiresAt: new Date(),
+    usedAt: null,
+    revokedAt: null,
+    revokedReason: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  const guestGroup: GuestGroup = {
+    id: "group-1",
+    displayName: "Familia Silva",
+    groupCode: "SILVA",
+    allowedCompanions: 2,
+    primaryContactName: "Joao",
+    primaryContactPhone: null,
+    primaryContactEmail: null,
+    notes: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  const guest: Guest = {
+    id: "guest-1",
+    guestGroupId: "group-1",
+    fullName: "Joao Silva",
+    phone: null,
+    email: "joao@example.com",
+    isPrimary: true,
+    status: "active",
+    lastAccessAt: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  const event: Event = {
+    id: "event-1",
+    slug: "casamento",
+    name: "Casamento",
+    eventType: "wedding",
+    startsAt: new Date(),
+    location: {
+      venueName: "Igreja",
+      addressLine: "Rua A",
+      addressNumber: "100",
+      neighborhood: null,
+      city: "Sao Paulo",
+      state: "SP",
+      postalCode: null,
+      latitude: null,
+      longitude: null,
+      mapUrl: null,
+    },
+    notes: null,
+    isActive: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  const eligibility: EventGuestEligibility = {
+    id: "eligibility-1",
+    eventId: "event-1",
+    guestId: "guest-1",
+    canRsvp: true,
+    createdAt: new Date(),
+  };
+
+  const rsvpResponse: RsvpResponse = {
+    id: "rsvp-1",
+    eventId: "event-1",
+    guestId: "guest-1",
+    responseStatus: "yes",
+    companionsConfirmed: 1,
+    message: null,
+    respondedAt: new Date(),
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  const gift: Gift = {
+    id: "gift-1",
+    name: "Jogo de panelas",
+    category: "cozinha",
+    description: null,
+    estimatedValue: 199.9,
+    imageUrl: null,
+    displayOrder: 1,
+    status: "available",
+    isActive: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  const giftReservation: GiftReservation = {
+    id: "reservation-1",
+    giftId: "gift-1",
+    guestId: "guest-1",
+    reservationStatus: "active",
+    purchaseNotes: null,
+    reservedAt: new Date(),
+    releasedAt: null,
+    releasedByAdminUserId: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  const photoPost: PhotoPost = {
+    id: "post-1",
+    guestId: "guest-1",
+    authorName: "Joao",
+    message: "Parabens",
+    mediaStorageKey: "photos/post-1.jpg",
+    mediaUrl: null,
+    mediaMimeType: "image/jpeg",
+    mediaSizeBytes: 1024,
+    mediaWidth: null,
+    mediaHeight: null,
+    moderationStatus: "pending",
+    submittedAt: new Date(),
+    approvedAt: null,
+    hiddenAt: null,
+    moderatedByAdminUserId: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  const auditLog: AuditLog = {
+    id: "audit-1",
+    entityType: "gift_reservation",
+    entityId: "reservation-1",
+    actionType: "GIFT_RESERVED",
+    actorAdminUserId: null,
+    actorGuestId: "guest-1",
+    actorType: "guest",
+    requestId: "request-1",
+    metadata: { giftId: "gift-1" },
+    createdAt: new Date(),
+  };
+
+  assert.equal(adminUser.status, "active");
+  assert.equal(inviteToken.status, "issued");
+  assert.equal(guestGroup.allowedCompanions, 2);
+  assert.equal(guest.status, "active");
+  assert.equal(event.eventType, "wedding");
+  assert.equal(eligibility.canRsvp, true);
+  assert.equal(rsvpResponse.responseStatus, "yes");
+  assert.equal(gift.status, "available");
+  assert.equal(giftReservation.reservationStatus, "active");
+  assert.equal(photoPost.moderationStatus, "pending");
+  assert.equal(auditLog.actorType, "guest");
+}
+
 async function run(): Promise<void> {
   await testEchoesIncomingRequestId();
   await testGeneratesRequestIdWhenMissing();
   await testLogsIncludeRequestIdWithoutSensitiveHeaders();
   await testBuildAppKeepsModuleRegistryConnected();
+  await testDomainEntitiesAreExportedByModuleBarrels();
   console.log("main.test.ts passed");
 }
 
