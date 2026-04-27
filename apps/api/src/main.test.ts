@@ -1,7 +1,17 @@
 import assert from "node:assert/strict";
 import { PassThrough } from "node:stream";
 import { type AppEnv, buildApp } from "./main.js";
+import {
+  ADMIN_BACKOFFICE_HTTP_CONTRACT,
+  ADMIN_BACKOFFICE_INFRASTRUCTURE_PORTS,
+  ADMIN_BACKOFFICE_MODULE_USE_CASES,
+} from "./modules/admin-backoffice/index.js";
 import type { AuditLog } from "./modules/admin-backoffice/index.js";
+import {
+  GIFT_REGISTRY_HTTP_CONTRACT,
+  GIFT_REGISTRY_INFRASTRUCTURE_PORTS,
+  GIFT_REGISTRY_MODULE_USE_CASES,
+} from "./modules/gift-registry/index.js";
 import type { Gift, GiftReservation } from "./modules/gift-registry/index.js";
 import type {
   Event,
@@ -10,8 +20,23 @@ import type {
   GuestGroup,
   RsvpResponse,
 } from "./modules/guests-rsvp/index.js";
+import {
+  GUESTS_RSVP_HTTP_CONTRACT,
+  GUESTS_RSVP_INFRASTRUCTURE_PORTS,
+  GUESTS_RSVP_MODULE_USE_CASES,
+} from "./modules/guests-rsvp/index.js";
+import {
+  IDENTITY_ACCESS_HTTP_CONTRACT,
+  IDENTITY_ACCESS_INFRASTRUCTURE_PORTS,
+  IDENTITY_ACCESS_MODULE_USE_CASES,
+} from "./modules/identity-access/index.js";
 import type { AdminUser, InviteToken } from "./modules/identity-access/index.js";
 import { MODULE_NAMES } from "./modules/index.js";
+import {
+  PHOTO_WALL_HTTP_CONTRACT,
+  PHOTO_WALL_INFRASTRUCTURE_PORTS,
+  PHOTO_WALL_MODULE_USE_CASES,
+} from "./modules/photo-wall/index.js";
 import type { PhotoPost } from "./modules/photo-wall/index.js";
 import { REQUEST_ID_HEADER } from "./modules/shared/platform/logging/create-api-logger.js";
 
@@ -294,12 +319,45 @@ async function testDomainEntitiesAreExportedByModuleBarrels(): Promise<void> {
   assert.equal(auditLog.actorType, "guest");
 }
 
+function testModuleLayerContractsAreExported(): void {
+  assert.equal(IDENTITY_ACCESS_HTTP_CONTRACT.routePrefix, "/identity");
+  assert.equal(GUESTS_RSVP_HTTP_CONTRACT.routePrefix, "/guests");
+  assert.equal(GIFT_REGISTRY_HTTP_CONTRACT.routePrefix, "/gifts");
+  assert.equal(PHOTO_WALL_HTTP_CONTRACT.routePrefix, "/photos");
+  assert.equal(ADMIN_BACKOFFICE_HTTP_CONTRACT.routePrefix, "/admin");
+
+  assert.equal(IDENTITY_ACCESS_MODULE_USE_CASES.guestAuthentication, "planned");
+  assert.equal(GUESTS_RSVP_MODULE_USE_CASES.rsvpSubmission, "planned");
+  assert.equal(GIFT_REGISTRY_MODULE_USE_CASES.giftReservationLifecycle, "planned");
+  assert.equal(PHOTO_WALL_MODULE_USE_CASES.photoSubmission, "planned");
+  assert.equal(ADMIN_BACKOFFICE_MODULE_USE_CASES.auditTrailQuery, "planned");
+
+  assert.equal(
+    IDENTITY_ACCESS_INFRASTRUCTURE_PORTS.repositories.includes("invite-token-repository"),
+    true,
+  );
+  assert.equal(
+    GUESTS_RSVP_INFRASTRUCTURE_PORTS.repositories.includes("rsvp-response-repository"),
+    true,
+  );
+  assert.equal(
+    GIFT_REGISTRY_INFRASTRUCTURE_PORTS.providers.includes("payment-proof-storage-provider"),
+    true,
+  );
+  assert.equal(PHOTO_WALL_INFRASTRUCTURE_PORTS.providers.includes("photo-storage-provider"), true);
+  assert.equal(
+    ADMIN_BACKOFFICE_INFRASTRUCTURE_PORTS.repositories.includes("audit-log-repository"),
+    true,
+  );
+}
+
 async function run(): Promise<void> {
   await testEchoesIncomingRequestId();
   await testGeneratesRequestIdWhenMissing();
   await testLogsIncludeRequestIdWithoutSensitiveHeaders();
   await testBuildAppKeepsModuleRegistryConnected();
   await testDomainEntitiesAreExportedByModuleBarrels();
+  testModuleLayerContractsAreExported();
   console.log("main.test.ts passed");
 }
 
