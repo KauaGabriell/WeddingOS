@@ -8,6 +8,7 @@ import {
 } from "fastify-type-provider-zod";
 import type { DestinationStream } from "pino";
 import { z } from "zod";
+import { MODULE_REGISTRATIONS } from "./modules/index.js";
 import {
   attachRequestContext,
   logRequestCompletion,
@@ -106,6 +107,10 @@ export async function buildApp(env: AppEnv, options: BuildAppOptions = {}) {
       uptime: process.uptime(),
     }),
   });
+
+  for (const registerModule of MODULE_REGISTRATIONS) {
+    await app.register(registerModule);
+  }
 
   return app;
 }

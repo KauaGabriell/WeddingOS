@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { PassThrough } from "node:stream";
 import { type AppEnv, buildApp } from "./main.js";
+import { MODULE_NAMES } from "./modules/index.js";
 import { REQUEST_ID_HEADER } from "./modules/shared/platform/logging/create-api-logger.js";
 
 function createTestEnv(): AppEnv {
@@ -98,10 +99,22 @@ async function testLogsIncludeRequestIdWithoutSensitiveHeaders(): Promise<void> 
   }
 }
 
+async function testBuildAppKeepsModuleRegistryConnected(): Promise<void> {
+  const app = await buildApp(createTestEnv());
+
+  try {
+    await app.ready();
+    assert.equal(MODULE_NAMES.length, 5);
+  } finally {
+    await app.close();
+  }
+}
+
 async function run(): Promise<void> {
   await testEchoesIncomingRequestId();
   await testGeneratesRequestIdWhenMissing();
   await testLogsIncludeRequestIdWithoutSensitiveHeaders();
+  await testBuildAppKeepsModuleRegistryConnected();
   console.log("main.test.ts passed");
 }
 
