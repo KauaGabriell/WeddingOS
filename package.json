@@ -9,6 +9,7 @@
     "tools/*"
   ],
   "scripts": {
+    "install:clean": "powershell -ExecutionPolicy Bypass -File ./tools/install-deps.ps1",
     "dev": "npm run dev --workspaces --if-present",
     "build": "npm run build --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
