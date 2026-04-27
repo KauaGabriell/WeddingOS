@@ -1,12 +1,19 @@
-import Fastify from "fastify";
-import cors from "@fastify/cors";
 import { pathToFileURL } from "node:url";
+import cors from "@fastify/cors";
+import Fastify from "fastify";
 import {
-  validatorCompiler,
-  serializerCompiler,
   type ZodTypeProvider,
+  serializerCompiler,
+  validatorCompiler,
 } from "fastify-type-provider-zod";
+import type { DestinationStream } from "pino";
 import { z } from "zod";
+import {
+  attachRequestContext,
+  logRequestCompletion,
+  requestContextConfig,
+} from "./modules/shared/platform/http/request-context.js";
+import { createApiLogger } from "./modules/shared/platform/logging/create-api-logger.js";
 import { createStorageClient } from "./modules/shared/platform/storage/create-storage-client.js";
 
 const booleanFromEnv = z.preprocess((value) => {
@@ -42,6 +49,9 @@ const envSchema = z.object({
 });
 
 export type AppEnv = z.infer<typeof envSchema> & { corsOrigins: string[] };
+type BuildAppOptions = {
+  loggerStream?: DestinationStream;
+};
 
 export function loadEnv(): AppEnv {
   const parsed = envSchema.parse(process.env);
@@ -54,15 +64,22 @@ export function loadEnv(): AppEnv {
   };
 }
 
-export async function buildApp(env: AppEnv) {
+export async function buildApp(env: AppEnv, options: BuildAppOptions = {}) {
   const app = Fastify({
-    logger: true,
+    ...requestContextConfig,
+    loggerInstance: createApiLogger({
+      level: options.loggerStream ? "info" : env.NODE_ENV === "test" ? "silent" : "info",
+      stream: options.loggerStream,
+    }),
   });
   const storageClient = createStorageClient(env);
   app.decorate("storageClient", storageClient);
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
+
+  app.addHook("onRequest", attachRequestContext);
+  app.addHook("onResponse", logRequestCompletion);
 
   await app.register(cors, {
     origin: env.corsOrigins,
@@ -103,7 +120,7 @@ export async function bootstrap(): Promise<void> {
       port: env.API_PORT,
     });
 
-    app.log.info(`API listening at ${address}`);
+    app.log.info({ address }, "API listening");
 
     const shutdown = async (signal: string) => {
       app.log.info({ signal }, "Gracefully shutting down API");
@@ -125,8 +142,7 @@ export async function bootstrap(): Promise<void> {
 }
 
 const isMainModule =
-  typeof process.argv[1] === "string" &&
-  import.meta.url === pathToFileURL(process.argv[1]).href;
+  typeof process.argv[1] === "string" && import.meta.url === pathToFileURL(process.argv[1]).href;
 
 if (isMainModule) {
   void bootstrap();

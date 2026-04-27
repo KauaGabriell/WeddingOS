@@ -34,6 +34,7 @@
 
 - Do not assume dev/build/test/lint commands until manifests and scripts are added.
 - Do not claim features are implemented based only on PRD/task docs.
+- Never remove `docs` from `.gitignore`. If some doc file must be versioned, use explicit allowlist entries instead of unignoring the whole `docs` tree.
 - For new implementation work, start with phase 1 foundations:
   - Task `1.1`: initial repo/app structure
   - Task `1.2`: monorepo + TypeScript + root scripts (`dev`, `build`, `lint`, `test`)

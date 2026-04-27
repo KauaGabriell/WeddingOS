@@ -1,5 +1,5 @@
-import type { StorageClient } from "./storage-client.js";
 import { S3StorageClient } from "./s3-storage-client.js";
+import type { StorageClient } from "./storage-client.js";
 
 export type S3StorageEnvConfig = {
   S3_ENDPOINT: string;

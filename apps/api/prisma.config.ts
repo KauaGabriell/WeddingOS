@@ -1,6 +1,6 @@
-import { config as loadDotenv } from "dotenv";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { config as loadDotenv } from "dotenv";
 import { defineConfig, env } from "prisma/config";
 
 const currentDir = dirname(fileURLToPath(import.meta.url));

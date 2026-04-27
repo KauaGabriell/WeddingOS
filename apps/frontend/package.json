@@ -5,7 +5,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "tsc --noEmit",
+    "lint": "biome check src package.json tsconfig.json next.config.ts",
+    "typecheck": "tsc --noEmit",
     "test": "echo \"no tests yet\""
   },
   "dependencies": {
