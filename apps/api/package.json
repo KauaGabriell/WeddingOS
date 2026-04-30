@@ -12,6 +12,7 @@
     "storage:smoke": "tsx src/modules/shared/platform/storage/s3-storage-client.smoke.ts"
   },
   "dependencies": {
+    "@fastify/cors": "^11.1.0",
     "@aws-sdk/client-s3": "^3.908.0",
     "@aws-sdk/s3-request-presigner": "^3.908.0",
     "@prisma/client": "^7.8.0",

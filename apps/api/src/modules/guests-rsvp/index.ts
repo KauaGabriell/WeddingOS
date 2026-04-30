@@ -1,4 +1,5 @@
 export { registerGuestsRsvpModule } from "./guests-rsvp.module.js";
+export * from "./guests-rsvp.definition.js";
 export * from "./application/index.js";
 export * from "./contracts/index.js";
 export * from "./domain/index.js";
