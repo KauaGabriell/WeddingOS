@@ -1,16 +1,19 @@
 import assert from "node:assert/strict";
 import { PassThrough } from "node:stream";
+import type { FastifyRequest } from "fastify";
 import { type AppEnv, buildApp } from "./main.js";
 import {
   ADMIN_BACKOFFICE_HTTP_CONTRACT,
   ADMIN_BACKOFFICE_INFRASTRUCTURE_PORTS,
   ADMIN_BACKOFFICE_MODULE_USE_CASES,
+  ADMIN_BACKOFFICE_ROUTE_ACCESS,
 } from "./modules/admin-backoffice/index.js";
 import type { AuditLog } from "./modules/admin-backoffice/index.js";
 import {
   GIFT_REGISTRY_HTTP_CONTRACT,
   GIFT_REGISTRY_INFRASTRUCTURE_PORTS,
   GIFT_REGISTRY_MODULE_USE_CASES,
+  GIFT_REGISTRY_ROUTE_ACCESS,
 } from "./modules/gift-registry/index.js";
 import type { Gift, GiftReservation } from "./modules/gift-registry/index.js";
 import type {
@@ -24,11 +27,16 @@ import {
   GUESTS_RSVP_HTTP_CONTRACT,
   GUESTS_RSVP_INFRASTRUCTURE_PORTS,
   GUESTS_RSVP_MODULE_USE_CASES,
+  GUESTS_RSVP_ROUTE_ACCESS,
 } from "./modules/guests-rsvp/index.js";
 import {
+  createAdminAuthGuard,
+  createGuestAuthGuard,
+  type GuestSessionVerifier,
   IDENTITY_ACCESS_HTTP_CONTRACT,
   IDENTITY_ACCESS_INFRASTRUCTURE_PORTS,
   IDENTITY_ACCESS_MODULE_USE_CASES,
+  IDENTITY_ACCESS_ROUTE_ACCESS,
 } from "./modules/identity-access/index.js";
 import type { AdminUser, InviteToken } from "./modules/identity-access/index.js";
 import { MODULE_NAMES } from "./modules/index.js";
@@ -36,8 +44,18 @@ import {
   PHOTO_WALL_HTTP_CONTRACT,
   PHOTO_WALL_INFRASTRUCTURE_PORTS,
   PHOTO_WALL_MODULE_USE_CASES,
+  PHOTO_WALL_ROUTE_ACCESS,
 } from "./modules/photo-wall/index.js";
 import type { PhotoPost } from "./modules/photo-wall/index.js";
+import {
+  allowPublicAccess,
+  canAccessGuestResource,
+  hasAdminRole,
+  type HttpStatusError,
+  resolveBearerToken,
+  type AdminPrincipal,
+  type GuestPrincipal,
+} from "./modules/shared/index.js";
 import { REQUEST_ID_HEADER } from "./modules/shared/platform/logging/create-api-logger.js";
 
 function createTestEnv(): AppEnv {
@@ -349,6 +367,104 @@ function testModuleLayerContractsAreExported(): void {
     ADMIN_BACKOFFICE_INFRASTRUCTURE_PORTS.repositories.includes("audit-log-repository"),
     true,
   );
+  assert.equal(IDENTITY_ACCESS_ROUTE_ACCESS.loginWithInviteToken.config.access, "public");
+  assert.equal(GUESTS_RSVP_ROUTE_ACCESS.guestHome.config.access, "guest");
+  assert.equal(GIFT_REGISTRY_ROUTE_ACCESS.reserveGift.config.access, "guest");
+  assert.equal(PHOTO_WALL_ROUTE_ACCESS.createPhotoPost.config.access, "guest");
+  assert.equal(ADMIN_BACKOFFICE_ROUTE_ACCESS.dashboard.config.access, "admin");
+}
+
+function createAuthRequest(authorization?: string): FastifyRequest {
+  return {
+    headers: authorization ? { authorization } : {},
+    id: "req-auth-1",
+    correlationId: "req-auth-1",
+    auth: undefined,
+  } as FastifyRequest;
+}
+
+async function testBearerTokenResolution(): Promise<void> {
+  assert.equal(resolveBearerToken(createAuthRequest("Bearer guest-token")), "guest-token");
+  assert.throws(() => resolveBearerToken(createAuthRequest()), (error: unknown) => {
+    return (error as HttpStatusError).statusCode === 401;
+  });
+  assert.throws(() => resolveBearerToken(createAuthRequest("Token guest-token")), (error: unknown) => {
+    return (error as HttpStatusError).statusCode === 401;
+  });
+}
+
+async function testAuthGuardsSeparateGuestAndAdmin(): Promise<void> {
+  const guestPrincipal: GuestPrincipal = {
+    actorType: "guest",
+    guestId: "guest-1",
+    guestGroupId: "group-1",
+  };
+  const adminPrincipal: AdminPrincipal = {
+    actorType: "admin",
+    adminUserId: "admin-1",
+    role: "super_admin",
+  };
+
+  const verifier: GuestSessionVerifier = {
+    async verifySession({ token }) {
+      if (token === "guest-token") {
+        return guestPrincipal;
+      }
+
+      if (token === "admin-token") {
+        return adminPrincipal;
+      }
+
+      return null;
+    },
+  };
+
+  const guestGuard = createGuestAuthGuard(verifier);
+  const adminGuard = createAdminAuthGuard(verifier);
+
+  const guestRequest = createAuthRequest("Bearer guest-token");
+  const resolvedGuest = await guestGuard(guestRequest);
+
+  assert.deepEqual(resolvedGuest, guestPrincipal);
+  assert.deepEqual(guestRequest.auth, guestPrincipal);
+
+  await assert.rejects(() => guestGuard(createAuthRequest("Bearer invalid-token")), (error: unknown) => {
+    return (error as HttpStatusError).statusCode === 401;
+  });
+  await assert.rejects(() => adminGuard(createAuthRequest("Bearer guest-token")), (error: unknown) => {
+    return (error as HttpStatusError).statusCode === 403;
+  });
+  await assert.rejects(() => guestGuard(createAuthRequest("Bearer admin-token")), (error: unknown) => {
+    return (error as HttpStatusError).statusCode === 403;
+  });
+}
+
+async function testAccessPolicies(): Promise<void> {
+  const guestPrincipal: GuestPrincipal = {
+    actorType: "guest",
+    guestId: "guest-1",
+    guestGroupId: "group-1",
+  };
+  const adminPrincipal: AdminPrincipal = {
+    actorType: "admin",
+    adminUserId: "admin-1",
+    role: "super_admin",
+  };
+  const editorPrincipal: AdminPrincipal = {
+    actorType: "admin",
+    adminUserId: "admin-2",
+    role: "editor",
+  };
+
+  assert.equal(canAccessGuestResource(guestPrincipal, { guestId: "guest-1" }), true);
+  assert.equal(canAccessGuestResource(guestPrincipal, { guestGroupId: "group-1" }), true);
+  assert.equal(canAccessGuestResource(guestPrincipal, { guestId: "guest-2" }), false);
+  assert.equal(hasAdminRole(adminPrincipal, ["super_admin"]), true);
+  assert.equal(hasAdminRole(editorPrincipal, ["super_admin"]), false);
+
+  const publicRequest = createAuthRequest();
+  await allowPublicAccess(publicRequest);
+  assert.equal(publicRequest.auth, undefined);
 }
 
 async function run(): Promise<void> {
@@ -357,6 +473,9 @@ async function run(): Promise<void> {
   await testLogsIncludeRequestIdWithoutSensitiveHeaders();
   await testBuildAppKeepsModuleRegistryConnected();
   await testDomainEntitiesAreExportedByModuleBarrels();
+  await testBearerTokenResolution();
+  await testAuthGuardsSeparateGuestAndAdmin();
+  await testAccessPolicies();
   testModuleLayerContractsAreExported();
   console.log("main.test.ts passed");
 }

@@ -4,10 +4,18 @@ export interface IdentityAccessInfrastructurePorts {
     "admin-auth-provider",
     "guest-auth-provider",
     "invite-token-signer",
+    "guest-session-verifier",
+    "admin-session-verifier",
   ];
 }
 
 export const IDENTITY_ACCESS_INFRASTRUCTURE_PORTS: IdentityAccessInfrastructurePorts = {
   repositories: ["admin-user-repository", "invite-token-repository"],
-  providers: ["admin-auth-provider", "guest-auth-provider", "invite-token-signer"],
+  providers: [
+    "admin-auth-provider",
+    "guest-auth-provider",
+    "invite-token-signer",
+    "guest-session-verifier",
+    "admin-session-verifier",
+  ],
 };
