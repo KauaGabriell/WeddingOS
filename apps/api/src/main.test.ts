@@ -14,6 +14,8 @@ import {
   GIFT_REGISTRY_INFRASTRUCTURE_PORTS,
   GIFT_REGISTRY_MODULE_USE_CASES,
   GIFT_REGISTRY_ROUTE_ACCESS,
+  GIFT_REGISTRY_TRANSACTIONAL_CONTRACTS,
+  GiftReservationConflictError,
 } from "./modules/gift-registry/index.js";
 import type { Gift, GiftReservation } from "./modules/gift-registry/index.js";
 import type {
@@ -362,6 +364,12 @@ function testModuleLayerContractsAreExported(): void {
     GIFT_REGISTRY_INFRASTRUCTURE_PORTS.providers.includes("payment-proof-storage-provider"),
     true,
   );
+  assert.equal(
+    GIFT_REGISTRY_INFRASTRUCTURE_PORTS.providers.includes(
+      "gift-reservation-transaction-runner",
+    ),
+    true,
+  );
   assert.equal(PHOTO_WALL_INFRASTRUCTURE_PORTS.providers.includes("photo-storage-provider"), true);
   assert.equal(
     ADMIN_BACKOFFICE_INFRASTRUCTURE_PORTS.repositories.includes("audit-log-repository"),
@@ -372,6 +380,12 @@ function testModuleLayerContractsAreExported(): void {
   assert.equal(GIFT_REGISTRY_ROUTE_ACCESS.reserveGift.config.access, "guest");
   assert.equal(PHOTO_WALL_ROUTE_ACCESS.createPhotoPost.config.access, "guest");
   assert.equal(ADMIN_BACKOFFICE_ROUTE_ACCESS.dashboard.config.access, "admin");
+  assert.equal(GIFT_REGISTRY_TRANSACTIONAL_CONTRACTS.reserveAvailableGift, "transactional");
+  assert.equal(
+    GIFT_REGISTRY_TRANSACTIONAL_CONTRACTS.activeReservationUniqueness,
+    "database-partial-unique-index",
+  );
+  assert.equal(GIFT_REGISTRY_TRANSACTIONAL_CONTRACTS.conflictStatusCode, 409);
 }
 
 function createAuthRequest(authorization?: string): FastifyRequest {
@@ -467,6 +481,14 @@ async function testAccessPolicies(): Promise<void> {
   assert.equal(publicRequest.auth, undefined);
 }
 
+function testGiftReservationConflictError(): void {
+  const error = new GiftReservationConflictError("gift-1");
+
+  assert.equal(error.name, "GiftReservationConflictError");
+  assert.equal(error.giftId, "gift-1");
+  assert.equal(error.statusCode, 409);
+}
+
 async function run(): Promise<void> {
   await testEchoesIncomingRequestId();
   await testGeneratesRequestIdWhenMissing();
@@ -477,6 +499,7 @@ async function run(): Promise<void> {
   await testAuthGuardsSeparateGuestAndAdmin();
   await testAccessPolicies();
   testModuleLayerContractsAreExported();
+  testGiftReservationConflictError();
   console.log("main.test.ts passed");
 }
 

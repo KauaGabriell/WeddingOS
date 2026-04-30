@@ -15,4 +15,9 @@ export interface GiftReservationRepository
   extends EntityRepository<GiftReservation>,
     ListableRepository<GiftReservation, GiftReservationRepositoryFilters> {
   findActiveByGiftId(giftId: string): Promise<GiftReservation | null>;
+  createActiveReservation(input: {
+    readonly giftId: string;
+    readonly guestId: string;
+    readonly purchaseNotes?: string;
+  }): Promise<GiftReservation>;
 }
