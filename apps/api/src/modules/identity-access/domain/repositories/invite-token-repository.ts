@@ -4,6 +4,10 @@ import type {
   ListableRepository,
   PaginationQuery,
 } from "../../../shared/repository-contracts.js";
+import type {
+  MarkInviteTokenAsUsedInput,
+  RevokeInviteTokenRepositoryInput,
+} from "../invite-token-lifecycle.js";
 
 export interface InviteTokenRepositoryFilters extends PaginationQuery {
   readonly guestId?: string;
@@ -16,4 +20,6 @@ export interface InviteTokenRepository
     ListableRepository<InviteToken, InviteTokenRepositoryFilters> {
   findByTokenHash(tokenHash: string): Promise<InviteToken | null>;
   findByShortCode(shortCode: string): Promise<InviteToken | null>;
+  markAsUsed(input: MarkInviteTokenAsUsedInput): Promise<InviteToken>;
+  revoke(input: RevokeInviteTokenRepositoryInput): Promise<InviteToken>;
 }

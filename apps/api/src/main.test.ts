@@ -27,18 +27,26 @@ import type {
 } from "./modules/guests-rsvp/index.js";
 import {
   GUESTS_RSVP_HTTP_CONTRACT,
+  GUESTS_RSVP_IDEMPOTENCY_CONTRACTS,
   GUESTS_RSVP_INFRASTRUCTURE_PORTS,
   GUESTS_RSVP_MODULE_USE_CASES,
   GUESTS_RSVP_ROUTE_ACCESS,
+  buildRsvpResponseIdempotencyKey,
 } from "./modules/guests-rsvp/index.js";
 import {
+  canConsumeInviteToken,
+  consumeInviteToken,
   createAdminAuthGuard,
   createGuestAuthGuard,
   type GuestSessionVerifier,
   IDENTITY_ACCESS_HTTP_CONTRACT,
   IDENTITY_ACCESS_INFRASTRUCTURE_PORTS,
+  IDENTITY_ACCESS_INVITE_TOKEN_LIFECYCLE_CONTRACTS,
   IDENTITY_ACCESS_MODULE_USE_CASES,
   IDENTITY_ACCESS_ROUTE_ACCESS,
+  InvalidInviteTokenConsumptionError,
+  resolveInviteTokenLifecycleStatus,
+  revokeInviteToken,
 } from "./modules/identity-access/index.js";
 import type { AdminUser, InviteToken } from "./modules/identity-access/index.js";
 import { MODULE_NAMES } from "./modules/index.js";
@@ -347,6 +355,7 @@ function testModuleLayerContractsAreExported(): void {
   assert.equal(ADMIN_BACKOFFICE_HTTP_CONTRACT.routePrefix, "/admin");
 
   assert.equal(IDENTITY_ACCESS_MODULE_USE_CASES.guestAuthentication, "planned");
+  assert.equal(IDENTITY_ACCESS_MODULE_USE_CASES.inviteTokenLifecycle, "defined");
   assert.equal(GUESTS_RSVP_MODULE_USE_CASES.rsvpSubmission, "planned");
   assert.equal(GIFT_REGISTRY_MODULE_USE_CASES.giftReservationLifecycle, "planned");
   assert.equal(PHOTO_WALL_MODULE_USE_CASES.photoSubmission, "planned");
@@ -357,7 +366,17 @@ function testModuleLayerContractsAreExported(): void {
     true,
   );
   assert.equal(
+    IDENTITY_ACCESS_INFRASTRUCTURE_PORTS.providers.includes(
+      "invite-token-consumption-transaction-runner",
+    ),
+    true,
+  );
+  assert.equal(
     GUESTS_RSVP_INFRASTRUCTURE_PORTS.repositories.includes("rsvp-response-repository"),
+    true,
+  );
+  assert.equal(
+    GUESTS_RSVP_INFRASTRUCTURE_PORTS.providers.includes("rsvp-response-transaction-runner"),
     true,
   );
   assert.equal(
@@ -376,7 +395,22 @@ function testModuleLayerContractsAreExported(): void {
     true,
   );
   assert.equal(IDENTITY_ACCESS_ROUTE_ACCESS.loginWithInviteToken.config.access, "public");
+  assert.equal(IDENTITY_ACCESS_INVITE_TOKEN_LIFECYCLE_CONTRACTS.usagePolicy, "single-use");
+  assert.equal(
+    IDENTITY_ACCESS_INVITE_TOKEN_LIFECYCLE_CONTRACTS.expirationModel,
+    "derived-from-expiresAt",
+  );
+  assert.deepEqual(IDENTITY_ACCESS_INVITE_TOKEN_LIFECYCLE_CONTRACTS.persistenceTransitions, [
+    "mark-as-used",
+    "revoke",
+  ]);
   assert.equal(GUESTS_RSVP_ROUTE_ACCESS.guestHome.config.access, "guest");
+  assert.equal(GUESTS_RSVP_IDEMPOTENCY_CONTRACTS.idempotencyKey, "eventId+guestId");
+  assert.equal(GUESTS_RSVP_IDEMPOTENCY_CONTRACTS.persistenceStrategy, "single-row-upsert");
+  assert.equal(
+    GUESTS_RSVP_IDEMPOTENCY_CONTRACTS.replayBehavior,
+    "return-existing-response-without-duplicate-row",
+  );
   assert.equal(GIFT_REGISTRY_ROUTE_ACCESS.reserveGift.config.access, "guest");
   assert.equal(PHOTO_WALL_ROUTE_ACCESS.createPhotoPost.config.access, "guest");
   assert.equal(ADMIN_BACKOFFICE_ROUTE_ACCESS.dashboard.config.access, "admin");
@@ -489,6 +523,90 @@ function testGiftReservationConflictError(): void {
   assert.equal(error.statusCode, 409);
 }
 
+function testRsvpIdempotencyKeyBuilder(): void {
+  assert.deepEqual(
+    buildRsvpResponseIdempotencyKey({
+      eventId: "event-1",
+      guestId: "guest-1",
+    }),
+    {
+      eventId: "event-1",
+      guestId: "guest-1",
+    },
+  );
+}
+
+function testInviteTokenLifecyclePolicies(): void {
+  const now = new Date("2026-04-30T12:00:00.000Z");
+  const baseToken: InviteToken = {
+    id: "invite-1",
+    guestGroupId: "group-1",
+    guestId: null,
+    tokenHash: "hash",
+    shortCode: "ABC123",
+    channel: "manual",
+    status: "issued",
+    issuedAt: new Date("2026-04-25T12:00:00.000Z"),
+    expiresAt: new Date("2026-05-01T12:00:00.000Z"),
+    usedAt: null,
+    revokedAt: null,
+    revokedReason: null,
+    createdAt: new Date("2026-04-25T12:00:00.000Z"),
+    updatedAt: new Date("2026-04-25T12:00:00.000Z"),
+  };
+
+  assert.equal(resolveInviteTokenLifecycleStatus(baseToken, now), "issued");
+  assert.equal(canConsumeInviteToken(baseToken, now), true);
+
+  const expiredToken: InviteToken = {
+    ...baseToken,
+    expiresAt: new Date("2026-04-29T12:00:00.000Z"),
+  };
+  assert.equal(resolveInviteTokenLifecycleStatus(expiredToken, now), "expired");
+  assert.equal(canConsumeInviteToken(expiredToken, now), false);
+
+  const usedToken = consumeInviteToken(baseToken, { consumedAt: now });
+  assert.equal(resolveInviteTokenLifecycleStatus(usedToken, now), "used");
+  assert.equal(usedToken.status, "used");
+  assert.equal(usedToken.usedAt?.toISOString(), now.toISOString());
+
+  const revokedToken = revokeInviteToken(baseToken, {
+    reason: "guest requested reset",
+    revokedAt: now,
+  });
+  assert.equal(resolveInviteTokenLifecycleStatus(revokedToken, now), "revoked");
+  assert.equal(revokedToken.revokedReason, "guest requested reset");
+  assert.equal(revokedToken.revokedAt?.toISOString(), now.toISOString());
+
+  const revokedAfterUse: InviteToken = {
+    ...usedToken,
+    status: "revoked",
+    revokedAt: now,
+    revokedReason: "manual block",
+  };
+  assert.equal(resolveInviteTokenLifecycleStatus(revokedAfterUse, now), "revoked");
+
+  assert.throws(
+    () => consumeInviteToken(expiredToken, { consumedAt: now }),
+    (error: unknown) => {
+      return (
+        error instanceof InvalidInviteTokenConsumptionError &&
+        error.lifecycleStatus === "expired" &&
+        error.statusCode === 401
+      );
+    },
+  );
+
+  assert.throws(
+    () =>
+      revokeInviteToken(baseToken, {
+        reason: "   ",
+        revokedAt: now,
+      }),
+    /revocation reason is required/,
+  );
+}
+
 async function run(): Promise<void> {
   await testEchoesIncomingRequestId();
   await testGeneratesRequestIdWhenMissing();
@@ -500,6 +618,8 @@ async function run(): Promise<void> {
   await testAccessPolicies();
   testModuleLayerContractsAreExported();
   testGiftReservationConflictError();
+  testInviteTokenLifecyclePolicies();
+  testRsvpIdempotencyKeyBuilder();
   console.log("main.test.ts passed");
 }
 

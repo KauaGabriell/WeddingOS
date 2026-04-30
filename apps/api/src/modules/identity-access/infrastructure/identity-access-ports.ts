@@ -6,6 +6,7 @@ export interface IdentityAccessInfrastructurePorts {
     "invite-token-signer",
     "guest-session-verifier",
     "admin-session-verifier",
+    "invite-token-consumption-transaction-runner",
   ];
 }
 
@@ -17,5 +18,6 @@ export const IDENTITY_ACCESS_INFRASTRUCTURE_PORTS: IdentityAccessInfrastructureP
     "invite-token-signer",
     "guest-session-verifier",
     "admin-session-verifier",
+    "invite-token-consumption-transaction-runner",
   ],
 };

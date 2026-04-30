@@ -6,7 +6,7 @@ export interface GuestsRsvpInfrastructurePorts {
     "event-guest-eligibility-repository",
     "rsvp-response-repository",
   ];
-  readonly providers: readonly ["invite-delivery-provider"];
+  readonly providers: readonly ["invite-delivery-provider", "rsvp-response-transaction-runner"];
 }
 
 export const GUESTS_RSVP_INFRASTRUCTURE_PORTS: GuestsRsvpInfrastructurePorts = {
@@ -17,5 +17,5 @@ export const GUESTS_RSVP_INFRASTRUCTURE_PORTS: GuestsRsvpInfrastructurePorts = {
     "event-guest-eligibility-repository",
     "rsvp-response-repository",
   ],
-  providers: ["invite-delivery-provider"],
+  providers: ["invite-delivery-provider", "rsvp-response-transaction-runner"],
 };

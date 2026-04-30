@@ -1,4 +1,5 @@
 import type { RsvpResponse, RsvpResponseStatus } from "../entities/rsvp-response.js";
+import type { SubmitRsvpResponseInput } from "../rsvp-idempotency.js";
 import type {
   EntityRepository,
   ListableRepository,
@@ -15,4 +16,6 @@ export interface RsvpResponseRepository
   extends EntityRepository<RsvpResponse>,
     ListableRepository<RsvpResponse, RsvpResponseRepositoryFilters> {
   findByEventIdAndGuestId(eventId: string, guestId: string): Promise<RsvpResponse | null>;
+  createResponse(input: SubmitRsvpResponseInput): Promise<RsvpResponse>;
+  updateResponse(responseId: string, input: SubmitRsvpResponseInput): Promise<RsvpResponse>;
 }
