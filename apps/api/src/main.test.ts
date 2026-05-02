@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { PassThrough } from "node:stream";
 import type { FastifyRequest } from "fastify";
+import type { InviteToken as PrismaInviteTokenRecord } from "./generated/prisma/client.js";
 import { type AppEnv, buildApp } from "./main.js";
 import {
   ADMIN_BACKOFFICE_HTTP_CONTRACT,
@@ -45,6 +46,8 @@ import {
   IDENTITY_ACCESS_MODULE_USE_CASES,
   IDENTITY_ACCESS_ROUTE_ACCESS,
   InvalidInviteTokenConsumptionError,
+  PrismaInviteTokenConsumptionTransactionRunner,
+  PrismaInviteTokenRepository,
   resolveInviteTokenLifecycleStatus,
   revokeInviteToken,
 } from "./modules/identity-access/index.js";
@@ -607,6 +610,218 @@ function testInviteTokenLifecyclePolicies(): void {
   );
 }
 
+async function testPrismaInviteTokenRepository(): Promise<void> {
+  const persistenceRecord: PrismaInviteTokenRecord = {
+    id: "invite-1",
+    guestGroupId: "group-1",
+    guestId: null,
+    tokenHash: "hash-1",
+    shortCode: "ABC123",
+    channel: "MANUAL",
+    status: "ISSUED",
+    issuedAt: new Date("2026-04-25T12:00:00.000Z"),
+    expiresAt: new Date("2026-05-01T12:00:00.000Z"),
+    usedAt: null,
+    revokedAt: null,
+    revokedReason: null,
+    createdAt: new Date("2026-04-25T12:00:00.000Z"),
+    updatedAt: new Date("2026-04-25T12:00:00.000Z"),
+  };
+
+  const calls: Record<string, unknown>[] = [];
+  const delegate = {
+    async findUnique(args: { where: { id?: string; tokenHash?: string } }) {
+      calls.push({ method: "findUnique", args });
+      return persistenceRecord;
+    },
+    async findFirst(args: {
+      where: { shortCode: string };
+      orderBy: { createdAt: "asc" | "desc" };
+    }) {
+      calls.push({ method: "findFirst", args });
+      return persistenceRecord;
+    },
+    async findMany(args: {
+      where: { guestId?: string; guestGroupId?: string; status?: string };
+      orderBy: { createdAt: "asc" | "desc" };
+      skip: number;
+      take: number;
+    }) {
+      calls.push({ method: "findMany", args });
+      return [persistenceRecord];
+    },
+    async upsert(args: {
+      where: { id: string };
+      create: Record<string, unknown>;
+      update: Record<string, unknown>;
+    }) {
+      calls.push({ method: "upsert", args });
+      return {
+        ...persistenceRecord,
+        ...args.update,
+      };
+    },
+    async update(args: { where: { id: string }; data: Record<string, unknown> }) {
+      calls.push({ method: "update", args });
+      return {
+        ...persistenceRecord,
+        ...args.data,
+      };
+    },
+  };
+
+  const repository = new PrismaInviteTokenRepository(
+    delegate as unknown as ConstructorParameters<typeof PrismaInviteTokenRepository>[0],
+  );
+
+  const foundById = await repository.findById("invite-1");
+  assert.equal(foundById?.status, "issued");
+  assert.equal(foundById?.channel, "manual");
+
+  const foundByHash = await repository.findByTokenHash("hash-1");
+  assert.equal(foundByHash?.tokenHash, "hash-1");
+
+  const foundByShortCode = await repository.findByShortCode("ABC123");
+  assert.equal(foundByShortCode?.shortCode, "ABC123");
+
+  const listed = await repository.findMany({
+    page: 2,
+    pageSize: 10,
+    guestGroupId: "group-1",
+    status: "issued",
+  });
+  assert.equal(listed.length, 1);
+
+  const saved = await repository.save({
+    id: "invite-2",
+    guestGroupId: "group-2",
+    guestId: null,
+    tokenHash: "hash-2",
+    shortCode: "XYZ999",
+    channel: "email",
+    status: "issued",
+    issuedAt: new Date("2026-05-01T10:00:00.000Z"),
+    expiresAt: new Date("2026-05-08T10:00:00.000Z"),
+    usedAt: null,
+    revokedAt: null,
+    revokedReason: null,
+    createdAt: new Date("2026-05-01T10:00:00.000Z"),
+    updatedAt: new Date("2026-05-01T10:00:00.000Z"),
+  });
+  assert.equal(saved.channel, "email");
+
+  const used = await repository.markAsUsed({
+    inviteTokenId: "invite-1",
+    usedAt: new Date("2026-05-01T12:00:00.000Z"),
+  });
+  assert.equal(used.status, "used");
+
+  const revoked = await repository.revoke({
+    inviteTokenId: "invite-1",
+    reason: "security reset",
+    revokedAt: new Date("2026-05-01T13:00:00.000Z"),
+  });
+  assert.equal(revoked.status, "revoked");
+  assert.equal(revoked.revokedReason, "security reset");
+
+  assert.deepEqual(calls[0], {
+    method: "findUnique",
+    args: { where: { id: "invite-1" } },
+  });
+  assert.deepEqual(calls[2], {
+    method: "findFirst",
+    args: { where: { shortCode: "ABC123" }, orderBy: { createdAt: "desc" } },
+  });
+  assert.deepEqual(calls[3], {
+    method: "findMany",
+    args: {
+      where: { guestId: undefined, guestGroupId: "group-1", status: "ISSUED" },
+      orderBy: { createdAt: "desc" },
+      skip: 10,
+      take: 10,
+    },
+  });
+}
+
+async function testPrismaInviteTokenTransactionRunner(): Promise<void> {
+  const updates: Record<string, unknown>[] = [];
+  const transactionRecord: PrismaInviteTokenRecord = {
+    id: "invite-1",
+    guestGroupId: "group-1",
+    guestId: null,
+    tokenHash: "hash-1",
+    shortCode: "ABC123",
+    channel: "MANUAL",
+    status: "ISSUED",
+    issuedAt: new Date("2026-04-25T12:00:00.000Z"),
+    expiresAt: new Date("2026-05-01T12:00:00.000Z"),
+    usedAt: null,
+    revokedAt: null,
+    revokedReason: null,
+    createdAt: new Date("2026-04-25T12:00:00.000Z"),
+    updatedAt: new Date("2026-04-25T12:00:00.000Z"),
+  };
+
+  const inviteTokenDelegate = {
+    async findUnique(args: { where: { id?: string; tokenHash?: string } }) {
+      if (args.where.id !== "invite-1") {
+        return null;
+      }
+
+      return transactionRecord;
+    },
+    async findFirst() {
+      return null;
+    },
+    async findMany() {
+      return [];
+    },
+    async upsert() {
+      throw new Error("not used");
+    },
+    async update(args: { where: { id: string }; data: Record<string, unknown> }) {
+      updates.push(args);
+      return {
+        ...transactionRecord,
+        id: args.where.id,
+        status: "USED",
+        usedAt: args.data.usedAt as Date,
+        updatedAt: new Date("2026-05-01T14:00:00.000Z"),
+      } satisfies PrismaInviteTokenRecord;
+    },
+  };
+
+  const prisma: {
+    inviteToken: typeof inviteTokenDelegate;
+    $transaction<T>(
+      operation: (transactionClient: { inviteToken: typeof inviteTokenDelegate }) => Promise<T>,
+    ): Promise<T>;
+  } = {
+    inviteToken: {
+      ...inviteTokenDelegate,
+    },
+    async $transaction<T>(
+      operation: (transactionClient: { inviteToken: typeof inviteTokenDelegate }) => Promise<T>,
+    ) {
+      return operation({ inviteToken: this.inviteToken });
+    },
+  };
+
+  const runner = new PrismaInviteTokenConsumptionTransactionRunner(prisma);
+  const result = await runner.run(async (context) => {
+    const inviteToken = await context.findInviteTokenById("invite-1");
+    assert.equal(inviteToken?.status, "issued");
+
+    return context.markInviteTokenAsUsed({
+      inviteTokenId: "invite-1",
+      usedAt: new Date("2026-05-01T14:00:00.000Z"),
+    });
+  });
+
+  assert.equal(result.status, "used");
+  assert.equal(updates.length, 1);
+}
+
 async function run(): Promise<void> {
   await testEchoesIncomingRequestId();
   await testGeneratesRequestIdWhenMissing();
@@ -616,6 +831,8 @@ async function run(): Promise<void> {
   await testBearerTokenResolution();
   await testAuthGuardsSeparateGuestAndAdmin();
   await testAccessPolicies();
+  await testPrismaInviteTokenRepository();
+  await testPrismaInviteTokenTransactionRunner();
   testModuleLayerContractsAreExported();
   testGiftReservationConflictError();
   testInviteTokenLifecyclePolicies();
