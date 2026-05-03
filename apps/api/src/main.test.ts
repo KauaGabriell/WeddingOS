@@ -41,6 +41,7 @@ import {
   canConsumeInviteToken,
   consumeInviteToken,
   createLoginGuestWithInviteTokenUseCase,
+  createLoginGuestWithShortCodeUseCase,
   createAdminAuthGuard,
   createGuestAuthGuard,
   GuestInviteTokenAuthenticationError,
@@ -976,18 +977,21 @@ async function testLoginGuestWithInviteTokenUseCase(): Promise<void> {
     id: "invite-group",
     guestId: null,
     tokenHash: "group-token",
+    shortCode: "GROUP01",
   };
   const missingGuestToken: InviteToken = {
     ...baseInviteToken,
     id: "invite-missing-guest",
     guestId: "guest-missing",
     tokenHash: "missing-guest-token",
+    shortCode: "MISS01",
   };
   const inactiveGuestToken: InviteToken = {
     ...baseInviteToken,
     id: "invite-inactive-guest",
     guestId: "guest-inactive",
     tokenHash: "inactive-guest-token",
+    shortCode: "INACT1",
   };
 
   const inviteTokenRepository: {
@@ -1039,7 +1043,35 @@ async function testLoginGuestWithInviteTokenUseCase(): Promise<void> {
 
       return null;
     },
-    async findByShortCode() {
+    async findByShortCode(shortCode: string) {
+      if (shortCode === "ABC123") {
+        return baseInviteToken;
+      }
+
+      if (shortCode === "GROUP01") {
+        return groupToken;
+      }
+
+      if (shortCode === "EXPR01") {
+        return expiredToken;
+      }
+
+      if (shortCode === "USED01") {
+        return usedToken;
+      }
+
+      if (shortCode === "REVOK1") {
+        return revokedToken;
+      }
+
+      if (shortCode === "MISS01") {
+        return missingGuestToken;
+      }
+
+      if (shortCode === "INACT1") {
+        return inactiveGuestToken;
+      }
+
       return null;
     },
     async markAsUsed(input: { inviteTokenId: string; usedAt?: Date }) {
@@ -1166,6 +1198,32 @@ async function testLoginGuestWithInviteTokenUseCase(): Promise<void> {
     "inactive-guest-token",
   ]) {
     await assert.rejects(() => failingUseCase.execute({ token }), (error: unknown) => {
+      return error instanceof GuestInviteTokenAuthenticationError;
+    });
+  }
+
+  markCalls = 0;
+  const shortCodeUseCase = createLoginGuestWithShortCodeUseCase({
+    inviteTokenRepository,
+    guestRepository,
+    inviteTokenConsumptionTransactionRunner: transactionRunner,
+    now: () => new Date("2026-04-30T15:00:00.000Z"),
+  });
+
+  const shortCodeLogin = await shortCodeUseCase.execute({ code: "ABC123" });
+  assert.deepEqual(shortCodeLogin, {
+    guestId: "guest-1",
+    guestGroupId: "group-1",
+    inviteTokenId: "invite-1",
+    authenticatedAt: new Date("2026-04-30T15:00:00.000Z"),
+  });
+
+  const shortCodeGroupLogin = await shortCodeUseCase.execute({ code: "GROUP01" });
+  assert.equal(shortCodeGroupLogin.guestId, "guest-1");
+  assert.equal(markCalls, 2);
+
+  for (const code of ["UNKNOWN", "EXPR01", "USED01", "REVOK1", "MISS01", "INACT1"]) {
+    await assert.rejects(() => shortCodeUseCase.execute({ code }), (error: unknown) => {
       return error instanceof GuestInviteTokenAuthenticationError;
     });
   }
