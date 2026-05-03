@@ -1,8 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import type {
-  AuthenticatedPrincipal,
-  GuestPrincipal,
-} from "../../shared/platform/http/auth-context.js";
+import type { GuestPrincipal } from "../../shared/platform/http/auth-context.js";
 
 const SESSION_TOKEN_ALGORITHM = "HS256";
 const SESSION_TOKEN_TYPE = "JWT";
@@ -56,10 +53,6 @@ export interface GuestSessionIssuer {
 
 export interface GuestSessionVerifier {
   verifySession(input: SessionVerificationInput): Promise<GuestPrincipal | null>;
-}
-
-export interface AdminSessionVerifier {
-  verifySession(input: SessionVerificationInput): Promise<AuthenticatedPrincipal | null>;
 }
 
 interface SessionTokenHeader {

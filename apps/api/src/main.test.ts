@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { PassThrough } from "node:stream";
 import type { FastifyRequest } from "fastify";
 import type {
+  AdminUser as PrismaAdminUserRecord,
   Guest as PrismaGuestRecord,
   InviteToken as PrismaInviteTokenRecord,
 } from "./generated/prisma/client.js";
@@ -42,6 +43,7 @@ import {
   buildGuestSessionCookieAttributes,
   canConsumeInviteToken,
   consumeInviteToken,
+  createRequestAdminMagicLinkUseCase,
   createRevokeInviteTokenUseCase,
   createIssueGuestSessionUseCase,
   createLoginGuestWithInviteTokenUseCase,
@@ -49,9 +51,12 @@ import {
   createAdminAuthGuard,
   createGuestAuthGuard,
   GuestInviteTokenAuthenticationError,
+  type AdminMagicLinkIssueInput,
+  type AdminMagicLinkIssueResult,
   type SessionVerificationInput,
   type GuestSessionVerifier,
   IDENTITY_ACCESS_HTTP_CONTRACT,
+  IDENTITY_ACCESS_HTTP_SCHEMAS,
   IDENTITY_ACCESS_INFRASTRUCTURE_PORTS,
   IDENTITY_ACCESS_INVITE_TOKEN_LIFECYCLE_CONTRACTS,
   IDENTITY_ACCESS_MODULE_USE_CASES,
@@ -59,11 +64,13 @@ import {
   InvalidInviteTokenConsumptionError,
   InviteTokenRevocationError,
   InviteTokenValidationError,
+  PrismaAdminUserRepository,
   PrismaGuestRepository,
   PrismaInviteTokenConsumptionTransactionRunner,
   PrismaInviteTokenRepository,
   resolveInviteTokenLifecycleStatus,
   revokeInviteToken,
+  SignedAdminMagicLinkService,
   SignedGuestSessionService,
   validateInviteToken,
 } from "./modules/identity-access/index.js";
@@ -379,6 +386,7 @@ function testModuleLayerContractsAreExported(): void {
   assert.equal(ADMIN_BACKOFFICE_HTTP_CONTRACT.routePrefix, "/admin");
 
   assert.equal(IDENTITY_ACCESS_MODULE_USE_CASES.guestAuthentication, "implemented");
+  assert.equal(IDENTITY_ACCESS_MODULE_USE_CASES.adminAuthentication, "implemented");
   assert.equal(IDENTITY_ACCESS_MODULE_USE_CASES.inviteTokenLifecycle, "implemented");
   assert.equal(GUESTS_RSVP_MODULE_USE_CASES.rsvpSubmission, "planned");
   assert.equal(GIFT_REGISTRY_MODULE_USE_CASES.giftReservationLifecycle, "planned");
@@ -401,6 +409,14 @@ function testModuleLayerContractsAreExported(): void {
   );
   assert.equal(
     IDENTITY_ACCESS_INFRASTRUCTURE_PORTS.providers.includes("guest-session-issuer"),
+    true,
+  );
+  assert.equal(
+    IDENTITY_ACCESS_INFRASTRUCTURE_PORTS.providers.includes("admin-magic-link-issuer"),
+    true,
+  );
+  assert.equal(
+    IDENTITY_ACCESS_INFRASTRUCTURE_PORTS.providers.includes("admin-magic-link-dispatcher"),
     true,
   );
   assert.equal(
@@ -438,6 +454,18 @@ function testModuleLayerContractsAreExported(): void {
   ]);
   assert.equal(GUESTS_RSVP_ROUTE_ACCESS.guestHome.config.access, "guest");
   assert.equal(GUESTS_RSVP_IDEMPOTENCY_CONTRACTS.idempotencyKey, "eventId+guestId");
+  assert.deepEqual(
+    IDENTITY_ACCESS_HTTP_SCHEMAS.bodies.adminLogin.parse({
+      email: "admin@example.com",
+      password: "ignored-by-schema",
+    }),
+    {
+      email: "admin@example.com",
+    },
+  );
+  assert.deepEqual(IDENTITY_ACCESS_HTTP_SCHEMAS.responses.requestAccepted.parse({ accepted: true }), {
+    accepted: true,
+  });
   assert.equal(GUESTS_RSVP_IDEMPOTENCY_CONTRACTS.persistenceStrategy, "single-row-upsert");
   assert.equal(
     GUESTS_RSVP_IDEMPOTENCY_CONTRACTS.replayBehavior,
@@ -485,7 +513,20 @@ async function testAuthGuardsSeparateGuestAndAdmin(): Promise<void> {
     role: "super_admin",
   };
 
-  const verifier = {
+  const guestVerifier = {
+    async verifySession({ token }: SessionVerificationInput) {
+      if (token === "guest-token") {
+        return guestPrincipal;
+      }
+
+      if (token === "admin-token") {
+        return adminPrincipal;
+      }
+
+      return null;
+    },
+  };
+  const adminVerifier = {
     async verifySession({ token }: SessionVerificationInput) {
       if (token === "guest-token") {
         return guestPrincipal;
@@ -499,8 +540,8 @@ async function testAuthGuardsSeparateGuestAndAdmin(): Promise<void> {
     },
   };
 
-  const guestGuard = createGuestAuthGuard(verifier as GuestSessionVerifier);
-  const adminGuard = createAdminAuthGuard(verifier);
+  const guestGuard = createGuestAuthGuard(guestVerifier as GuestSessionVerifier);
+  const adminGuard = createAdminAuthGuard(adminVerifier);
 
   const guestRequest = createAuthRequest("Bearer guest-token");
   const resolvedGuest = await guestGuard(guestRequest);
@@ -1101,6 +1142,86 @@ async function testPrismaGuestRepository(): Promise<void> {
   assert.equal(saved.status, "inactive");
 }
 
+async function testPrismaAdminUserRepository(): Promise<void> {
+  const persistenceRecord: PrismaAdminUserRecord = {
+    id: "admin-1",
+    name: "Admin User",
+    email: "admin@example.com",
+    authProvider: "email_magic_link",
+    role: "SUPER_ADMIN",
+    status: "ACTIVE",
+    lastLoginAt: null,
+    createdAt: new Date("2026-04-25T12:00:00.000Z"),
+    updatedAt: new Date("2026-04-25T12:00:00.000Z"),
+  };
+
+  const calls: Record<string, unknown>[] = [];
+  const delegate = {
+    async findUnique(args: { where: { id?: string; email?: string } }) {
+      calls.push({ method: "findUnique", args });
+      return persistenceRecord;
+    },
+    async findMany(args: {
+      where: Record<string, unknown>;
+      orderBy: { createdAt: "asc" | "desc" };
+      skip: number;
+      take: number;
+    }) {
+      calls.push({ method: "findMany", args });
+      return [persistenceRecord];
+    },
+    async upsert(args: {
+      where: { id: string };
+      create: Record<string, unknown>;
+      update: Record<string, unknown>;
+    }) {
+      calls.push({ method: "upsert", args });
+      return {
+        ...persistenceRecord,
+        ...args.update,
+      };
+    },
+  };
+
+  const repository = new PrismaAdminUserRepository(
+    delegate as unknown as ConstructorParameters<typeof PrismaAdminUserRepository>[0],
+  );
+
+  const foundById = await repository.findById("admin-1");
+  assert.equal(foundById?.role, "super_admin");
+
+  const foundByEmail = await repository.findByEmail("admin@example.com");
+  assert.equal(foundByEmail?.email, "admin@example.com");
+
+  const listed = await repository.findMany({
+    page: 1,
+    pageSize: 20,
+    role: "super_admin",
+    status: "active",
+    search: "admin",
+  });
+  assert.equal(listed.length, 1);
+
+  const saved = await repository.save({
+    id: "admin-2",
+    name: "Editor User",
+    email: "editor@example.com",
+    authProvider: "email_magic_link",
+    role: "editor",
+    status: "disabled",
+    lastLoginAt: null,
+    createdAt: new Date("2026-05-01T10:00:00.000Z"),
+    updatedAt: new Date("2026-05-01T10:00:00.000Z"),
+  });
+  assert.equal(saved.role, "editor");
+  assert.equal(saved.status, "disabled");
+
+  assert.deepEqual(calls[1], {
+    method: "findUnique",
+    args: { where: { email: "admin@example.com" } },
+  });
+}
+
 async function testLoginGuestWithInviteTokenUseCase(): Promise<void> {
   const baseGuest: IdentityAccessGuest = {
     id: "guest-1",
@@ -1411,6 +1532,144 @@ async function testLoginGuestWithInviteTokenUseCase(): Promise<void> {
   }
 }
 
+async function testAdminMagicLinkService(): Promise<void> {
+  const now = new Date("2026-05-02T12:00:00.000Z");
+  const service = new SignedAdminMagicLinkService(
+    "12345678901234567890123456789012",
+    300,
+    () => now,
+  );
+
+  const issued = await service.issueMagicLink({
+    adminUserId: "admin-1",
+    email: "admin@example.com",
+    role: "super_admin",
+    issuedAt: now,
+  });
+
+  assert.equal(typeof issued.token, "string");
+  assert.equal(issued.payload.actorType, "admin");
+  assert.equal(issued.payload.adminUserId, "admin-1");
+  assert.equal(issued.payload.email, "admin@example.com");
+  assert.equal(issued.payload.role, "super_admin");
+  assert.equal(issued.payload.purpose, "admin_magic_link");
+  assert.equal(issued.expiresAt.toISOString(), "2026-05-02T12:05:00.000Z");
+}
+
+async function testRequestAdminMagicLinkUseCase(): Promise<void> {
+  const activeAdmin: AdminUser = {
+    id: "admin-1",
+    name: "Admin User",
+    email: "admin@example.com",
+    authProvider: "email_magic_link",
+    role: "super_admin",
+    status: "active",
+    lastLoginAt: null,
+    createdAt: new Date("2026-04-25T12:00:00.000Z"),
+    updatedAt: new Date("2026-04-25T12:00:00.000Z"),
+  };
+  const disabledAdmin: AdminUser = {
+    ...activeAdmin,
+    id: "admin-2",
+    email: "disabled@example.com",
+    status: "disabled",
+  };
+  const issuedMagicLinks: AdminMagicLinkIssueInput[] = [];
+  const dispatchedMagicLinks: Array<{
+    adminUserId: string;
+    email: string;
+    name: string;
+    role: string;
+    token: string;
+    expiresAt: Date;
+    requestId?: string;
+  }> = [];
+  const issuer = {
+    async issueMagicLink(input: AdminMagicLinkIssueInput): Promise<AdminMagicLinkIssueResult> {
+      issuedMagicLinks.push(input);
+
+      return {
+        token: "signed-admin-token",
+        expiresAt: new Date("2026-05-02T12:15:00.000Z"),
+        payload: {
+          actorType: "admin",
+          adminUserId: input.adminUserId,
+          email: input.email,
+          role: input.role,
+          purpose: "admin_magic_link",
+          iat: 1,
+          exp: 2,
+        },
+      };
+    },
+  };
+  const dispatcher = {
+    async dispatchMagicLink(input: {
+      adminUserId: string;
+      email: string;
+      name: string;
+      role: string;
+      token: string;
+      expiresAt: Date;
+      requestId?: string;
+    }): Promise<void> {
+      dispatchedMagicLinks.push(input);
+    },
+  };
+  const useCase = createRequestAdminMagicLinkUseCase({
+    adminUserRepository: {
+      async findByEmail(email: string) {
+        if (email === activeAdmin.email) {
+          return activeAdmin;
+        }
+
+        if (email === disabledAdmin.email) {
+          return disabledAdmin;
+        }
+
+        return null;
+      },
+    },
+    adminMagicLinkIssuer: issuer,
+    adminMagicLinkDispatcher: dispatcher,
+  });
+
+  const acceptedForActive = await useCase.execute({
+    email: activeAdmin.email,
+    requestId: "req-1",
+  });
+  const acceptedForMissing = await useCase.execute({
+    email: "missing@example.com",
+    requestId: "req-2",
+  });
+  const acceptedForDisabled = await useCase.execute({
+    email: disabledAdmin.email,
+    requestId: "req-3",
+  });
+
+  assert.deepEqual(acceptedForActive, { accepted: true });
+  assert.deepEqual(acceptedForMissing, { accepted: true });
+  assert.deepEqual(acceptedForDisabled, { accepted: true });
+  assert.deepEqual(issuedMagicLinks, [
+    {
+      adminUserId: "admin-1",
+      email: "admin@example.com",
+      role: "super_admin",
+    },
+  ]);
+  assert.deepEqual(dispatchedMagicLinks, [
+    {
+      adminUserId: "admin-1",
+      email: "admin@example.com",
+      name: "Admin User",
+      role: "super_admin",
+      token: "signed-admin-token",
+      expiresAt: new Date("2026-05-02T12:15:00.000Z"),
+      requestId: "req-1",
+    },
+  ]);
+}
+
 async function testGuestSessionService(): Promise<void> {
   const now = new Date("2026-05-02T12:00:00.000Z");
   const service = new SignedGuestSessionService(
@@ -1549,8 +1808,11 @@ async function run(): Promise<void> {
   await testAuthGuardsSeparateGuestAndAdmin();
   await testAccessPolicies();
   await testLoginGuestWithInviteTokenUseCase();
+  await testAdminMagicLinkService();
+  await testRequestAdminMagicLinkUseCase();
   await testGuestSessionService();
   await testIssueGuestSessionUseCase();
+  await testPrismaAdminUserRepository();
   await testPrismaGuestRepository();
   await testPrismaInviteTokenRepository();
   await testPrismaInviteTokenTransactionRunner();

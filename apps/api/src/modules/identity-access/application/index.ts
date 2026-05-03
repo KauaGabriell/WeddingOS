@@ -4,4 +4,5 @@ export * from "./invite-token-lifecycle-contract.js";
 export * from "./invite-token-validation.js";
 export * from "./login-with-invite-token.js";
 export * from "./login-with-short-code.js";
+export * from "./request-admin-magic-link.js";
 export * from "./revoke-invite-token.js";

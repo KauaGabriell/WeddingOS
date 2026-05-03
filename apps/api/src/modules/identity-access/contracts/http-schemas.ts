@@ -50,6 +50,10 @@ const authSessionResponseSchema = z.object({
   expiresAt: isoDateTimeSchema,
 });
 
+const requestAcceptedResponseSchema = z.object({
+  accepted: z.literal(true),
+});
+
 export const IDENTITY_ACCESS_HTTP_SCHEMAS = defineHttpSchemaCatalog({
   params: {
     inviteTokenId: z.object({
@@ -66,7 +70,6 @@ export const IDENTITY_ACCESS_HTTP_SCHEMAS = defineHttpSchemaCatalog({
     }),
     adminLogin: z.object({
       email: z.string().email(),
-      password: z.string().min(8),
     }),
     revokeInviteToken: z.object({
       reason: z.string().trim().min(3).max(255),
@@ -76,6 +79,7 @@ export const IDENTITY_ACCESS_HTTP_SCHEMAS = defineHttpSchemaCatalog({
     adminUser: adminUserResponseSchema,
     inviteToken: inviteTokenResponseSchema,
     authSession: authSessionResponseSchema,
+    requestAccepted: requestAcceptedResponseSchema,
   },
 });
 
@@ -87,6 +91,9 @@ export type IdentityAccessInviteTokenResponseDto = z.infer<
 >;
 export type IdentityAccessAuthSessionResponseDto = z.infer<
   typeof IDENTITY_ACCESS_HTTP_SCHEMAS.responses.authSession
+>;
+export type IdentityAccessRequestAcceptedResponseDto = z.infer<
+  typeof IDENTITY_ACCESS_HTTP_SCHEMAS.responses.requestAccepted
 >;
 export type IdentityAccessGuestTokenLoginRequestDto = z.infer<
   typeof IDENTITY_ACCESS_HTTP_SCHEMAS.bodies.guestTokenLogin

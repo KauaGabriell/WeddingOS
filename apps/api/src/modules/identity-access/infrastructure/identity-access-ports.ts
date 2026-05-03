@@ -6,6 +6,8 @@ export interface IdentityAccessInfrastructurePorts {
   ];
   readonly providers: readonly [
     "admin-auth-provider",
+    "admin-magic-link-issuer",
+    "admin-magic-link-dispatcher",
     "guest-auth-provider",
     "guest-session-issuer",
     "invite-token-signer",
@@ -19,6 +21,8 @@ export const IDENTITY_ACCESS_INFRASTRUCTURE_PORTS: IdentityAccessInfrastructureP
   repositories: ["admin-user-repository", "invite-token-repository", "guest-repository"],
   providers: [
     "admin-auth-provider",
+    "admin-magic-link-issuer",
+    "admin-magic-link-dispatcher",
     "guest-auth-provider",
     "guest-session-issuer",
     "invite-token-signer",
