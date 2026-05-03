@@ -7,6 +7,7 @@ export interface IdentityAccessInfrastructurePorts {
   readonly providers: readonly [
     "admin-auth-provider",
     "guest-auth-provider",
+    "guest-session-issuer",
     "invite-token-signer",
     "guest-session-verifier",
     "admin-session-verifier",
@@ -19,6 +20,7 @@ export const IDENTITY_ACCESS_INFRASTRUCTURE_PORTS: IdentityAccessInfrastructureP
   providers: [
     "admin-auth-provider",
     "guest-auth-provider",
+    "guest-session-issuer",
     "invite-token-signer",
     "guest-session-verifier",
     "admin-session-verifier",

@@ -47,6 +47,7 @@ const envSchema = z.object({
   S3_SECRET_ACCESS_KEY: z.string().min(1).default("minioadmin"),
   S3_FORCE_PATH_STYLE: booleanFromEnv.default(true),
   S3_SIGNED_URL_EXPIRES_IN_SECONDS: z.coerce.number().int().min(60).default(900),
+  JWT_SECRET: z.string().min(32).default("CHANGE_ME_JWT_SECRET_MIN_32_CHARS"),
 });
 
 export type AppEnv = z.infer<typeof envSchema> & { corsOrigins: string[] };

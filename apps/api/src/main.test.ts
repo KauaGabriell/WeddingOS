@@ -38,13 +38,16 @@ import {
   buildRsvpResponseIdempotencyKey,
 } from "./modules/guests-rsvp/index.js";
 import {
+  buildGuestSessionCookieAttributes,
   canConsumeInviteToken,
   consumeInviteToken,
+  createIssueGuestSessionUseCase,
   createLoginGuestWithInviteTokenUseCase,
   createLoginGuestWithShortCodeUseCase,
   createAdminAuthGuard,
   createGuestAuthGuard,
   GuestInviteTokenAuthenticationError,
+  type SessionVerificationInput,
   type GuestSessionVerifier,
   IDENTITY_ACCESS_HTTP_CONTRACT,
   IDENTITY_ACCESS_INFRASTRUCTURE_PORTS,
@@ -57,6 +60,7 @@ import {
   PrismaInviteTokenRepository,
   resolveInviteTokenLifecycleStatus,
   revokeInviteToken,
+  SignedGuestSessionService,
 } from "./modules/identity-access/index.js";
 import type {
   AdminUser,
@@ -95,6 +99,7 @@ function createTestEnv(): AppEnv {
     S3_SECRET_ACCESS_KEY: "super-secret-storage-key",
     S3_FORCE_PATH_STYLE: true,
     S3_SIGNED_URL_EXPIRES_IN_SECONDS: 900,
+    JWT_SECRET: "12345678901234567890123456789012",
     corsOrigins: ["http://localhost:3000"],
   };
 }
@@ -471,8 +476,8 @@ async function testAuthGuardsSeparateGuestAndAdmin(): Promise<void> {
     role: "super_admin",
   };
 
-  const verifier: GuestSessionVerifier = {
-    async verifySession({ token }) {
+  const verifier = {
+    async verifySession({ token }: SessionVerificationInput) {
       if (token === "guest-token") {
         return guestPrincipal;
       }
@@ -485,7 +490,7 @@ async function testAuthGuardsSeparateGuestAndAdmin(): Promise<void> {
     },
   };
 
-  const guestGuard = createGuestAuthGuard(verifier);
+  const guestGuard = createGuestAuthGuard(verifier as GuestSessionVerifier);
   const adminGuard = createAdminAuthGuard(verifier);
 
   const guestRequest = createAuthRequest("Bearer guest-token");
@@ -1229,6 +1234,134 @@ async function testLoginGuestWithInviteTokenUseCase(): Promise<void> {
   }
 }
 
+async function testGuestSessionService(): Promise<void> {
+  const now = new Date("2026-05-02T12:00:00.000Z");
+  const service = new SignedGuestSessionService(
+    "12345678901234567890123456789012",
+    60,
+    () => now,
+  );
+
+  const issued = await service.issueSession({
+    guestId: "guest-1",
+    guestGroupId: "group-1",
+    issuedAt: now,
+  });
+
+  assert.equal(typeof issued.accessToken, "string");
+  assert.equal(issued.payload.actorType, "guest");
+  assert.equal(issued.payload.guestId, "guest-1");
+  assert.equal(issued.payload.guestGroupId, "group-1");
+  assert.equal(issued.expiresAt.toISOString(), "2026-05-02T12:01:00.000Z");
+
+  const verified = await service.verifySession({
+    token: issued.accessToken,
+    requestId: "req-1",
+  });
+  assert.deepEqual(verified, {
+    actorType: "guest",
+    guestId: "guest-1",
+    guestGroupId: "group-1",
+  });
+
+  const expiredService = new SignedGuestSessionService(
+    "12345678901234567890123456789012",
+    60,
+    () => new Date("2026-05-02T12:02:00.000Z"),
+  );
+  assert.equal(
+    await expiredService.verifySession({
+      token: issued.accessToken,
+      requestId: "req-2",
+    }),
+    null,
+  );
+
+  assert.equal(
+    await service.verifySession({
+      token: "malformed-token",
+      requestId: "req-3",
+    }),
+    null,
+  );
+
+  const tamperedToken = `${issued.accessToken.slice(0, -1)}x`;
+  assert.equal(
+    await service.verifySession({
+      token: tamperedToken,
+      requestId: "req-4",
+    }),
+    null,
+  );
+
+  const tokenParts = issued.accessToken.split(".");
+  const actorPayload = {
+    actorType: "admin",
+    guestId: "guest-1",
+    guestGroupId: "group-1",
+    iat: issued.payload.iat,
+    exp: issued.payload.exp,
+  };
+  const encodedActorPayload = Buffer.from(JSON.stringify(actorPayload), "utf8").toString("base64url");
+  const invalidActorToken = `${tokenParts[0]}.${encodedActorPayload}.${tokenParts[2]}`;
+  assert.equal(
+    await service.verifySession({
+      token: invalidActorToken,
+      requestId: "req-5",
+    }),
+    null,
+  );
+}
+
+function testGuestSessionCookieAttributes(): void {
+  const expiresAt = new Date("2026-06-01T12:00:00.000Z");
+  const developmentCookie = buildGuestSessionCookieAttributes({
+    nodeEnv: "development",
+    expiresAt,
+  });
+  const productionCookie = buildGuestSessionCookieAttributes({
+    nodeEnv: "production",
+    expiresAt,
+  });
+
+  assert.equal(developmentCookie.name, "weddingos_guest_session");
+  assert.equal(developmentCookie.httpOnly, true);
+  assert.equal(developmentCookie.sameSite, "lax");
+  assert.equal(developmentCookie.path, "/");
+  assert.equal(developmentCookie.secure, false);
+  assert.equal(productionCookie.secure, true);
+  assert.equal(developmentCookie.expires, expiresAt);
+}
+
+async function testIssueGuestSessionUseCase(): Promise<void> {
+  const now = new Date("2026-05-02T12:00:00.000Z");
+  const service = new SignedGuestSessionService(
+    "12345678901234567890123456789012",
+    60,
+    () => now,
+  );
+  const useCase = createIssueGuestSessionUseCase({
+    guestSessionIssuer: service,
+    env: { NODE_ENV: "test" },
+  });
+
+  const result = await useCase.execute({
+    authenticationResult: {
+      guestId: "guest-1",
+      guestGroupId: "group-1",
+      inviteTokenId: "invite-1",
+      authenticatedAt: now,
+    },
+  });
+
+  assert.equal(result.actorType, "guest");
+  assert.equal(result.actorId, "guest-1");
+  assert.equal(typeof result.accessToken, "string");
+  assert.equal(result.expiresAt.toISOString(), "2026-05-02T12:01:00.000Z");
+  assert.equal(result.cookie.httpOnly, true);
+  assert.equal(result.cookie.secure, false);
+}
+
 async function run(): Promise<void> {
   await testEchoesIncomingRequestId();
   await testGeneratesRequestIdWhenMissing();
@@ -1239,10 +1372,13 @@ async function run(): Promise<void> {
   await testAuthGuardsSeparateGuestAndAdmin();
   await testAccessPolicies();
   await testLoginGuestWithInviteTokenUseCase();
+  await testGuestSessionService();
+  await testIssueGuestSessionUseCase();
   await testPrismaGuestRepository();
   await testPrismaInviteTokenRepository();
   await testPrismaInviteTokenTransactionRunner();
   testModuleLayerContractsAreExported();
+  testGuestSessionCookieAttributes();
   testGiftReservationConflictError();
   testInviteTokenLifecyclePolicies();
   testRsvpIdempotencyKeyBuilder();

@@ -1,3 +1,4 @@
+export * from "./guest-session.js";
 export * from "./identity-access-ports.js";
 export * from "./invite-token-transactions.js";
 export * from "./prisma-guest-repository.js";
