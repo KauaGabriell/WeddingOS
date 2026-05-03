@@ -1,5 +1,9 @@
 export interface IdentityAccessInfrastructurePorts {
-  readonly repositories: readonly ["admin-user-repository", "invite-token-repository"];
+  readonly repositories: readonly [
+    "admin-user-repository",
+    "invite-token-repository",
+    "guest-repository",
+  ];
   readonly providers: readonly [
     "admin-auth-provider",
     "guest-auth-provider",
@@ -11,7 +15,7 @@ export interface IdentityAccessInfrastructurePorts {
 }
 
 export const IDENTITY_ACCESS_INFRASTRUCTURE_PORTS: IdentityAccessInfrastructurePorts = {
-  repositories: ["admin-user-repository", "invite-token-repository"],
+  repositories: ["admin-user-repository", "invite-token-repository", "guest-repository"],
   providers: [
     "admin-auth-provider",
     "guest-auth-provider",

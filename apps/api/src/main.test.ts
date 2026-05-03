@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { PassThrough } from "node:stream";
 import type { FastifyRequest } from "fastify";
-import type { InviteToken as PrismaInviteTokenRecord } from "./generated/prisma/client.js";
+import type {
+  Guest as PrismaGuestRecord,
+  InviteToken as PrismaInviteTokenRecord,
+} from "./generated/prisma/client.js";
 import { type AppEnv, buildApp } from "./main.js";
 import {
   ADMIN_BACKOFFICE_HTTP_CONTRACT,
@@ -37,8 +40,10 @@ import {
 import {
   canConsumeInviteToken,
   consumeInviteToken,
+  createLoginGuestWithInviteTokenUseCase,
   createAdminAuthGuard,
   createGuestAuthGuard,
+  GuestInviteTokenAuthenticationError,
   type GuestSessionVerifier,
   IDENTITY_ACCESS_HTTP_CONTRACT,
   IDENTITY_ACCESS_INFRASTRUCTURE_PORTS,
@@ -46,12 +51,17 @@ import {
   IDENTITY_ACCESS_MODULE_USE_CASES,
   IDENTITY_ACCESS_ROUTE_ACCESS,
   InvalidInviteTokenConsumptionError,
+  PrismaGuestRepository,
   PrismaInviteTokenConsumptionTransactionRunner,
   PrismaInviteTokenRepository,
   resolveInviteTokenLifecycleStatus,
   revokeInviteToken,
 } from "./modules/identity-access/index.js";
-import type { AdminUser, InviteToken } from "./modules/identity-access/index.js";
+import type {
+  AdminUser,
+  Guest as IdentityAccessGuest,
+  InviteToken,
+} from "./modules/identity-access/index.js";
 import { MODULE_NAMES } from "./modules/index.js";
 import {
   PHOTO_WALL_HTTP_CONTRACT,
@@ -357,7 +367,7 @@ function testModuleLayerContractsAreExported(): void {
   assert.equal(PHOTO_WALL_HTTP_CONTRACT.routePrefix, "/photos");
   assert.equal(ADMIN_BACKOFFICE_HTTP_CONTRACT.routePrefix, "/admin");
 
-  assert.equal(IDENTITY_ACCESS_MODULE_USE_CASES.guestAuthentication, "planned");
+  assert.equal(IDENTITY_ACCESS_MODULE_USE_CASES.guestAuthentication, "implemented");
   assert.equal(IDENTITY_ACCESS_MODULE_USE_CASES.inviteTokenLifecycle, "defined");
   assert.equal(GUESTS_RSVP_MODULE_USE_CASES.rsvpSubmission, "planned");
   assert.equal(GIFT_REGISTRY_MODULE_USE_CASES.giftReservationLifecycle, "planned");
@@ -366,6 +376,10 @@ function testModuleLayerContractsAreExported(): void {
 
   assert.equal(
     IDENTITY_ACCESS_INFRASTRUCTURE_PORTS.repositories.includes("invite-token-repository"),
+    true,
+  );
+  assert.equal(
+    IDENTITY_ACCESS_INFRASTRUCTURE_PORTS.repositories.includes("guest-repository"),
     true,
   );
   assert.equal(
@@ -822,6 +836,341 @@ async function testPrismaInviteTokenTransactionRunner(): Promise<void> {
   assert.equal(updates.length, 1);
 }
 
+async function testPrismaGuestRepository(): Promise<void> {
+  const persistenceRecord: PrismaGuestRecord = {
+    id: "guest-1",
+    guestGroupId: "group-1",
+    fullName: "Joao Silva",
+    phone: null,
+    email: "joao@example.com",
+    isPrimary: true,
+    status: "ACTIVE",
+    lastAccessAt: null,
+    createdAt: new Date("2026-04-25T12:00:00.000Z"),
+    updatedAt: new Date("2026-04-25T12:00:00.000Z"),
+  };
+
+  const calls: Record<string, unknown>[] = [];
+  const delegate = {
+    async findUnique(args: { where: { id: string } }) {
+      calls.push({ method: "findUnique", args });
+      return persistenceRecord;
+    },
+    async findFirst(args: {
+      where: { guestGroupId: string; isPrimary?: boolean };
+      orderBy: { createdAt: "asc" | "desc" };
+    }) {
+      calls.push({ method: "findFirst", args });
+      return persistenceRecord;
+    },
+    async findMany(args: {
+      where: { guestGroupId?: string; status?: string };
+      orderBy: { createdAt: "asc" | "desc" };
+      skip: number;
+      take: number;
+    }) {
+      calls.push({ method: "findMany", args });
+      return [persistenceRecord];
+    },
+    async upsert(args: {
+      where: { id: string };
+      create: Record<string, unknown>;
+      update: Record<string, unknown>;
+    }) {
+      calls.push({ method: "upsert", args });
+      return {
+        ...persistenceRecord,
+        ...args.update,
+      };
+    },
+  };
+
+  const repository = new PrismaGuestRepository(
+    delegate as unknown as ConstructorParameters<typeof PrismaGuestRepository>[0],
+  );
+
+  const foundById = await repository.findById("guest-1");
+  assert.equal(foundById?.status, "active");
+
+  const foundPrimary = await repository.findPrimaryByGroupId("group-1");
+  assert.equal(foundPrimary?.isPrimary, true);
+
+  const listed = await repository.findMany({
+    page: 1,
+    pageSize: 20,
+    guestGroupId: "group-1",
+    status: "active",
+  });
+  assert.equal(listed.length, 1);
+
+  const saved = await repository.save({
+    id: "guest-2",
+    guestGroupId: "group-2",
+    fullName: "Maria Silva",
+    phone: null,
+    email: "maria@example.com",
+    isPrimary: false,
+    status: "inactive",
+    lastAccessAt: null,
+    createdAt: new Date("2026-05-01T10:00:00.000Z"),
+    updatedAt: new Date("2026-05-01T10:00:00.000Z"),
+  });
+  assert.equal(saved.status, "inactive");
+}
+
+async function testLoginGuestWithInviteTokenUseCase(): Promise<void> {
+  const baseGuest: IdentityAccessGuest = {
+    id: "guest-1",
+    guestGroupId: "group-1",
+    fullName: "Joao Silva",
+    phone: null,
+    email: "joao@example.com",
+    isPrimary: true,
+    status: "active",
+    lastAccessAt: null,
+    createdAt: new Date("2026-04-20T10:00:00.000Z"),
+    updatedAt: new Date("2026-04-20T10:00:00.000Z"),
+  };
+
+  const baseInviteToken: InviteToken = {
+    id: "invite-1",
+    guestGroupId: "group-1",
+    guestId: "guest-1",
+    tokenHash: "valid-token",
+    shortCode: "ABC123",
+    channel: "manual",
+    status: "issued",
+    issuedAt: new Date("2026-04-25T12:00:00.000Z"),
+    expiresAt: new Date("2026-05-10T12:00:00.000Z"),
+    usedAt: null,
+    revokedAt: null,
+    revokedReason: null,
+    createdAt: new Date("2026-04-25T12:00:00.000Z"),
+    updatedAt: new Date("2026-04-25T12:00:00.000Z"),
+  };
+
+  let markCalls = 0;
+  const expiredToken: InviteToken = {
+    ...baseInviteToken,
+    id: "invite-expired",
+    tokenHash: "expired-token",
+    expiresAt: new Date("2026-04-29T12:00:00.000Z"),
+  };
+  const usedToken: InviteToken = {
+    ...baseInviteToken,
+    id: "invite-used",
+    tokenHash: "used-token",
+    status: "used",
+    usedAt: new Date("2026-04-28T12:00:00.000Z"),
+  };
+  const revokedToken: InviteToken = {
+    ...baseInviteToken,
+    id: "invite-revoked",
+    tokenHash: "revoked-token",
+    status: "revoked",
+    revokedAt: new Date("2026-04-28T12:00:00.000Z"),
+    revokedReason: "manual revoke",
+  };
+  const groupToken: InviteToken = {
+    ...baseInviteToken,
+    id: "invite-group",
+    guestId: null,
+    tokenHash: "group-token",
+  };
+  const missingGuestToken: InviteToken = {
+    ...baseInviteToken,
+    id: "invite-missing-guest",
+    guestId: "guest-missing",
+    tokenHash: "missing-guest-token",
+  };
+  const inactiveGuestToken: InviteToken = {
+    ...baseInviteToken,
+    id: "invite-inactive-guest",
+    guestId: "guest-inactive",
+    tokenHash: "inactive-guest-token",
+  };
+
+  const inviteTokenRepository: {
+    findById(id: string): Promise<InviteToken | null>;
+    save(entity: InviteToken): Promise<InviteToken>;
+    findMany(): Promise<readonly InviteToken[]>;
+    findByTokenHash(tokenHash: string): Promise<InviteToken | null>;
+    findByShortCode(shortCode: string): Promise<InviteToken | null>;
+    markAsUsed(input: { inviteTokenId: string; usedAt?: Date }): Promise<InviteToken>;
+    revoke(input?: unknown): Promise<InviteToken>;
+  } = {
+    async findById() {
+      return null;
+    },
+    async save(entity: InviteToken) {
+      return entity;
+    },
+    async findMany() {
+      return [] as const;
+    },
+    async findByTokenHash(tokenHash: string) {
+      if (tokenHash === "valid-token") {
+        return baseInviteToken;
+      }
+
+      if (tokenHash === "group-token") {
+        return groupToken;
+      }
+
+      if (tokenHash === "expired-token") {
+        return expiredToken;
+      }
+
+      if (tokenHash === "used-token") {
+        return usedToken;
+      }
+
+      if (tokenHash === "revoked-token") {
+        return revokedToken;
+      }
+
+      if (tokenHash === "missing-guest-token") {
+        return missingGuestToken;
+      }
+
+      if (tokenHash === "inactive-guest-token") {
+        return inactiveGuestToken;
+      }
+
+      return null;
+    },
+    async findByShortCode() {
+      return null;
+    },
+    async markAsUsed(input: { inviteTokenId: string; usedAt?: Date }) {
+      markCalls += 1;
+      return {
+        ...baseInviteToken,
+        id: input.inviteTokenId,
+        status: "used" as const,
+        usedAt: input.usedAt ?? new Date(),
+      };
+    },
+    async revoke() {
+      return {
+        ...baseInviteToken,
+        status: "revoked" as const,
+      };
+    },
+  };
+
+  const guestRepository = {
+    async findById(id: string) {
+      if (id === "guest-1") {
+        return baseGuest;
+      }
+
+      if (id === "guest-inactive") {
+        return {
+          ...baseGuest,
+          id,
+          status: "inactive" as const,
+        };
+      }
+
+      return null;
+    },
+    async save(entity: IdentityAccessGuest) {
+      return entity;
+    },
+    async findMany() {
+      return [] as const;
+    },
+    async findPrimaryByGroupId(guestGroupId: string) {
+      if (guestGroupId === "group-1") {
+        return baseGuest;
+      }
+
+      return null;
+    },
+  };
+
+  const transactionRunner = {
+    async run<T>(operation: (context: {
+      findInviteTokenById(inviteTokenId: string): Promise<InviteToken | null>;
+      markInviteTokenAsUsed(input: { inviteTokenId: string; usedAt?: Date }): Promise<InviteToken>;
+    }) => Promise<T>) {
+      return operation({
+        async findInviteTokenById(inviteTokenId: string) {
+          if (inviteTokenId === "invite-group") {
+            return {
+              ...baseInviteToken,
+              id: inviteTokenId,
+              guestId: null,
+            };
+          }
+
+          if (inviteTokenId === "invite-1") {
+            return baseInviteToken;
+          }
+
+          return null;
+        },
+        async markInviteTokenAsUsed(input) {
+          return inviteTokenRepository.markAsUsed(input);
+        },
+      });
+    },
+  };
+
+  const authMoments = [
+    new Date("2026-04-30T12:00:00.000Z"),
+    new Date("2026-04-30T12:00:05.000Z"),
+  ];
+  const useCase = createLoginGuestWithInviteTokenUseCase({
+    inviteTokenRepository,
+    guestRepository,
+    inviteTokenConsumptionTransactionRunner: transactionRunner,
+    now: () => authMoments.shift() ?? new Date("2026-04-30T12:00:05.000Z"),
+  });
+
+  const directLogin = await useCase.execute({
+    token: "valid-token",
+    requestId: "req-1",
+  });
+  assert.deepEqual(directLogin, {
+    guestId: "guest-1",
+    guestGroupId: "group-1",
+    inviteTokenId: "invite-1",
+    authenticatedAt: new Date("2026-04-30T12:00:05.000Z"),
+  });
+
+  const groupLoginUseCase = createLoginGuestWithInviteTokenUseCase({
+    inviteTokenRepository,
+    guestRepository,
+    inviteTokenConsumptionTransactionRunner: transactionRunner,
+    now: () => new Date("2026-04-30T13:00:00.000Z"),
+  });
+  const groupLogin = await groupLoginUseCase.execute({ token: "group-token" });
+  assert.equal(groupLogin.guestId, "guest-1");
+  assert.equal(markCalls, 2);
+
+  const failingUseCase = createLoginGuestWithInviteTokenUseCase({
+    inviteTokenRepository,
+    guestRepository,
+    inviteTokenConsumptionTransactionRunner: transactionRunner,
+    now: () => new Date("2026-04-30T12:00:00.000Z"),
+  });
+
+  for (const token of [
+    "missing-token",
+    "expired-token",
+    "used-token",
+    "revoked-token",
+    "missing-guest-token",
+    "inactive-guest-token",
+  ]) {
+    await assert.rejects(() => failingUseCase.execute({ token }), (error: unknown) => {
+      return error instanceof GuestInviteTokenAuthenticationError;
+    });
+  }
+}
+
 async function run(): Promise<void> {
   await testEchoesIncomingRequestId();
   await testGeneratesRequestIdWhenMissing();
@@ -831,6 +1180,8 @@ async function run(): Promise<void> {
   await testBearerTokenResolution();
   await testAuthGuardsSeparateGuestAndAdmin();
   await testAccessPolicies();
+  await testLoginGuestWithInviteTokenUseCase();
+  await testPrismaGuestRepository();
   await testPrismaInviteTokenRepository();
   await testPrismaInviteTokenTransactionRunner();
   testModuleLayerContractsAreExported();
