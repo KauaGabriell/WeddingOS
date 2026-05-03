@@ -71,6 +71,7 @@ import {
   resolveInviteTokenLifecycleStatus,
   revokeInviteToken,
   SignedAdminMagicLinkService,
+  SignedAdminSessionService,
   SignedGuestSessionService,
   validateInviteToken,
 } from "./modules/identity-access/index.js";
@@ -417,6 +418,10 @@ function testModuleLayerContractsAreExported(): void {
   );
   assert.equal(
     IDENTITY_ACCESS_INFRASTRUCTURE_PORTS.providers.includes("admin-magic-link-dispatcher"),
+    true,
+  );
+  assert.equal(
+    IDENTITY_ACCESS_INFRASTRUCTURE_PORTS.providers.includes("admin-session-issuer"),
     true,
   );
   assert.equal(
@@ -1556,6 +1561,86 @@ async function testAdminMagicLinkService(): Promise<void> {
   assert.equal(issued.expiresAt.toISOString(), "2026-05-02T12:05:00.000Z");
 }
 
+async function testAdminSessionService(): Promise<void> {
+  const now = new Date("2026-05-02T12:00:00.000Z");
+  const service = new SignedAdminSessionService(
+    "12345678901234567890123456789012",
+    300,
+    () => now,
+  );
+  const guestService = new SignedGuestSessionService(
+    "12345678901234567890123456789012",
+    300,
+    () => now,
+  );
+
+  const issued = await service.issueSession({
+    adminUserId: "admin-1",
+    role: "super_admin",
+    issuedAt: now,
+  });
+
+  assert.equal(typeof issued.accessToken, "string");
+  assert.equal(issued.payload.actorType, "admin");
+  assert.equal(issued.payload.adminUserId, "admin-1");
+  assert.equal(issued.payload.role, "super_admin");
+  assert.equal(issued.expiresAt.toISOString(), "2026-05-02T12:05:00.000Z");
+
+  const verified = await service.verifySession({
+    token: issued.accessToken,
+    requestId: "req-admin-1",
+  });
+  assert.deepEqual(verified, {
+    actorType: "admin",
+    adminUserId: "admin-1",
+    role: "super_admin",
+  });
+
+  const issuedGuestSession = await guestService.issueSession({
+    guestId: "guest-1",
+    guestGroupId: "group-1",
+    issuedAt: now,
+  });
+  const verifiedGuest = await service.verifySession({
+    token: issuedGuestSession.accessToken,
+    requestId: "req-admin-2",
+  });
+  assert.deepEqual(verifiedGuest, {
+    actorType: "guest",
+    guestId: "guest-1",
+    guestGroupId: "group-1",
+  });
+
+  const expiredService = new SignedAdminSessionService(
+    "12345678901234567890123456789012",
+    300,
+    () => new Date("2026-05-02T12:06:00.000Z"),
+  );
+  assert.equal(
+    await expiredService.verifySession({
+      token: issued.accessToken,
+      requestId: "req-admin-3",
+    }),
+    null,
+  );
+  assert.equal(
+    await service.verifySession({
+      token: "malformed-token",
+      requestId: "req-admin-4",
+    }),
+    null,
+  );
+
+  const tamperedToken = `${issued.accessToken.slice(0, -1)}x`;
+  assert.equal(
+    await service.verifySession({
+      token: tamperedToken,
+      requestId: "req-admin-5",
+    }),
+    null,
+  );
+}
+
 async function testRequestAdminMagicLinkUseCase(): Promise<void> {
   const activeAdmin: AdminUser = {
     id: "admin-1",
@@ -1798,6 +1883,49 @@ async function testIssueGuestSessionUseCase(): Promise<void> {
   assert.equal(result.cookie.secure, false);
 }
 
+async function testAdminRoutesRequireAdminAuth(): Promise<void> {
+  const env = createTestEnv();
+  const app = await buildApp(env);
+  const guestSessionService = new SignedGuestSessionService(env.JWT_SECRET, 300, () => new Date());
+  const adminSessionService = new SignedAdminSessionService(env.JWT_SECRET, 300, () => new Date());
+
+  try {
+    const missingCredentials = await app.inject({
+      method: "GET",
+      url: "/admin/dashboard",
+    });
+    assert.equal(missingCredentials.statusCode, 401);
+
+    const guestSession = await guestSessionService.issueSession({
+      guestId: "guest-1",
+      guestGroupId: "group-1",
+    });
+    const guestResponse = await app.inject({
+      method: "GET",
+      url: "/admin/dashboard",
+      headers: {
+        authorization: `Bearer ${guestSession.accessToken}`,
+      },
+    });
+    assert.equal(guestResponse.statusCode, 403);
+
+    const adminSession = await adminSessionService.issueSession({
+      adminUserId: "admin-1",
+      role: "super_admin",
+    });
+    const adminResponse = await app.inject({
+      method: "GET",
+      url: "/admin/dashboard",
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    assert.equal(adminResponse.statusCode, 501);
+  } finally {
+    await app.close();
+  }
+}
+
 async function run(): Promise<void> {
   await testEchoesIncomingRequestId();
   await testGeneratesRequestIdWhenMissing();
@@ -1809,9 +1937,11 @@ async function run(): Promise<void> {
   await testAccessPolicies();
   await testLoginGuestWithInviteTokenUseCase();
   await testAdminMagicLinkService();
+  await testAdminSessionService();
   await testRequestAdminMagicLinkUseCase();
   await testGuestSessionService();
   await testIssueGuestSessionUseCase();
+  await testAdminRoutesRequireAdminAuth();
   await testPrismaAdminUserRepository();
   await testPrismaGuestRepository();
   await testPrismaInviteTokenRepository();

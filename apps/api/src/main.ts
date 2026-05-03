@@ -16,6 +16,7 @@ import {
 } from "./modules/shared/platform/http/request-context.js";
 import { createApiLogger } from "./modules/shared/platform/logging/create-api-logger.js";
 import { createStorageClient } from "./modules/shared/platform/storage/create-storage-client.js";
+import { SignedAdminSessionService } from "./modules/identity-access/index.js";
 
 const booleanFromEnv = z.preprocess((value) => {
   if (typeof value === "boolean") {
@@ -76,6 +77,7 @@ export async function buildApp(env: AppEnv, options: BuildAppOptions = {}) {
   });
   const storageClient = createStorageClient(env);
   app.decorate("storageClient", storageClient);
+  app.decorate("adminSessionVerifier", new SignedAdminSessionService(env.JWT_SECRET));
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
