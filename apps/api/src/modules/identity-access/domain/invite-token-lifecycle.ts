@@ -6,7 +6,7 @@ export interface InviteTokenConsumptionOptions {
   readonly consumedAt?: Date;
 }
 
-export interface RevokeInviteTokenInput {
+export interface RevokeInviteTokenPolicyInput {
   readonly reason: string;
   readonly revokedAt?: Date;
 }
@@ -91,7 +91,7 @@ export function consumeInviteToken(
 
 export function revokeInviteToken(
   inviteToken: InviteToken,
-  input: RevokeInviteTokenInput,
+  input: RevokeInviteTokenPolicyInput,
 ): InviteToken {
   const reason = input.reason.trim();
 

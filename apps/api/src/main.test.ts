@@ -38,9 +38,11 @@ import {
   buildRsvpResponseIdempotencyKey,
 } from "./modules/guests-rsvp/index.js";
 import {
+  assertInviteTokenIsUsable,
   buildGuestSessionCookieAttributes,
   canConsumeInviteToken,
   consumeInviteToken,
+  createRevokeInviteTokenUseCase,
   createIssueGuestSessionUseCase,
   createLoginGuestWithInviteTokenUseCase,
   createLoginGuestWithShortCodeUseCase,
@@ -55,12 +57,15 @@ import {
   IDENTITY_ACCESS_MODULE_USE_CASES,
   IDENTITY_ACCESS_ROUTE_ACCESS,
   InvalidInviteTokenConsumptionError,
+  InviteTokenRevocationError,
+  InviteTokenValidationError,
   PrismaGuestRepository,
   PrismaInviteTokenConsumptionTransactionRunner,
   PrismaInviteTokenRepository,
   resolveInviteTokenLifecycleStatus,
   revokeInviteToken,
   SignedGuestSessionService,
+  validateInviteToken,
 } from "./modules/identity-access/index.js";
 import type {
   AdminUser,
@@ -374,7 +379,7 @@ function testModuleLayerContractsAreExported(): void {
   assert.equal(ADMIN_BACKOFFICE_HTTP_CONTRACT.routePrefix, "/admin");
 
   assert.equal(IDENTITY_ACCESS_MODULE_USE_CASES.guestAuthentication, "implemented");
-  assert.equal(IDENTITY_ACCESS_MODULE_USE_CASES.inviteTokenLifecycle, "defined");
+  assert.equal(IDENTITY_ACCESS_MODULE_USE_CASES.inviteTokenLifecycle, "implemented");
   assert.equal(GUESTS_RSVP_MODULE_USE_CASES.rsvpSubmission, "planned");
   assert.equal(GIFT_REGISTRY_MODULE_USE_CASES.giftReservationLifecycle, "planned");
   assert.equal(PHOTO_WALL_MODULE_USE_CASES.photoSubmission, "planned");
@@ -392,6 +397,10 @@ function testModuleLayerContractsAreExported(): void {
     IDENTITY_ACCESS_INFRASTRUCTURE_PORTS.providers.includes(
       "invite-token-consumption-transaction-runner",
     ),
+    true,
+  );
+  assert.equal(
+    IDENTITY_ACCESS_INFRASTRUCTURE_PORTS.providers.includes("guest-session-issuer"),
     true,
   );
   assert.equal(
@@ -627,6 +636,174 @@ function testInviteTokenLifecyclePolicies(): void {
         revokedAt: now,
       }),
     /revocation reason is required/,
+  );
+}
+
+function testInviteTokenValidationService(): void {
+  const now = new Date("2026-04-30T12:00:00.000Z");
+  const baseToken: InviteToken = {
+    id: "invite-1",
+    guestGroupId: "group-1",
+    guestId: "guest-1",
+    tokenHash: "hash",
+    shortCode: "ABC123",
+    channel: "manual",
+    status: "issued",
+    issuedAt: new Date("2026-04-25T12:00:00.000Z"),
+    expiresAt: new Date("2026-05-01T12:00:00.000Z"),
+    usedAt: null,
+    revokedAt: null,
+    revokedReason: null,
+    createdAt: new Date("2026-04-25T12:00:00.000Z"),
+    updatedAt: new Date("2026-04-25T12:00:00.000Z"),
+  };
+
+  assert.deepEqual(validateInviteToken(null, now), {
+    ok: false,
+    reason: "not_found",
+    lifecycleStatus: null,
+  });
+
+  assert.deepEqual(validateInviteToken(baseToken, now), {
+    ok: true,
+    inviteToken: baseToken,
+    lifecycleStatus: "issued",
+  });
+
+  for (const [token, reason] of [
+    [
+      {
+        ...baseToken,
+        expiresAt: new Date("2026-04-29T12:00:00.000Z"),
+      },
+      "expired",
+    ],
+    [
+      {
+        ...baseToken,
+        status: "used" as const,
+        usedAt: new Date("2026-04-29T12:00:00.000Z"),
+      },
+      "used",
+    ],
+    [
+      {
+        ...baseToken,
+        status: "revoked" as const,
+        revokedAt: new Date("2026-04-29T12:00:00.000Z"),
+        revokedReason: "manual block",
+      },
+      "revoked",
+    ],
+  ] as const) {
+    const validationResult = validateInviteToken(token, now);
+    assert.equal(validationResult.ok, false);
+
+    if (!validationResult.ok) {
+      assert.equal(validationResult.reason, reason);
+      assert.equal(validationResult.lifecycleStatus, reason);
+    }
+
+    assert.throws(
+      () => assertInviteTokenIsUsable(token, now),
+      (error: unknown) => {
+        return (
+          error instanceof InviteTokenValidationError &&
+          error.reason === reason &&
+          error.lifecycleStatus === reason &&
+          error.statusCode === 401
+        );
+      },
+    );
+  }
+}
+
+async function testRevokeInviteTokenUseCase(): Promise<void> {
+  const baseToken: InviteToken = {
+    id: "invite-1",
+    guestGroupId: "group-1",
+    guestId: null,
+    tokenHash: "hash",
+    shortCode: "ABC123",
+    channel: "manual",
+    status: "used",
+    issuedAt: new Date("2026-04-25T12:00:00.000Z"),
+    expiresAt: new Date("2026-05-01T12:00:00.000Z"),
+    usedAt: new Date("2026-04-29T12:00:00.000Z"),
+    revokedAt: null,
+    revokedReason: null,
+    createdAt: new Date("2026-04-25T12:00:00.000Z"),
+    updatedAt: new Date("2026-04-29T12:00:00.000Z"),
+  };
+  const revokeCalls: Array<{ inviteTokenId: string; reason: string; revokedAt?: Date }> = [];
+  const repository = {
+    async findById(id: string) {
+      if (id === baseToken.id) {
+        return baseToken;
+      }
+
+      return null;
+    },
+    async revoke(input: { inviteTokenId: string; reason: string; revokedAt?: Date }) {
+      revokeCalls.push(input);
+      return {
+        ...baseToken,
+        status: "revoked" as const,
+        revokedAt: input.revokedAt ?? new Date("2026-04-30T12:00:00.000Z"),
+        revokedReason: input.reason,
+      };
+    },
+  };
+  const useCase = createRevokeInviteTokenUseCase({
+    inviteTokenRepository: repository,
+  });
+  const revokedAt = new Date("2026-04-30T12:00:00.000Z");
+
+  const result = await useCase.execute({
+    inviteTokenId: "invite-1",
+    reason: "security reset",
+    revokedAt,
+  });
+
+  assert.equal(result.status, "revoked");
+  assert.equal(result.revokedReason, "security reset");
+  assert.equal(result.revokedAt?.toISOString(), revokedAt.toISOString());
+  assert.deepEqual(revokeCalls, [
+    {
+      inviteTokenId: "invite-1",
+      reason: "security reset",
+      revokedAt,
+    },
+  ]);
+
+  await assert.rejects(
+    () =>
+      useCase.execute({
+        inviteTokenId: "missing",
+        reason: "security reset",
+      }),
+    (error: unknown) => {
+      return (
+        error instanceof InviteTokenRevocationError &&
+        error.reason === "not_found" &&
+        error.statusCode === 404
+      );
+    },
+  );
+
+  await assert.rejects(
+    () =>
+      useCase.execute({
+        inviteTokenId: "invite-1",
+        reason: "   ",
+      }),
+    (error: unknown) => {
+      return (
+        error instanceof InviteTokenRevocationError &&
+        error.reason === "invalid_reason" &&
+        error.statusCode === 400
+      );
+    },
   );
 }
 
@@ -1377,10 +1554,12 @@ async function run(): Promise<void> {
   await testPrismaGuestRepository();
   await testPrismaInviteTokenRepository();
   await testPrismaInviteTokenTransactionRunner();
+  await testRevokeInviteTokenUseCase();
   testModuleLayerContractsAreExported();
   testGuestSessionCookieAttributes();
   testGiftReservationConflictError();
   testInviteTokenLifecyclePolicies();
+  testInviteTokenValidationService();
   testRsvpIdempotencyKeyBuilder();
   console.log("main.test.ts passed");
 }

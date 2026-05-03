@@ -1,11 +1,13 @@
 import {
-  InvalidInviteTokenConsumptionError,
-  resolveInviteTokenLifecycleStatus,
   type Guest,
   type GuestRepository,
   type InviteToken,
 } from "../domain/index.js";
 import type { InviteTokenConsumptionTransactionRunner } from "../infrastructure/index.js";
+import {
+  assertInviteTokenIsUsable,
+  InviteTokenValidationError,
+} from "./invite-token-validation.js";
 
 export interface GuestAuthenticationResult {
   readonly guestId: string;
@@ -59,56 +61,47 @@ export async function authenticateGuestWithInviteToken(
   dependencies: AuthenticateGuestWithInviteTokenDependencies,
 ): Promise<GuestAuthenticationResult> {
   const now = dependencies.now?.() ?? new Date();
-  const inviteToken = await resolveInviteToken();
-
-  if (inviteToken === null) {
-    throw new GuestInviteTokenAuthenticationError();
-  }
-
-  if (resolveInviteTokenLifecycleStatus(inviteToken, now) !== "issued") {
-    throw new GuestInviteTokenAuthenticationError();
-  }
-
-  const guest = assertGuestEligible(
-    await resolveAuthenticatedGuest(inviteToken, dependencies.guestRepository),
-  );
-
-  let authenticatedAt = now;
+  let inviteToken: InviteToken;
 
   try {
-    await dependencies.inviteTokenConsumptionTransactionRunner.run(async (context) => {
-      const storedInviteToken = await context.findInviteTokenById(inviteToken.id);
-
-      if (storedInviteToken === null) {
-        throw new GuestInviteTokenAuthenticationError();
-      }
-
-      authenticatedAt = dependencies.now?.() ?? new Date();
-
-      if (resolveInviteTokenLifecycleStatus(storedInviteToken, authenticatedAt) !== "issued") {
-        throw new GuestInviteTokenAuthenticationError();
-      }
-
-      await context.markInviteTokenAsUsed({
-        inviteTokenId: storedInviteToken.id,
-        usedAt: authenticatedAt,
-      });
-    });
+    inviteToken = assertInviteTokenIsUsable(await resolveInviteToken(), now);
   } catch (error) {
-    if (
-      error instanceof GuestInviteTokenAuthenticationError ||
-      error instanceof InvalidInviteTokenConsumptionError
-    ) {
+    if (error instanceof InviteTokenValidationError) {
       throw new GuestInviteTokenAuthenticationError();
     }
 
     throw error;
   }
 
-  return {
-    guestId: guest.id,
-    guestGroupId: guest.guestGroupId,
-    inviteTokenId: inviteToken.id,
-    authenticatedAt,
-  };
+  try {
+    const guest = assertGuestEligible(
+      await resolveAuthenticatedGuest(inviteToken, dependencies.guestRepository),
+    );
+    let authenticatedAt = now;
+
+    await dependencies.inviteTokenConsumptionTransactionRunner.run(async (context) => {
+      const storedInviteToken = context.findInviteTokenById(inviteToken.id);
+      inviteToken = assertInviteTokenIsUsable(await storedInviteToken, dependencies.now?.() ?? new Date());
+      authenticatedAt = dependencies.now?.() ?? new Date();
+      inviteToken = assertInviteTokenIsUsable(inviteToken, authenticatedAt);
+
+      await context.markInviteTokenAsUsed({
+        inviteTokenId: inviteToken.id,
+        usedAt: authenticatedAt,
+      });
+    });
+
+    return {
+      guestId: guest.id,
+      guestGroupId: guest.guestGroupId,
+      inviteTokenId: inviteToken.id,
+      authenticatedAt,
+    };
+  } catch (error) {
+    if (error instanceof GuestInviteTokenAuthenticationError || error instanceof InviteTokenValidationError) {
+      throw new GuestInviteTokenAuthenticationError();
+    }
+
+    throw error;
+  }
 }
