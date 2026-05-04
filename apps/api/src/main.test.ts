@@ -3,7 +3,9 @@ import { PassThrough } from "node:stream";
 import type { FastifyRequest } from "fastify";
 import type {
   AdminUser as PrismaAdminUserRecord,
+  Event as PrismaEventRecord,
   Guest as PrismaGuestRecord,
+  GuestGroup as PrismaGuestGroupRecord,
   InviteToken as PrismaInviteTokenRecord,
 } from "./generated/prisma/client.js";
 import { type AppEnv, buildApp } from "./main.js";
@@ -36,6 +38,9 @@ import {
   GUESTS_RSVP_INFRASTRUCTURE_PORTS,
   GUESTS_RSVP_MODULE_USE_CASES,
   GUESTS_RSVP_ROUTE_ACCESS,
+  PrismaEventRepository,
+  PrismaGuestGroupRepository,
+  PrismaGuestRepository as PrismaGuestsRsvpGuestRepository,
   buildRsvpResponseIdempotencyKey,
 } from "./modules/guests-rsvp/index.js";
 import {
@@ -1147,6 +1152,314 @@ async function testPrismaGuestRepository(): Promise<void> {
   assert.equal(saved.status, "inactive");
 }
 
+async function testPrismaGuestsRsvpGuestRepository(): Promise<void> {
+  const persistenceRecord: PrismaGuestRecord = {
+    id: "guest-rsvp-1",
+    guestGroupId: "group-1",
+    fullName: "Ana Souza",
+    phone: "11999990000",
+    email: "ana@example.com",
+    isPrimary: true,
+    status: "ACTIVE",
+    lastAccessAt: null,
+    createdAt: new Date("2026-04-25T12:00:00.000Z"),
+    updatedAt: new Date("2026-04-25T12:00:00.000Z"),
+  };
+
+  const calls: Record<string, unknown>[] = [];
+  const delegate = {
+    async findUnique(args: { where: { id: string } }) {
+      calls.push({ method: "findUnique", args });
+      return persistenceRecord;
+    },
+    async findFirst(args: {
+      where: { guestGroupId: string; isPrimary?: boolean };
+      orderBy: { createdAt: "asc" | "desc" };
+    }) {
+      calls.push({ method: "findFirst", args });
+      return persistenceRecord;
+    },
+    async findMany(args: {
+      where: { guestGroupId?: string; status?: string; OR?: Record<string, unknown>[] };
+      orderBy: { createdAt: "asc" | "desc" };
+      skip: number;
+      take: number;
+    }) {
+      calls.push({ method: "findMany", args });
+      return [persistenceRecord];
+    },
+    async upsert(args: {
+      where: { id: string };
+      create: Record<string, unknown>;
+      update: Record<string, unknown>;
+    }) {
+      calls.push({ method: "upsert", args });
+      return {
+        ...persistenceRecord,
+        ...args.update,
+      };
+    },
+  };
+
+  const repository = new PrismaGuestsRsvpGuestRepository(
+    delegate as unknown as ConstructorParameters<typeof PrismaGuestsRsvpGuestRepository>[0],
+  );
+
+  const foundById = await repository.findById("guest-rsvp-1");
+  assert.equal(foundById?.status, "active");
+
+  const foundPrimary = await repository.findPrimaryByGroupId("group-1");
+  assert.equal(foundPrimary?.isPrimary, true);
+
+  const listed = await repository.findMany({
+    page: 2,
+    pageSize: 10,
+    guestGroupId: "group-1",
+    status: "active",
+    search: "ana",
+  });
+  assert.equal(listed.length, 1);
+
+  const saved = await repository.save({
+    id: "guest-rsvp-2",
+    guestGroupId: "group-2",
+    fullName: "Bruno Souza",
+    phone: null,
+    email: "bruno@example.com",
+    isPrimary: false,
+    status: "inactive",
+    lastAccessAt: null,
+    createdAt: new Date("2026-05-01T10:00:00.000Z"),
+    updatedAt: new Date("2026-05-01T10:00:00.000Z"),
+  });
+  assert.equal(saved.status, "inactive");
+
+  assert.deepEqual(calls[2], {
+    method: "findMany",
+    args: {
+      where: {
+        guestGroupId: "group-1",
+        status: "ACTIVE",
+        OR: [
+          { fullName: { contains: "ana", mode: "insensitive" } },
+          { email: { contains: "ana", mode: "insensitive" } },
+          { phone: { contains: "ana", mode: "insensitive" } },
+        ],
+      },
+      orderBy: { createdAt: "desc" },
+      skip: 10,
+      take: 10,
+    },
+  });
+}
+
+async function testPrismaGuestGroupRepository(): Promise<void> {
+  const persistenceRecord: PrismaGuestGroupRecord = {
+    id: "group-1",
+    displayName: "Familia Souza",
+    groupCode: "SOUZA01",
+    allowedCompanions: 2,
+    primaryContactName: "Ana Souza",
+    primaryContactPhone: "11999990000",
+    primaryContactEmail: "ana@example.com",
+    notes: "Mesa perto do palco",
+    createdAt: new Date("2026-04-25T12:00:00.000Z"),
+    updatedAt: new Date("2026-04-25T12:00:00.000Z"),
+  };
+
+  const calls: Record<string, unknown>[] = [];
+  const delegate = {
+    async findUnique(args: { where: { id?: string; groupCode?: string } }) {
+      calls.push({ method: "findUnique", args });
+      return persistenceRecord;
+    },
+    async findMany(args: {
+      where: { groupCode?: string; OR?: Record<string, unknown>[] };
+      orderBy: { createdAt: "asc" | "desc" };
+      skip: number;
+      take: number;
+    }) {
+      calls.push({ method: "findMany", args });
+      return [persistenceRecord];
+    },
+    async upsert(args: {
+      where: { id: string };
+      create: Record<string, unknown>;
+      update: Record<string, unknown>;
+    }) {
+      calls.push({ method: "upsert", args });
+      return {
+        ...persistenceRecord,
+        ...args.update,
+      };
+    },
+  };
+
+  const repository = new PrismaGuestGroupRepository(
+    delegate as unknown as ConstructorParameters<typeof PrismaGuestGroupRepository>[0],
+  );
+
+  const foundById = await repository.findById("group-1");
+  assert.equal(foundById?.groupCode, "SOUZA01");
+
+  const foundByCode = await repository.findByGroupCode("SOUZA01");
+  assert.equal(foundByCode?.displayName, "Familia Souza");
+
+  const listed = await repository.findMany({
+    page: 1,
+    pageSize: 20,
+    groupCode: "SOUZA01",
+    search: "ana",
+  });
+  assert.equal(listed.length, 1);
+
+  const saved = await repository.save({
+    id: "group-2",
+    displayName: "Familia Lima",
+    groupCode: "LIMA02",
+    allowedCompanions: 1,
+    primaryContactName: "Carlos Lima",
+    primaryContactPhone: null,
+    primaryContactEmail: "carlos@example.com",
+    notes: null,
+    createdAt: new Date("2026-05-01T10:00:00.000Z"),
+    updatedAt: new Date("2026-05-01T10:00:00.000Z"),
+  });
+  assert.equal(saved.allowedCompanions, 1);
+
+  assert.deepEqual(calls[2], {
+    method: "findMany",
+    args: {
+      where: {
+        groupCode: "SOUZA01",
+        OR: [
+          { displayName: { contains: "ana", mode: "insensitive" } },
+          { primaryContactName: { contains: "ana", mode: "insensitive" } },
+          { primaryContactEmail: { contains: "ana", mode: "insensitive" } },
+          { groupCode: { contains: "ana", mode: "insensitive" } },
+        ],
+      },
+      orderBy: { createdAt: "desc" },
+      skip: 0,
+      take: 20,
+    },
+  });
+}
+
+async function testPrismaEventRepository(): Promise<void> {
+  const persistenceRecord: PrismaEventRecord = {
+    id: "event-1",
+    slug: "casamento",
+    name: "Casamento",
+    eventType: "WEDDING",
+    startsAt: new Date("2026-07-12T16:00:00.000Z"),
+    venueName: "Espaco Jardim",
+    addressLine: "Rua das Flores",
+    addressNumber: "100",
+    neighborhood: "Centro",
+    city: "Sao Paulo",
+    state: "SP",
+    postalCode: "01000-000",
+    latitude: { toNumber: () => -23.55052 } as PrismaEventRecord["latitude"],
+    longitude: { toNumber: () => -46.633308 } as PrismaEventRecord["longitude"],
+    mapUrl: "https://maps.example.com/casamento",
+    notes: "Chegar com 30 minutos de antecedencia",
+    isActive: true,
+    createdAt: new Date("2026-04-25T12:00:00.000Z"),
+    updatedAt: new Date("2026-04-25T12:00:00.000Z"),
+  };
+
+  const calls: Record<string, unknown>[] = [];
+  const delegate = {
+    async findUnique(args: { where: { id?: string; slug?: string } }) {
+      calls.push({ method: "findUnique", args });
+      return persistenceRecord;
+    },
+    async findMany(args: {
+      where: { isActive?: boolean; eventType?: string; slug?: string };
+      orderBy: { startsAt: "asc" | "desc" };
+      skip: number;
+      take: number;
+    }) {
+      calls.push({ method: "findMany", args });
+      return [persistenceRecord];
+    },
+    async upsert(args: {
+      where: { id: string };
+      create: Record<string, unknown>;
+      update: Record<string, unknown>;
+    }) {
+      calls.push({ method: "upsert", args });
+      return {
+        ...persistenceRecord,
+        ...args.update,
+        latitude: { toNumber: () => Number(args.update.latitude ?? 0) },
+        longitude: { toNumber: () => Number(args.update.longitude ?? 0) },
+      };
+    },
+  };
+
+  const repository = new PrismaEventRepository(
+    delegate as unknown as ConstructorParameters<typeof PrismaEventRepository>[0],
+  );
+
+  const foundById = await repository.findById("event-1");
+  assert.equal(foundById?.eventType, "wedding");
+  assert.equal(foundById?.location.latitude, -23.55052);
+
+  const foundBySlug = await repository.findBySlug("casamento");
+  assert.equal(foundBySlug?.slug, "casamento");
+
+  const listed = await repository.findMany({
+    page: 1,
+    pageSize: 10,
+    isActive: true,
+    eventType: "wedding",
+    slug: "casamento",
+  });
+  assert.equal(listed.length, 1);
+
+  const saved = await repository.save({
+    id: "event-2",
+    slug: "cha-bar",
+    name: "Cha Bar",
+    eventType: "bridal_shower",
+    startsAt: new Date("2026-06-01T15:00:00.000Z"),
+    location: {
+      venueName: "Casa da Familia",
+      addressLine: "Rua A",
+      addressNumber: null,
+      neighborhood: null,
+      city: "Campinas",
+      state: "SP",
+      postalCode: null,
+      latitude: null,
+      longitude: null,
+      mapUrl: null,
+    },
+    notes: null,
+    isActive: false,
+    createdAt: new Date("2026-05-01T10:00:00.000Z"),
+    updatedAt: new Date("2026-05-01T10:00:00.000Z"),
+  });
+  assert.equal(saved.eventType, "bridal_shower");
+  assert.equal(saved.location.city, "Campinas");
+
+  assert.deepEqual(calls[2], {
+    method: "findMany",
+    args: {
+      where: {
+        isActive: true,
+        eventType: "WEDDING",
+        slug: "casamento",
+      },
+      orderBy: { startsAt: "asc" },
+      skip: 0,
+      take: 10,
+    },
+  });
+}
+
 async function testPrismaAdminUserRepository(): Promise<void> {
   const persistenceRecord: PrismaAdminUserRecord = {
     id: "admin-1",
@@ -1944,6 +2257,9 @@ async function run(): Promise<void> {
   await testAdminRoutesRequireAdminAuth();
   await testPrismaAdminUserRepository();
   await testPrismaGuestRepository();
+  await testPrismaGuestsRsvpGuestRepository();
+  await testPrismaGuestGroupRepository();
+  await testPrismaEventRepository();
   await testPrismaInviteTokenRepository();
   await testPrismaInviteTokenTransactionRunner();
   await testRevokeInviteTokenUseCase();
