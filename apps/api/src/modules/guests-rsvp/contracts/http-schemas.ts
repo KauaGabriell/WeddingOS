@@ -108,6 +108,18 @@ export const GUESTS_RSVP_HTTP_SCHEMAS = defineHttpSchemaCatalog({
       status: z.enum(GUEST_STATUSES).optional(),
       search: z.string().trim().min(1).optional(),
     }),
+    adminGuestList: paginationQuerySchema.extend({
+      eventId: uuidSchema.optional(),
+      guestGroupId: uuidSchema.optional(),
+      status: z.enum(GUEST_STATUSES).optional(),
+      search: z.string().trim().min(1).optional(),
+    }),
+    adminRsvpList: paginationQuerySchema.extend({
+      eventId: uuidSchema.optional(),
+      guestGroupId: uuidSchema.optional(),
+      responseStatus: z.enum(RSVP_RESPONSE_STATUSES).optional(),
+      search: z.string().trim().min(1).optional(),
+    }),
     eventList: paginationQuerySchema.extend({
       eventType: z.enum(EVENT_TYPES).optional(),
       isActive: z.coerce.boolean().optional(),
@@ -150,4 +162,10 @@ export type GuestsRsvpRsvpResponseDto = z.infer<
 >;
 export type GuestsRsvpSubmitRsvpRequestDto = z.infer<
   typeof GUESTS_RSVP_HTTP_SCHEMAS.bodies.submitRsvp
+>;
+export type GuestsRsvpAdminGuestListQueryDto = z.infer<
+  typeof GUESTS_RSVP_HTTP_SCHEMAS.queries.adminGuestList
+>;
+export type GuestsRsvpAdminRsvpListQueryDto = z.infer<
+  typeof GUESTS_RSVP_HTTP_SCHEMAS.queries.adminRsvpList
 >;

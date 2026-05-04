@@ -9,7 +9,10 @@ import type {
 export interface RsvpResponseRepositoryFilters extends PaginationQuery {
   readonly eventId?: string;
   readonly guestId?: string;
+  readonly guestIds?: readonly string[];
+  readonly guestGroupId?: string;
   readonly responseStatus?: RsvpResponseStatus;
+  readonly search?: string;
 }
 
 export interface RsvpResponseRepository

@@ -8,6 +8,7 @@ import {
 import type { AuditLog } from "../modules/admin-backoffice/index.js";
 import {
   GIFT_REGISTRY_HTTP_CONTRACT,
+  GIFT_REGISTRY_HTTP_SCHEMAS,
   GIFT_REGISTRY_INFRASTRUCTURE_PORTS,
   GIFT_REGISTRY_MODULE_USE_CASES,
   GIFT_REGISTRY_ROUTE_ACCESS,
@@ -24,6 +25,7 @@ import type {
 } from "../modules/guests-rsvp/index.js";
 import {
   GUESTS_RSVP_HTTP_CONTRACT,
+  GUESTS_RSVP_HTTP_SCHEMAS,
   GUESTS_RSVP_IDEMPOTENCY_CONTRACTS,
   GUESTS_RSVP_INFRASTRUCTURE_PORTS,
   GUESTS_RSVP_MODULE_USE_CASES,
@@ -225,6 +227,8 @@ function testModuleLayerContractsAreExported(): void {
   assert.equal(GUESTS_RSVP_MODULE_USE_CASES.guestLookup, "implemented");
   assert.equal(GUESTS_RSVP_MODULE_USE_CASES.eventEligibilityResolution, "implemented");
   assert.equal(GUESTS_RSVP_MODULE_USE_CASES.rsvpSubmission, "implemented");
+  assert.equal(GUESTS_RSVP_MODULE_USE_CASES.adminGuestQuery, "implemented");
+  assert.equal(GIFT_REGISTRY_MODULE_USE_CASES.giftCatalogListing, "implemented");
   assert.equal(GIFT_REGISTRY_MODULE_USE_CASES.giftReservationLifecycle, "planned");
   assert.equal(PHOTO_WALL_MODULE_USE_CASES.photoSubmission, "planned");
   assert.equal(ADMIN_BACKOFFICE_MODULE_USE_CASES.auditTrailQuery, "planned");
@@ -236,7 +240,12 @@ function testModuleLayerContractsAreExported(): void {
   assert.equal(IDENTITY_ACCESS_ROUTE_ACCESS.loginWithInviteToken.config.access, "public");
   assert.equal(IDENTITY_ACCESS_INVITE_TOKEN_LIFECYCLE_CONTRACTS.usagePolicy, "single-use");
   assert.equal(GUESTS_RSVP_ROUTE_ACCESS.guestHome.config.access, "guest");
+  assert.equal(GUESTS_RSVP_ROUTE_ACCESS.listAdminGuests.config.access, "admin");
+  assert.equal(GUESTS_RSVP_ROUTE_ACCESS.listAdminRsvps.config.access, "admin");
   assert.equal(GUESTS_RSVP_IDEMPOTENCY_CONTRACTS.idempotencyKey, "eventId+guestId");
+  assert.ok(GUESTS_RSVP_HTTP_SCHEMAS.queries.adminGuestList);
+  assert.ok(GUESTS_RSVP_HTTP_SCHEMAS.queries.adminRsvpList);
+  assert.ok(GIFT_REGISTRY_HTTP_SCHEMAS.queries.giftCatalog.shape.reservationStatus);
   assert.equal(GIFT_REGISTRY_ROUTE_ACCESS.reserveGift.config.access, "guest");
   assert.equal(PHOTO_WALL_ROUTE_ACCESS.createPhotoPost.config.access, "guest");
   assert.equal(ADMIN_BACKOFFICE_ROUTE_ACCESS.dashboard.config.access, "admin");
@@ -257,10 +266,47 @@ function testGiftReservationConflictError(): void {
   assert.equal(error.statusCode, 409);
 }
 
+function testGiftCatalogItemResponseContractMatchesApplicationShape(): void {
+  const parsed = GIFT_REGISTRY_HTTP_SCHEMAS.responses.giftCatalogItem.parse({
+    gift: {
+      id: "550e8400-e29b-41d4-a716-446655440000",
+      name: "Jogo de panelas",
+      category: "cozinha",
+      description: null,
+      estimatedValue: 199.9,
+      imageUrl: null,
+      displayOrder: 1,
+      status: "available",
+      isActive: true,
+      createdAt: "2026-05-04T10:00:00.000Z",
+      updatedAt: "2026-05-04T10:00:00.000Z",
+    },
+    activeReservation: {
+      id: "550e8400-e29b-41d4-a716-446655440001",
+      giftId: "550e8400-e29b-41d4-a716-446655440000",
+      guestId: "550e8400-e29b-41d4-a716-446655440002",
+      reservationStatus: "active",
+      purchaseNotes: null,
+      reservedAt: "2026-05-04T10:00:00.000Z",
+      releasedAt: null,
+      releasedByAdminUserId: null,
+      createdAt: "2026-05-04T10:00:00.000Z",
+      updatedAt: "2026-05-04T10:00:00.000Z",
+    },
+  });
+
+  assert.equal(parsed.gift.name, "Jogo de panelas");
+  assert.equal(parsed.activeReservation?.reservationStatus, "active");
+}
+
 export async function runModuleContractTests(): Promise<void> {
   await runNamedTests("module-contracts", [
     { name: "exports domain entities by barrels", run: testDomainEntitiesAreExportedByModuleBarrels },
     { name: "exports module layer contracts", run: testModuleLayerContractsAreExported },
     { name: "keeps gift reservation conflict error contract", run: testGiftReservationConflictError },
+    {
+      name: "matches gift catalog item response shape with application contract",
+      run: testGiftCatalogItemResponseContractMatchesApplicationShape,
+    },
   ]);
 }

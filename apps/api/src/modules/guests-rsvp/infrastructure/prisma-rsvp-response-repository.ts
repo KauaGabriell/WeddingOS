@@ -6,8 +6,20 @@ import { RsvpResponseStatus as PrismaRsvpResponseStatus } from "../../../generat
 
 interface RsvpResponseWhereInput {
   eventId?: string;
-  guestId?: string;
+  guestId?:
+    | string
+    | {
+        in: readonly string[];
+      };
   responseStatus?: keyof typeof PrismaRsvpResponseStatus;
+  guest?: {
+    guestGroupId?: string;
+    OR?: Array<{
+      fullName?: { contains: string; mode: "insensitive" };
+      email?: { contains: string; mode: "insensitive" };
+      phone?: { contains: string; mode: "insensitive" };
+    }>;
+  };
 }
 
 interface RsvpResponseModelDelegate {
@@ -17,8 +29,8 @@ interface RsvpResponseModelDelegate {
   findMany(args: {
     where: RsvpResponseWhereInput;
     orderBy: { respondedAt: "asc" | "desc" };
-    skip: number;
-    take: number;
+    skip?: number;
+    take?: number;
   }): Promise<PrismaRsvpResponse[]>;
   upsert(args: {
     where: { id: string };
@@ -105,16 +117,40 @@ function mapInput(input: SubmitRsvpResponseInput): SubmitRsvpResponsePersistence
 function mapFilters(
   filter: RsvpResponseRepositoryFilters,
 ): { where: RsvpResponseWhereInput; skip: number; take: number } {
+  const search = filter.search?.trim();
+  const guestIds = filter.guestIds?.filter((guestId) => guestId.trim().length > 0);
+  const isGuestIdsScoped = guestIds !== undefined;
+  const guestSearchConditions =
+    search && search.length > 0
+      ? [
+          { fullName: { contains: search, mode: "insensitive" as const } },
+          { email: { contains: search, mode: "insensitive" as const } },
+          { phone: { contains: search, mode: "insensitive" as const } },
+        ]
+      : undefined;
+
   return {
     where: {
       eventId: filter.eventId,
-      guestId: filter.guestId,
+      guestId:
+        guestIds !== undefined
+          ? {
+              in: guestIds,
+            }
+          : filter.guestId,
       responseStatus: filter.responseStatus
         ? mapStatusToPersistence(filter.responseStatus)
         : undefined,
+      guest:
+        filter.guestGroupId || guestSearchConditions
+          ? {
+              guestGroupId: filter.guestGroupId,
+              OR: guestSearchConditions,
+            }
+          : undefined,
     },
-    skip: Math.max(0, (filter.page - 1) * filter.pageSize),
-    take: filter.pageSize,
+    skip: isGuestIdsScoped ? 0 : Math.max(0, (filter.page - 1) * filter.pageSize),
+    take: isGuestIdsScoped ? 0 : filter.pageSize,
   };
 }
 
@@ -144,8 +180,7 @@ export class PrismaRsvpResponseRepository implements RsvpResponseRepository {
     const records = await this.responses.findMany({
       where,
       orderBy: { respondedAt: "desc" },
-      skip,
-      take,
+      ...(take > 0 ? { skip, take } : {}),
     });
 
     return records.map(mapRecord);

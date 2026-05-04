@@ -12,6 +12,11 @@ interface GuestSearchCondition {
 interface GuestWhereInput {
   guestGroupId?: string;
   status?: keyof typeof PrismaGuestStatus;
+  eventEligibilities?: {
+    some: {
+      eventId: string;
+    };
+  };
   OR?: GuestSearchCondition[];
 }
 
@@ -94,6 +99,13 @@ function mapGuestFilters(
     where: {
       guestGroupId: filter.guestGroupId,
       status: filter.status ? mapGuestStatusToPersistence(filter.status) : undefined,
+      eventEligibilities: filter.eventId
+        ? {
+            some: {
+              eventId: filter.eventId,
+            },
+          }
+        : undefined,
       OR:
         search && search.length > 0
           ? [

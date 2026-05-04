@@ -1,6 +1,9 @@
 import { runAdminRouteTests } from "./admin-routes.test.js";
 import { runBootstrapTests } from "./bootstrap.test.js";
+import { runGiftRegistryApplicationTests } from "./gift-registry/application.test.js";
+import { runGiftRegistryInfrastructureTests } from "./gift-registry/infrastructure.test.js";
 import { runGuestsRsvpApplicationTests } from "./guests-rsvp/application.test.js";
+import { runGuestsRsvpAdminQueryTests } from "./guests-rsvp/admin-query.test.js";
 import { runGuestsRsvpInfrastructureTests } from "./guests-rsvp/infrastructure.test.js";
 import { runIdentityAccessApplicationTests } from "./identity-access/application.test.js";
 import { runIdentityAccessInfrastructureTests } from "./identity-access/infrastructure.test.js";
@@ -13,7 +16,10 @@ async function run(): Promise<void> {
   await runSharedHttpAuthTests();
   await runIdentityAccessApplicationTests();
   await runIdentityAccessInfrastructureTests();
+  await runGiftRegistryApplicationTests();
+  await runGiftRegistryInfrastructureTests();
   await runGuestsRsvpApplicationTests();
+  await runGuestsRsvpAdminQueryTests();
   await runGuestsRsvpInfrastructureTests();
   await runAdminRouteTests();
   console.log("api test suites passed");

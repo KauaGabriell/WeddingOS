@@ -5,6 +5,7 @@ import {
   paginationQuerySchema,
   uuidSchema,
 } from "../../shared/platform/http/http-contracts.js";
+import { GIFT_CATALOG_RESERVATION_STATUSES } from "../gift-catalog-reservation-status.js";
 import { GIFT_STATUSES } from "../domain/entities/gift.js";
 import { GIFT_RESERVATION_STATUSES } from "../domain/entities/gift-reservation.js";
 
@@ -35,7 +36,8 @@ const giftReservationResponseSchema = z.object({
   updatedAt: isoDateTimeSchema,
 });
 
-const giftCatalogItemResponseSchema = giftResponseSchema.extend({
+const giftCatalogItemResponseSchema = z.object({
+  gift: giftResponseSchema,
   activeReservation: giftReservationResponseSchema.nullable(),
 });
 
@@ -52,6 +54,7 @@ export const GIFT_REGISTRY_HTTP_SCHEMAS = defineHttpSchemaCatalog({
     giftCatalog: paginationQuerySchema.extend({
       category: z.string().trim().min(1).optional(),
       status: z.enum(GIFT_STATUSES).optional(),
+      reservationStatus: z.enum(GIFT_CATALOG_RESERVATION_STATUSES).optional(),
       minEstimatedValue: z.coerce.number().nonnegative().optional(),
       maxEstimatedValue: z.coerce.number().nonnegative().optional(),
     }),
@@ -89,9 +92,15 @@ export type GiftRegistryGiftResponseDto = z.infer<
 export type GiftRegistryGiftReservationResponseDto = z.infer<
   typeof GIFT_REGISTRY_HTTP_SCHEMAS.responses.giftReservation
 >;
+export type GiftRegistryGiftCatalogItemResponseDto = z.infer<
+  typeof GIFT_REGISTRY_HTTP_SCHEMAS.responses.giftCatalogItem
+>;
 export type GiftRegistryReserveGiftRequestDto = z.infer<
   typeof GIFT_REGISTRY_HTTP_SCHEMAS.bodies.reserveGift
 >;
 export type GiftRegistryUpsertGiftRequestDto = z.infer<
   typeof GIFT_REGISTRY_HTTP_SCHEMAS.bodies.upsertGift
+>;
+export type GiftRegistryGiftCatalogQueryDto = z.infer<
+  typeof GIFT_REGISTRY_HTTP_SCHEMAS.queries.giftCatalog
 >;

@@ -7,7 +7,11 @@ import type { EventGuestEligibility as PrismaEventGuestEligibility } from "../..
 
 interface EventGuestEligibilityWhereInput {
   eventId?: string;
-  guestId?: string;
+  guestId?:
+    | string
+    | {
+        in: readonly string[];
+      };
   canRsvp?: boolean;
 }
 
@@ -18,8 +22,8 @@ interface EventGuestEligibilityModelDelegate {
   findMany(args: {
     where: EventGuestEligibilityWhereInput;
     orderBy: { createdAt: "asc" | "desc" };
-    skip: number;
-    take: number;
+    skip?: number;
+    take?: number;
   }): Promise<PrismaEventGuestEligibility[]>;
   upsert(args: {
     where: { id: string };
@@ -59,14 +63,22 @@ function mapEntity(entity: EventGuestEligibility): EventGuestEligibilityPersiste
 function mapFilters(
   filter: EventGuestEligibilityRepositoryFilters,
 ): { where: EventGuestEligibilityWhereInput; skip: number; take: number } {
+  const guestIds = filter.guestIds?.filter((guestId) => guestId.trim().length > 0);
+  const isGuestIdsScoped = guestIds !== undefined;
+
   return {
     where: {
       eventId: filter.eventId,
-      guestId: filter.guestId,
+      guestId:
+        guestIds !== undefined
+          ? {
+              in: guestIds,
+            }
+          : filter.guestId,
       canRsvp: filter.canRsvp,
     },
-    skip: Math.max(0, (filter.page - 1) * filter.pageSize),
-    take: filter.pageSize,
+    skip: isGuestIdsScoped ? 0 : Math.max(0, (filter.page - 1) * filter.pageSize),
+    take: isGuestIdsScoped ? 0 : filter.pageSize,
   };
 }
 
@@ -98,8 +110,7 @@ export class PrismaEventGuestEligibilityRepository implements EventGuestEligibil
     const records = await this.eligibilities.findMany({
       where,
       orderBy: { createdAt: "desc" },
-      skip,
-      take,
+      ...(take > 0 ? { skip, take } : {}),
     });
 
     return records.map(mapRecord);

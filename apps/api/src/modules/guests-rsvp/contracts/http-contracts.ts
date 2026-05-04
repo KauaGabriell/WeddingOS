@@ -1,3 +1,8 @@
+export type {
+  GuestsRsvpAdminGuestListQueryDto,
+  GuestsRsvpAdminRsvpListQueryDto,
+} from "./http-schemas.js";
+
 export interface GuestsRsvpHttpContract {
   readonly module: "guests-rsvp";
   readonly routePrefix: "/guests";

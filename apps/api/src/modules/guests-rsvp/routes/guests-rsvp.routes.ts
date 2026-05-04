@@ -1,11 +1,13 @@
 import type { FastifyPluginAsync } from "fastify";
-import { guestRoute } from "../../shared/index.js";
+import { adminRoute, guestRoute } from "../../shared/index.js";
 import { GUESTS_RSVP_HTTP_CONTRACT } from "../contracts/index.js";
 
 export const GUESTS_RSVP_ROUTE_ACCESS = {
   guestHome: guestRoute(),
   listEvents: guestRoute(),
   submitRsvp: guestRoute(),
+  listAdminGuests: adminRoute(),
+  listAdminRsvps: adminRoute(),
 };
 
 export const registerGuestsRsvpRoutes: FastifyPluginAsync = async (app) => {

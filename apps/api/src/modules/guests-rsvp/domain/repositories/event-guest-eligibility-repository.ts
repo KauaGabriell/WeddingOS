@@ -8,6 +8,7 @@ import type {
 export interface EventGuestEligibilityRepositoryFilters extends PaginationQuery {
   readonly eventId?: string;
   readonly guestId?: string;
+  readonly guestIds?: readonly string[];
   readonly canRsvp?: boolean;
 }
 
