@@ -4,9 +4,11 @@ import type { FastifyRequest } from "fastify";
 import type {
   AdminUser as PrismaAdminUserRecord,
   Event as PrismaEventRecord,
+  EventGuestEligibility as PrismaEventGuestEligibilityRecord,
   Guest as PrismaGuestRecord,
   GuestGroup as PrismaGuestGroupRecord,
   InviteToken as PrismaInviteTokenRecord,
+  RsvpResponse as PrismaRsvpResponseRecord,
 } from "./generated/prisma/client.js";
 import { type AppEnv, buildApp } from "./main.js";
 import {
@@ -33,15 +35,20 @@ import type {
   RsvpResponse,
 } from "./modules/guests-rsvp/index.js";
 import {
+  GuestsRsvpApplicationError,
   GUESTS_RSVP_HTTP_CONTRACT,
   GUESTS_RSVP_IDEMPOTENCY_CONTRACTS,
   GUESTS_RSVP_INFRASTRUCTURE_PORTS,
   GUESTS_RSVP_MODULE_USE_CASES,
   GUESTS_RSVP_ROUTE_ACCESS,
+  PrismaEventGuestEligibilityRepository,
   PrismaEventRepository,
   PrismaGuestGroupRepository,
   PrismaGuestRepository as PrismaGuestsRsvpGuestRepository,
+  PrismaRsvpResponseRepository,
   buildRsvpResponseIdempotencyKey,
+  createConfirmAttendanceUseCase,
+  createGetGuestInvitationOverviewUseCase,
 } from "./modules/guests-rsvp/index.js";
 import {
   assertInviteTokenIsUsable,
@@ -394,7 +401,9 @@ function testModuleLayerContractsAreExported(): void {
   assert.equal(IDENTITY_ACCESS_MODULE_USE_CASES.guestAuthentication, "implemented");
   assert.equal(IDENTITY_ACCESS_MODULE_USE_CASES.adminAuthentication, "implemented");
   assert.equal(IDENTITY_ACCESS_MODULE_USE_CASES.inviteTokenLifecycle, "implemented");
-  assert.equal(GUESTS_RSVP_MODULE_USE_CASES.rsvpSubmission, "planned");
+  assert.equal(GUESTS_RSVP_MODULE_USE_CASES.guestLookup, "implemented");
+  assert.equal(GUESTS_RSVP_MODULE_USE_CASES.eventEligibilityResolution, "implemented");
+  assert.equal(GUESTS_RSVP_MODULE_USE_CASES.rsvpSubmission, "implemented");
   assert.equal(GIFT_REGISTRY_MODULE_USE_CASES.giftReservationLifecycle, "planned");
   assert.equal(PHOTO_WALL_MODULE_USE_CASES.photoSubmission, "planned");
   assert.equal(ADMIN_BACKOFFICE_MODULE_USE_CASES.auditTrailQuery, "planned");
@@ -1460,6 +1469,216 @@ async function testPrismaEventRepository(): Promise<void> {
   });
 }
 
+async function testPrismaEventGuestEligibilityRepository(): Promise<void> {
+  const persistenceRecord: PrismaEventGuestEligibilityRecord = {
+    id: "eligibility-1",
+    eventId: "event-1",
+    guestId: "guest-1",
+    canRsvp: true,
+    createdAt: new Date("2026-04-25T12:00:00.000Z"),
+  };
+
+  const calls: Record<string, unknown>[] = [];
+  const delegate = {
+    async findUnique(args: {
+      where: { id?: string; eventId_guestId?: { eventId: string; guestId: string } };
+    }) {
+      calls.push({ method: "findUnique", args });
+      return persistenceRecord;
+    },
+    async findMany(args: {
+      where: { eventId?: string; guestId?: string; canRsvp?: boolean };
+      orderBy: { createdAt: "asc" | "desc" };
+      skip: number;
+      take: number;
+    }) {
+      calls.push({ method: "findMany", args });
+      return [persistenceRecord];
+    },
+    async upsert(args: {
+      where: { id: string };
+      create: Record<string, unknown>;
+      update: Record<string, unknown>;
+    }) {
+      calls.push({ method: "upsert", args });
+      return {
+        ...persistenceRecord,
+        ...args.update,
+      };
+    },
+  };
+
+  const repository = new PrismaEventGuestEligibilityRepository(
+    delegate as unknown as ConstructorParameters<typeof PrismaEventGuestEligibilityRepository>[0],
+  );
+
+  const foundById = await repository.findById("eligibility-1");
+  assert.equal(foundById?.guestId, "guest-1");
+
+  const foundByComposite = await repository.findByEventIdAndGuestId("event-1", "guest-1");
+  assert.equal(foundByComposite?.canRsvp, true);
+
+  const listed = await repository.findMany({
+    page: 1,
+    pageSize: 10,
+    eventId: "event-1",
+    guestId: "guest-1",
+    canRsvp: true,
+  });
+  assert.equal(listed.length, 1);
+
+  const saved = await repository.save({
+    id: "eligibility-2",
+    eventId: "event-2",
+    guestId: "guest-2",
+    canRsvp: false,
+    createdAt: new Date("2026-05-01T10:00:00.000Z"),
+  });
+  assert.equal(saved.canRsvp, false);
+
+  assert.deepEqual(calls[2], {
+    method: "findMany",
+    args: {
+      where: {
+        eventId: "event-1",
+        guestId: "guest-1",
+        canRsvp: true,
+      },
+      orderBy: { createdAt: "desc" },
+      skip: 0,
+      take: 10,
+    },
+  });
+}
+
+async function testPrismaRsvpResponseRepository(): Promise<void> {
+  const persistenceRecord: PrismaRsvpResponseRecord = {
+    id: "rsvp-1",
+    eventId: "event-1",
+    guestId: "guest-1",
+    responseStatus: "YES",
+    companionsConfirmed: 2,
+    message: "Presenca confirmada",
+    respondedAt: new Date("2026-04-30T12:00:00.000Z"),
+    createdAt: new Date("2026-04-30T12:00:00.000Z"),
+    updatedAt: new Date("2026-04-30T12:00:00.000Z"),
+  };
+
+  const calls: Record<string, unknown>[] = [];
+  const delegate = {
+    async findUnique(args: {
+      where: { id?: string; eventId_guestId?: { eventId: string; guestId: string } };
+    }) {
+      calls.push({ method: "findUnique", args });
+      return persistenceRecord;
+    },
+    async findMany(args: {
+      where: { eventId?: string; guestId?: string; responseStatus?: string };
+      orderBy: { respondedAt: "asc" | "desc" };
+      skip: number;
+      take: number;
+    }) {
+      calls.push({ method: "findMany", args });
+      return [persistenceRecord];
+    },
+    async upsert(args: {
+      where: { id: string };
+      create: Record<string, unknown>;
+      update: Record<string, unknown>;
+    }) {
+      calls.push({ method: "upsert", args });
+      return {
+        ...persistenceRecord,
+        ...args.update,
+      };
+    },
+    async create(args: { data: Record<string, unknown> }) {
+      calls.push({ method: "create", args });
+      return {
+        ...persistenceRecord,
+        id: "rsvp-2",
+        ...args.data,
+        createdAt: new Date("2026-05-01T10:00:00.000Z"),
+        updatedAt: new Date("2026-05-01T10:00:00.000Z"),
+      } as PrismaRsvpResponseRecord;
+    },
+    async update(args: { where: { id: string }; data: Record<string, unknown> }) {
+      calls.push({ method: "update", args });
+      return {
+        ...persistenceRecord,
+        ...args.data,
+        updatedAt: new Date("2026-05-02T10:00:00.000Z"),
+      } as PrismaRsvpResponseRecord;
+    },
+  };
+
+  const repository = new PrismaRsvpResponseRepository(
+    delegate as unknown as ConstructorParameters<typeof PrismaRsvpResponseRepository>[0],
+  );
+
+  const foundById = await repository.findById("rsvp-1");
+  assert.equal(foundById?.responseStatus, "yes");
+
+  const foundByComposite = await repository.findByEventIdAndGuestId("event-1", "guest-1");
+  assert.equal(foundByComposite?.companionsConfirmed, 2);
+
+  const listed = await repository.findMany({
+    page: 1,
+    pageSize: 15,
+    eventId: "event-1",
+    guestId: "guest-1",
+    responseStatus: "yes",
+  });
+  assert.equal(listed.length, 1);
+
+  const saved = await repository.save({
+    id: "rsvp-3",
+    eventId: "event-2",
+    guestId: "guest-2",
+    responseStatus: "pending",
+    companionsConfirmed: 0,
+    message: null,
+    respondedAt: new Date("2026-05-01T10:00:00.000Z"),
+    createdAt: new Date("2026-05-01T10:00:00.000Z"),
+    updatedAt: new Date("2026-05-01T10:00:00.000Z"),
+  });
+  assert.equal(saved.responseStatus, "pending");
+
+  const created = await repository.createResponse({
+    eventId: "event-2",
+    guestId: "guest-2",
+    responseStatus: "no",
+    companionsConfirmed: 0,
+    message: "   sem acompanhantes   ",
+  });
+  assert.equal(created.message, "sem acompanhantes");
+  assert.equal(created.responseStatus, "no");
+
+  const updated = await repository.updateResponse("rsvp-1", {
+    eventId: "event-1",
+    guestId: "guest-1",
+    responseStatus: "pending",
+    companionsConfirmed: 1,
+    message: "   ",
+  });
+  assert.equal(updated.responseStatus, "pending");
+  assert.equal(updated.message, null);
+
+  assert.deepEqual(calls[2], {
+    method: "findMany",
+    args: {
+      where: {
+        eventId: "event-1",
+        guestId: "guest-1",
+        responseStatus: "YES",
+      },
+      orderBy: { respondedAt: "desc" },
+      skip: 0,
+      take: 15,
+    },
+  });
+}
+
 async function testPrismaAdminUserRepository(): Promise<void> {
   const persistenceRecord: PrismaAdminUserRecord = {
     id: "admin-1",
@@ -2239,6 +2458,489 @@ async function testAdminRoutesRequireAdminAuth(): Promise<void> {
   }
 }
 
+function useCaseDependenciesGuestRepository(primaryGuest: Guest, companionGuest: Guest) {
+  return {
+    async findById(guestId: string) {
+      if (guestId === primaryGuest.id) {
+        return primaryGuest;
+      }
+
+      if (guestId === companionGuest.id) {
+        return companionGuest;
+      }
+
+      return null;
+    },
+    async findMany() {
+      return [companionGuest, primaryGuest] as const;
+    },
+  };
+}
+
+async function testGetGuestInvitationOverviewUseCase(): Promise<void> {
+  const group: GuestGroup = {
+    id: "group-1",
+    displayName: "Familia Souza",
+    groupCode: "SOUZA01",
+    allowedCompanions: 2,
+    primaryContactName: "Ana Souza",
+    primaryContactPhone: "11999990000",
+    primaryContactEmail: "ana@example.com",
+    notes: null,
+    createdAt: new Date("2026-04-01T10:00:00.000Z"),
+    updatedAt: new Date("2026-04-01T10:00:00.000Z"),
+  };
+  const primaryGuest: Guest = {
+    id: "guest-1",
+    guestGroupId: "group-1",
+    fullName: "Ana Souza",
+    phone: "11999990000",
+    email: "ana@example.com",
+    isPrimary: true,
+    status: "active",
+    lastAccessAt: null,
+    createdAt: new Date("2026-04-01T10:00:00.000Z"),
+    updatedAt: new Date("2026-04-01T10:00:00.000Z"),
+  };
+  const companionGuest: Guest = {
+    ...primaryGuest,
+    id: "guest-2",
+    fullName: "Bruno Souza",
+    isPrimary: false,
+    createdAt: new Date("2026-04-02T10:00:00.000Z"),
+  };
+  const weddingEvent: Event = {
+    id: "event-1",
+    slug: "casamento",
+    name: "Casamento",
+    eventType: "wedding",
+    startsAt: new Date("2026-07-12T16:00:00.000Z"),
+    location: {
+      venueName: "Espaco Jardim",
+      addressLine: "Rua das Flores",
+      addressNumber: "100",
+      neighborhood: "Centro",
+      city: "Sao Paulo",
+      state: "SP",
+      postalCode: "01000-000",
+      latitude: null,
+      longitude: null,
+      mapUrl: null,
+    },
+    notes: null,
+    isActive: true,
+    createdAt: new Date("2026-04-01T10:00:00.000Z"),
+    updatedAt: new Date("2026-04-01T10:00:00.000Z"),
+  };
+  const showerEvent: Event = {
+    ...weddingEvent,
+    id: "event-2",
+    slug: "cha-bar",
+    name: "Cha Bar",
+    eventType: "bridal_shower",
+    startsAt: new Date("2026-06-01T15:00:00.000Z"),
+  };
+  const eligibility: EventGuestEligibility[] = [
+    {
+      id: "eligibility-1",
+      eventId: "event-1",
+      guestId: "guest-1",
+      canRsvp: true,
+      createdAt: new Date("2026-04-05T10:00:00.000Z"),
+    },
+    {
+      id: "eligibility-2",
+      eventId: "event-2",
+      guestId: "guest-1",
+      canRsvp: true,
+      createdAt: new Date("2026-04-05T10:00:00.000Z"),
+    },
+    {
+      id: "eligibility-3",
+      eventId: "event-1",
+      guestId: "guest-2",
+      canRsvp: true,
+      createdAt: new Date("2026-04-06T10:00:00.000Z"),
+    },
+  ];
+  const responses: RsvpResponse[] = [
+    {
+      id: "rsvp-1",
+      eventId: "event-1",
+      guestId: "guest-1",
+      responseStatus: "yes",
+      companionsConfirmed: 1,
+      message: "Confirmado",
+      respondedAt: new Date("2026-05-01T12:00:00.000Z"),
+      createdAt: new Date("2026-05-01T12:00:00.000Z"),
+      updatedAt: new Date("2026-05-01T12:00:00.000Z"),
+    },
+    {
+      id: "rsvp-2",
+      eventId: "event-1",
+      guestId: "guest-2",
+      responseStatus: "pending",
+      companionsConfirmed: 0,
+      message: null,
+      respondedAt: new Date("2026-05-02T12:00:00.000Z"),
+      createdAt: new Date("2026-05-02T12:00:00.000Z"),
+      updatedAt: new Date("2026-05-02T12:00:00.000Z"),
+    },
+  ];
+
+  const useCase = createGetGuestInvitationOverviewUseCase({
+    guestRepository: {
+      async findById(guestId: string) {
+        if (guestId === "guest-1") {
+          return primaryGuest;
+        }
+
+        if (guestId === "guest-inactive") {
+          return { ...primaryGuest, id: guestId, status: "inactive" };
+        }
+
+        return null;
+      },
+      async findMany(filter) {
+        assert.equal(filter.guestGroupId, "group-1");
+        return [companionGuest, primaryGuest];
+      },
+    },
+    guestGroupRepository: {
+      async findById(groupId: string) {
+        return groupId === "group-1" ? group : null;
+      },
+    },
+    eventRepository: {
+      async findById(eventId: string) {
+        if (eventId === "event-1") {
+          return weddingEvent;
+        }
+
+        if (eventId === "event-2") {
+          return showerEvent;
+        }
+
+        return null;
+      },
+    },
+    eventGuestEligibilityRepository: {
+      async findMany(filter) {
+        return eligibility.filter((entry) => entry.guestId === filter.guestId);
+      },
+    },
+    rsvpResponseRepository: {
+      async findMany(filter) {
+        return responses.filter((entry) => entry.guestId === filter.guestId);
+      },
+    },
+  });
+
+  const overview = await useCase.execute({ guestId: "guest-1" });
+  assert.equal(overview.guestGroup.id, "group-1");
+  assert.deepEqual(
+    overview.guests.map((guest) => guest.id),
+    ["guest-1", "guest-2"],
+  );
+  assert.deepEqual(
+    overview.events.map((event) => event.id),
+    ["event-2", "event-1"],
+  );
+  assert.equal(overview.eligibility.length, 3);
+  assert.equal(overview.responses.length, 2);
+
+  await assert.rejects(
+    () => useCase.execute({ guestId: "guest-missing" }),
+    (error: unknown) =>
+      error instanceof GuestsRsvpApplicationError && error.reason === "guest_not_found",
+  );
+  await assert.rejects(
+    () => useCase.execute({ guestId: "guest-inactive" }),
+    (error: unknown) =>
+      error instanceof GuestsRsvpApplicationError && error.reason === "guest_inactive",
+  );
+
+  const missingGroupUseCase = createGetGuestInvitationOverviewUseCase({
+    guestRepository: useCaseDependenciesGuestRepository(primaryGuest, companionGuest),
+    guestGroupRepository: {
+      async findById() {
+        return null;
+      },
+    },
+    eventRepository: {
+      async findById() {
+        return null;
+      },
+    },
+    eventGuestEligibilityRepository: {
+      async findMany() {
+        return [];
+      },
+    },
+    rsvpResponseRepository: {
+      async findMany() {
+        return [];
+      },
+    },
+  });
+
+  await assert.rejects(
+    () => missingGroupUseCase.execute({ guestId: "guest-1" }),
+    (error: unknown) =>
+      error instanceof GuestsRsvpApplicationError && error.reason === "guest_group_not_found",
+  );
+}
+
+async function testConfirmAttendanceUseCase(): Promise<void> {
+  const guest: Guest = {
+    id: "guest-1",
+    guestGroupId: "group-1",
+    fullName: "Ana Souza",
+    phone: null,
+    email: "ana@example.com",
+    isPrimary: true,
+    status: "active",
+    lastAccessAt: null,
+    createdAt: new Date("2026-04-01T10:00:00.000Z"),
+    updatedAt: new Date("2026-04-01T10:00:00.000Z"),
+  };
+  const event: Event = {
+    id: "event-1",
+    slug: "casamento",
+    name: "Casamento",
+    eventType: "wedding",
+    startsAt: new Date("2026-07-12T16:00:00.000Z"),
+    location: {
+      venueName: "Espaco Jardim",
+      addressLine: "Rua das Flores",
+      addressNumber: "100",
+      neighborhood: "Centro",
+      city: "Sao Paulo",
+      state: "SP",
+      postalCode: "01000-000",
+      latitude: null,
+      longitude: null,
+      mapUrl: null,
+    },
+    notes: null,
+    isActive: true,
+    createdAt: new Date("2026-04-01T10:00:00.000Z"),
+    updatedAt: new Date("2026-04-01T10:00:00.000Z"),
+  };
+  const eligibility: EventGuestEligibility = {
+    id: "eligibility-1",
+    eventId: "event-1",
+    guestId: "guest-1",
+    canRsvp: true,
+    createdAt: new Date("2026-04-05T10:00:00.000Z"),
+  };
+  const existingResponse: RsvpResponse = {
+    id: "rsvp-1",
+    eventId: "event-1",
+    guestId: "guest-1",
+    responseStatus: "yes",
+    companionsConfirmed: 1,
+    message: "Confirmado",
+    respondedAt: new Date("2026-05-01T12:00:00.000Z"),
+    createdAt: new Date("2026-05-01T12:00:00.000Z"),
+    updatedAt: new Date("2026-05-01T12:00:00.000Z"),
+  };
+
+  let currentResponse: RsvpResponse | null = null;
+
+  const useCase = createConfirmAttendanceUseCase({
+    guestRepository: {
+      async findById(guestId: string) {
+        if (guestId === "guest-1") {
+          return guest;
+        }
+
+        if (guestId === "guest-inactive") {
+          return { ...guest, id: guestId, status: "inactive" };
+        }
+
+        return null;
+      },
+    },
+    eventRepository: {
+      async findById(eventId: string) {
+        if (eventId === "event-1") {
+          return event;
+        }
+
+        if (eventId === "event-2") {
+          return { ...event, id: "event-2", slug: "cha-bar", eventType: "bridal_shower" };
+        }
+
+        return null;
+      },
+    },
+    eventGuestEligibilityRepository: {
+      async findByEventIdAndGuestId(eventId: string, guestId: string) {
+        if (eventId === "event-1" && guestId === "guest-1") {
+          return eligibility;
+        }
+
+        if (eventId === "event-blocked" && guestId === "guest-1") {
+          return { ...eligibility, eventId, canRsvp: false };
+        }
+
+        return null;
+      },
+    },
+    rsvpResponseTransactionRunner: {
+      async runIdempotentSubmission(operation) {
+        return operation({
+          async findResponseByEventAndGuest() {
+            return currentResponse;
+          },
+          async createResponse(input) {
+            currentResponse = {
+              id: "rsvp-created",
+              eventId: input.eventId,
+              guestId: input.guestId,
+              responseStatus: input.responseStatus,
+              companionsConfirmed: input.companionsConfirmed,
+              message: input.message?.trim() ? input.message.trim() : null,
+              respondedAt: new Date("2026-05-10T10:00:00.000Z"),
+              createdAt: new Date("2026-05-10T10:00:00.000Z"),
+              updatedAt: new Date("2026-05-10T10:00:00.000Z"),
+            };
+            return currentResponse;
+          },
+          async updateResponse(responseId, input) {
+            currentResponse = {
+              id: responseId,
+              eventId: input.eventId,
+              guestId: input.guestId,
+              responseStatus: input.responseStatus,
+              companionsConfirmed: input.companionsConfirmed,
+              message: input.message?.trim() ? input.message.trim() : null,
+              respondedAt: new Date("2026-05-11T10:00:00.000Z"),
+              createdAt: existingResponse.createdAt,
+              updatedAt: new Date("2026-05-11T10:00:00.000Z"),
+            };
+            return currentResponse;
+          },
+        });
+      },
+    },
+  });
+
+  currentResponse = null;
+  const created = await useCase.execute({
+    eventId: "event-1",
+    guestId: "guest-1",
+    responseStatus: "yes",
+    companionsConfirmed: 1,
+    message: "  Confirmado  ",
+  });
+  assert.equal(created.outcome, "created");
+  assert.equal(created.persistedResponse.message, "Confirmado");
+
+  currentResponse = existingResponse;
+  const replayed = await useCase.execute({
+    eventId: "event-1",
+    guestId: "guest-1",
+    responseStatus: "yes",
+    companionsConfirmed: 1,
+    message: " Confirmado ",
+  });
+  assert.equal(replayed.outcome, "replayed");
+  assert.equal(replayed.persistedResponse.id, "rsvp-1");
+
+  currentResponse = existingResponse;
+  const updated = await useCase.execute({
+    eventId: "event-1",
+    guestId: "guest-1",
+    responseStatus: "pending",
+    companionsConfirmed: 0,
+    message: "Ainda vou decidir",
+  });
+  assert.equal(updated.outcome, "updated");
+  assert.equal(updated.persistedResponse.responseStatus, "pending");
+
+  await assert.rejects(
+    () =>
+      useCase.execute({
+        eventId: "event-1",
+        guestId: "guest-missing",
+        responseStatus: "yes",
+        companionsConfirmed: 0,
+      }),
+    (error: unknown) =>
+      error instanceof GuestsRsvpApplicationError && error.reason === "guest_not_found",
+  );
+  await assert.rejects(
+    () =>
+      useCase.execute({
+        eventId: "event-1",
+        guestId: "guest-inactive",
+        responseStatus: "yes",
+        companionsConfirmed: 0,
+      }),
+    (error: unknown) =>
+      error instanceof GuestsRsvpApplicationError && error.reason === "guest_inactive",
+  );
+  await assert.rejects(
+    () =>
+      useCase.execute({
+        eventId: "event-missing",
+        guestId: "guest-1",
+        responseStatus: "yes",
+        companionsConfirmed: 0,
+      }),
+    (error: unknown) =>
+      error instanceof GuestsRsvpApplicationError && error.reason === "event_not_found",
+  );
+  await assert.rejects(
+    () =>
+      useCase.execute({
+        eventId: "event-2",
+        guestId: "guest-1",
+        responseStatus: "yes",
+        companionsConfirmed: 0,
+      }),
+    (error: unknown) =>
+      error instanceof GuestsRsvpApplicationError && error.reason === "event_not_eligible",
+  );
+
+  const blockedUseCase = createConfirmAttendanceUseCase({
+    guestRepository: {
+      async findById() {
+        return guest;
+      },
+    },
+    eventRepository: {
+      async findById(eventId: string) {
+        return eventId === "event-blocked" ? { ...event, id: eventId } : null;
+      },
+    },
+    eventGuestEligibilityRepository: {
+      async findByEventIdAndGuestId() {
+        return { ...eligibility, eventId: "event-blocked", canRsvp: false };
+      },
+    },
+    rsvpResponseTransactionRunner: {
+      async runIdempotentSubmission() {
+        throw new Error("should not run");
+      },
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      blockedUseCase.execute({
+        eventId: "event-blocked",
+        guestId: "guest-1",
+        responseStatus: "no",
+        companionsConfirmed: 0,
+      }),
+    (error: unknown) =>
+      error instanceof GuestsRsvpApplicationError && error.reason === "event_rsvp_blocked",
+  );
+}
+
 async function run(): Promise<void> {
   await testEchoesIncomingRequestId();
   await testGeneratesRequestIdWhenMissing();
@@ -2260,9 +2962,13 @@ async function run(): Promise<void> {
   await testPrismaGuestsRsvpGuestRepository();
   await testPrismaGuestGroupRepository();
   await testPrismaEventRepository();
+  await testPrismaEventGuestEligibilityRepository();
+  await testPrismaRsvpResponseRepository();
   await testPrismaInviteTokenRepository();
   await testPrismaInviteTokenTransactionRunner();
   await testRevokeInviteTokenUseCase();
+  await testGetGuestInvitationOverviewUseCase();
+  await testConfirmAttendanceUseCase();
   testModuleLayerContractsAreExported();
   testGuestSessionCookieAttributes();
   testGiftReservationConflictError();
