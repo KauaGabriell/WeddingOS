@@ -48,6 +48,7 @@ import {
   PrismaRsvpResponseRepository,
   buildRsvpResponseIdempotencyKey,
   createConfirmAttendanceUseCase,
+  createDeclineAttendanceUseCase,
   createGetGuestInvitationOverviewUseCase,
 } from "./modules/guests-rsvp/index.js";
 import {
@@ -2762,6 +2763,24 @@ async function testConfirmAttendanceUseCase(): Promise<void> {
         return null;
       },
     },
+    guestGroupRepository: {
+      async findById(groupId: string) {
+        return groupId === "group-1"
+          ? {
+              id: "group-1",
+              displayName: "Familia Souza",
+              groupCode: "SOUZA01",
+              allowedCompanions: 1,
+              primaryContactName: "Ana Souza",
+              primaryContactPhone: null,
+              primaryContactEmail: "ana@example.com",
+              notes: null,
+              createdAt: new Date("2026-04-01T10:00:00.000Z"),
+              updatedAt: new Date("2026-04-01T10:00:00.000Z"),
+            }
+          : null;
+      },
+    },
     eventRepository: {
       async findById(eventId: string) {
         if (eventId === "event-1") {
@@ -2864,6 +2883,18 @@ async function testConfirmAttendanceUseCase(): Promise<void> {
     () =>
       useCase.execute({
         eventId: "event-1",
+        guestId: "guest-1",
+        responseStatus: "yes",
+        companionsConfirmed: 2,
+      }),
+    (error: unknown) =>
+      error instanceof GuestsRsvpApplicationError && error.reason === "companions_limit_exceeded",
+  );
+
+  await assert.rejects(
+    () =>
+      useCase.execute({
+        eventId: "event-1",
         guestId: "guest-missing",
         responseStatus: "yes",
         companionsConfirmed: 0,
@@ -2905,10 +2936,66 @@ async function testConfirmAttendanceUseCase(): Promise<void> {
       error instanceof GuestsRsvpApplicationError && error.reason === "event_not_eligible",
   );
 
+  const missingGroupUseCase = createConfirmAttendanceUseCase({
+    guestRepository: {
+      async findById() {
+        return guest;
+      },
+    },
+    guestGroupRepository: {
+      async findById() {
+        return null;
+      },
+    },
+    eventRepository: {
+      async findById() {
+        return event;
+      },
+    },
+    eventGuestEligibilityRepository: {
+      async findByEventIdAndGuestId() {
+        return eligibility;
+      },
+    },
+    rsvpResponseTransactionRunner: {
+      async runIdempotentSubmission() {
+        throw new Error("should not run");
+      },
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      missingGroupUseCase.execute({
+        eventId: "event-1",
+        guestId: "guest-1",
+        responseStatus: "yes",
+        companionsConfirmed: 1,
+      }),
+    (error: unknown) =>
+      error instanceof GuestsRsvpApplicationError && error.reason === "guest_group_not_found",
+  );
+
   const blockedUseCase = createConfirmAttendanceUseCase({
     guestRepository: {
       async findById() {
         return guest;
+      },
+    },
+    guestGroupRepository: {
+      async findById() {
+        return {
+          id: "group-1",
+          displayName: "Familia Souza",
+          groupCode: "SOUZA01",
+          allowedCompanions: 1,
+          primaryContactName: "Ana Souza",
+          primaryContactPhone: null,
+          primaryContactEmail: "ana@example.com",
+          notes: null,
+          createdAt: new Date("2026-04-01T10:00:00.000Z"),
+          updatedAt: new Date("2026-04-01T10:00:00.000Z"),
+        };
       },
     },
     eventRepository: {
@@ -2936,6 +3023,215 @@ async function testConfirmAttendanceUseCase(): Promise<void> {
         responseStatus: "no",
         companionsConfirmed: 0,
       }),
+    (error: unknown) =>
+      error instanceof GuestsRsvpApplicationError && error.reason === "event_rsvp_blocked",
+  );
+}
+
+async function testDeclineAttendanceUseCase(): Promise<void> {
+  const guest: Guest = {
+    id: "guest-1",
+    guestGroupId: "group-1",
+    fullName: "Ana Souza",
+    phone: null,
+    email: "ana@example.com",
+    isPrimary: true,
+    status: "active",
+    lastAccessAt: null,
+    createdAt: new Date("2026-04-01T10:00:00.000Z"),
+    updatedAt: new Date("2026-04-01T10:00:00.000Z"),
+  };
+  const group: GuestGroup = {
+    id: "group-1",
+    displayName: "Familia Souza",
+    groupCode: "SOUZA01",
+    allowedCompanions: 2,
+    primaryContactName: "Ana Souza",
+    primaryContactPhone: null,
+    primaryContactEmail: "ana@example.com",
+    notes: null,
+    createdAt: new Date("2026-04-01T10:00:00.000Z"),
+    updatedAt: new Date("2026-04-01T10:00:00.000Z"),
+  };
+  const event: Event = {
+    id: "event-1",
+    slug: "casamento",
+    name: "Casamento",
+    eventType: "wedding",
+    startsAt: new Date("2026-07-12T16:00:00.000Z"),
+    location: {
+      venueName: "Espaco Jardim",
+      addressLine: "Rua das Flores",
+      addressNumber: "100",
+      neighborhood: "Centro",
+      city: "Sao Paulo",
+      state: "SP",
+      postalCode: "01000-000",
+      latitude: null,
+      longitude: null,
+      mapUrl: null,
+    },
+    notes: null,
+    isActive: true,
+    createdAt: new Date("2026-04-01T10:00:00.000Z"),
+    updatedAt: new Date("2026-04-01T10:00:00.000Z"),
+  };
+  const eligibility: EventGuestEligibility = {
+    id: "eligibility-1",
+    eventId: "event-1",
+    guestId: "guest-1",
+    canRsvp: true,
+    createdAt: new Date("2026-04-05T10:00:00.000Z"),
+  };
+  const yesResponse: RsvpResponse = {
+    id: "rsvp-1",
+    eventId: "event-1",
+    guestId: "guest-1",
+    responseStatus: "yes",
+    companionsConfirmed: 1,
+    message: "Confirmado",
+    respondedAt: new Date("2026-05-01T12:00:00.000Z"),
+    createdAt: new Date("2026-05-01T12:00:00.000Z"),
+    updatedAt: new Date("2026-05-01T12:00:00.000Z"),
+  };
+
+  let currentResponse: RsvpResponse | null = null;
+
+  const useCase = createDeclineAttendanceUseCase({
+    guestRepository: {
+      async findById(guestId: string) {
+        if (guestId === "guest-1") {
+          return guest;
+        }
+
+        if (guestId === "guest-inactive") {
+          return { ...guest, id: guestId, status: "inactive" };
+        }
+
+        return null;
+      },
+    },
+    guestGroupRepository: {
+      async findById(groupId: string) {
+        return groupId === "group-1" ? group : null;
+      },
+    },
+    eventRepository: {
+      async findById(eventId: string) {
+        if (eventId === "event-1") {
+          return event;
+        }
+
+        if (eventId === "event-2") {
+          return { ...event, id: eventId, slug: "cha-bar", eventType: "bridal_shower" };
+        }
+
+        if (eventId === "event-blocked") {
+          return { ...event, id: eventId };
+        }
+
+        return null;
+      },
+    },
+    eventGuestEligibilityRepository: {
+      async findByEventIdAndGuestId(eventId: string, guestId: string) {
+        if (eventId === "event-1" && guestId === "guest-1") {
+          return eligibility;
+        }
+
+        if (eventId === "event-blocked" && guestId === "guest-1") {
+          return { ...eligibility, eventId, canRsvp: false };
+        }
+
+        return null;
+      },
+    },
+    rsvpResponseTransactionRunner: {
+      async runIdempotentSubmission(operation) {
+        return operation({
+          async findResponseByEventAndGuest() {
+            return currentResponse;
+          },
+          async createResponse(input) {
+            currentResponse = {
+              id: "rsvp-decline-created",
+              eventId: input.eventId,
+              guestId: input.guestId,
+              responseStatus: input.responseStatus,
+              companionsConfirmed: input.companionsConfirmed,
+              message: input.message?.trim() ? input.message.trim() : null,
+              respondedAt: new Date("2026-05-12T10:00:00.000Z"),
+              createdAt: new Date("2026-05-12T10:00:00.000Z"),
+              updatedAt: new Date("2026-05-12T10:00:00.000Z"),
+            };
+            return currentResponse;
+          },
+          async updateResponse(responseId, input) {
+            currentResponse = {
+              id: responseId,
+              eventId: input.eventId,
+              guestId: input.guestId,
+              responseStatus: input.responseStatus,
+              companionsConfirmed: input.companionsConfirmed,
+              message: input.message?.trim() ? input.message.trim() : null,
+              respondedAt: new Date("2026-05-13T10:00:00.000Z"),
+              createdAt: yesResponse.createdAt,
+              updatedAt: new Date("2026-05-13T10:00:00.000Z"),
+            };
+            return currentResponse;
+          },
+        });
+      },
+    },
+  });
+
+  currentResponse = null;
+  const created = await useCase.execute({
+    eventId: "event-1",
+    guestId: "guest-1",
+    message: "Nao vou conseguir",
+  });
+  assert.equal(created.outcome, "created");
+  assert.equal(created.persistedResponse.responseStatus, "no");
+  assert.equal(created.persistedResponse.companionsConfirmed, 0);
+
+  currentResponse = {
+    ...created.persistedResponse,
+  };
+  const replayed = await useCase.execute({
+    eventId: "event-1",
+    guestId: "guest-1",
+    message: " Nao vou conseguir ",
+  });
+  assert.equal(replayed.outcome, "replayed");
+
+  currentResponse = yesResponse;
+  const updated = await useCase.execute({
+    eventId: "event-1",
+    guestId: "guest-1",
+    message: "Decidi recusar",
+  });
+  assert.equal(updated.outcome, "updated");
+  assert.equal(updated.persistedResponse.responseStatus, "no");
+  assert.equal(updated.persistedResponse.companionsConfirmed, 0);
+
+  await assert.rejects(
+    () => useCase.execute({ eventId: "event-missing", guestId: "guest-1" }),
+    (error: unknown) =>
+      error instanceof GuestsRsvpApplicationError && error.reason === "event_not_found",
+  );
+  await assert.rejects(
+    () => useCase.execute({ eventId: "event-1", guestId: "guest-inactive" }),
+    (error: unknown) =>
+      error instanceof GuestsRsvpApplicationError && error.reason === "guest_inactive",
+  );
+  await assert.rejects(
+    () => useCase.execute({ eventId: "event-2", guestId: "guest-1" }),
+    (error: unknown) =>
+      error instanceof GuestsRsvpApplicationError && error.reason === "event_not_eligible",
+  );
+  await assert.rejects(
+    () => useCase.execute({ eventId: "event-blocked", guestId: "guest-1" }),
     (error: unknown) =>
       error instanceof GuestsRsvpApplicationError && error.reason === "event_rsvp_blocked",
   );
@@ -2969,6 +3265,7 @@ async function run(): Promise<void> {
   await testRevokeInviteTokenUseCase();
   await testGetGuestInvitationOverviewUseCase();
   await testConfirmAttendanceUseCase();
+  await testDeclineAttendanceUseCase();
   testModuleLayerContractsAreExported();
   testGuestSessionCookieAttributes();
   testGiftReservationConflictError();
