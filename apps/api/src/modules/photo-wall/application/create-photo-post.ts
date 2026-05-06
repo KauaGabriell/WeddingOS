@@ -38,8 +38,47 @@ export interface CreatePhotoPostDependencies {
   readonly photoPostRepository: Pick<PhotoPostRepository, "save">;
 }
 
+const PHOTO_WALL_MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024;
+const ALLOWED_MEDIA_TYPES = ["image/jpeg", "image/png"] as const;
+const ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png"] as const;
+
 function normalizeRequiredText(value: string): string {
   return value.trim();
+}
+
+function getFileExtension(fileName: string): string {
+  const normalizedFileName = fileName.trim().toLowerCase();
+  const lastDotIndex = normalizedFileName.lastIndexOf(".");
+
+  if (lastDotIndex < 0) {
+    return "";
+  }
+
+  return normalizedFileName.slice(lastDotIndex);
+}
+
+function assertSupportedUpload(input: CreatePhotoPostInput): void {
+  if (!ALLOWED_MEDIA_TYPES.includes(input.mediaMimeType as (typeof ALLOWED_MEDIA_TYPES)[number])) {
+    throw new PhotoWallApplicationError("unsupported_media_type");
+  }
+
+  const extension = getFileExtension(input.fileName);
+
+  if (!ALLOWED_EXTENSIONS.includes(extension as (typeof ALLOWED_EXTENSIONS)[number])) {
+    throw new PhotoWallApplicationError("unsupported_file_extension");
+  }
+
+  const isMimeExtensionMatch =
+    (input.mediaMimeType === "image/jpeg" && (extension === ".jpg" || extension === ".jpeg")) ||
+    (input.mediaMimeType === "image/png" && extension === ".png");
+
+  if (!isMimeExtensionMatch) {
+    throw new PhotoWallApplicationError("media_type_extension_mismatch");
+  }
+
+  if (input.mediaSizeBytes <= 0 || input.mediaSizeBytes > PHOTO_WALL_MAX_UPLOAD_SIZE_BYTES) {
+    throw new PhotoWallApplicationError("file_too_large");
+  }
 }
 
 export function createCreatePhotoPostUseCase(
@@ -56,6 +95,8 @@ export function createCreatePhotoPostUseCase(
       if (guest.status !== "active") {
         throw new PhotoWallApplicationError("guest_inactive");
       }
+
+      assertSupportedUpload(input);
 
       const uploadedPhoto = await dependencies.photoStorageProvider.uploadPhoto({
         fileName: input.fileName,

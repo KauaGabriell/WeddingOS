@@ -16,6 +16,21 @@ const inactiveGuest = {
   status: "inactive" as const,
 };
 
+function createValidCreatePhotoPostInput(
+  overrides: Partial<Parameters<ReturnType<typeof createCreatePhotoPostUseCase>["execute"]>[0]> = {},
+) {
+  return {
+    guestId: "guest-1",
+    authorName: "Joao",
+    message: "Parabens",
+    fileName: "casamento.jpg",
+    fileBody: Buffer.from("photo"),
+    mediaMimeType: "image/jpeg",
+    mediaSizeBytes: 1024,
+    ...overrides,
+  };
+}
+
 async function testCreatePhotoPostCreatesPendingPost(): Promise<void> {
   const fileBody = Buffer.from("photo-bytes");
   const useCase = createCreatePhotoPostUseCase({
@@ -82,6 +97,76 @@ async function testCreatePhotoPostCreatesPendingPost(): Promise<void> {
   assert.equal(result.photoPost.mediaUrl, null);
   assert.equal(result.photoPost.moderationStatus, "pending");
   assert.equal(result.mediaUrl, "https://signed.example.com/photos/casamento.jpg");
+}
+
+async function testCreatePhotoPostAcceptsJpegExtension(): Promise<void> {
+  let uploadCalled = false;
+  const useCase = createCreatePhotoPostUseCase({
+    guestRepository: {
+      async findById() {
+        return activeGuest;
+      },
+    },
+    photoStorageProvider: {
+      async uploadPhoto() {
+        uploadCalled = true;
+        return {
+          mediaStorageKey: "photos/casamento.jpeg",
+          mediaUrl: "https://signed.example.com/photos/casamento.jpeg",
+        };
+      },
+    },
+    photoPostRepository: {
+      async save(entity: PhotoPost) {
+        return entity;
+      },
+    },
+  });
+
+  const result = await useCase.execute(
+    createValidCreatePhotoPostInput({
+      fileName: "casamento.jpeg",
+      mediaMimeType: "image/jpeg",
+    }),
+  );
+
+  assert.equal(uploadCalled, true);
+  assert.equal(result.photoPost.mediaMimeType, "image/jpeg");
+}
+
+async function testCreatePhotoPostAcceptsPngExtension(): Promise<void> {
+  let uploadCalled = false;
+  const useCase = createCreatePhotoPostUseCase({
+    guestRepository: {
+      async findById() {
+        return activeGuest;
+      },
+    },
+    photoStorageProvider: {
+      async uploadPhoto() {
+        uploadCalled = true;
+        return {
+          mediaStorageKey: "photos/casamento.png",
+          mediaUrl: "https://signed.example.com/photos/casamento.png",
+        };
+      },
+    },
+    photoPostRepository: {
+      async save(entity: PhotoPost) {
+        return entity;
+      },
+    },
+  });
+
+  const result = await useCase.execute(
+    createValidCreatePhotoPostInput({
+      fileName: "casamento.png",
+      mediaMimeType: "image/png",
+    }),
+  );
+
+  assert.equal(uploadCalled, true);
+  assert.equal(result.photoPost.mediaMimeType, "image/png");
 }
 
 async function testCreatePhotoPostRejectsUnknownGuest(): Promise<void> {
@@ -168,6 +253,161 @@ async function testCreatePhotoPostRejectsInactiveGuest(): Promise<void> {
   );
 }
 
+async function testCreatePhotoPostRejectsUnsupportedMediaType(): Promise<void> {
+  let uploadCalled = false;
+  const useCase = createCreatePhotoPostUseCase({
+    guestRepository: {
+      async findById() {
+        return activeGuest;
+      },
+    },
+    photoStorageProvider: {
+      async uploadPhoto() {
+        uploadCalled = true;
+        throw new Error("should not upload");
+      },
+    },
+    photoPostRepository: {
+      async save() {
+        throw new Error("should not save");
+      },
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      useCase.execute(
+        createValidCreatePhotoPostInput({
+          fileName: "casamento.gif",
+          mediaMimeType: "image/gif",
+        }),
+      ),
+    (error) => {
+      assert.ok(error instanceof PhotoWallApplicationError);
+      assert.equal(error.reason, "unsupported_media_type");
+      assert.equal(error.statusCode, 400);
+      assert.equal(uploadCalled, false);
+      return true;
+    },
+  );
+}
+
+async function testCreatePhotoPostRejectsUnsupportedFileExtension(): Promise<void> {
+  let uploadCalled = false;
+  const useCase = createCreatePhotoPostUseCase({
+    guestRepository: {
+      async findById() {
+        return activeGuest;
+      },
+    },
+    photoStorageProvider: {
+      async uploadPhoto() {
+        uploadCalled = true;
+        throw new Error("should not upload");
+      },
+    },
+    photoPostRepository: {
+      async save() {
+        throw new Error("should not save");
+      },
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      useCase.execute(
+        createValidCreatePhotoPostInput({
+          fileName: "casamento.heic",
+          mediaMimeType: "image/jpeg",
+        }),
+      ),
+    (error) => {
+      assert.ok(error instanceof PhotoWallApplicationError);
+      assert.equal(error.reason, "unsupported_file_extension");
+      assert.equal(error.statusCode, 400);
+      assert.equal(uploadCalled, false);
+      return true;
+    },
+  );
+}
+
+async function testCreatePhotoPostRejectsMediaTypeExtensionMismatch(): Promise<void> {
+  let uploadCalled = false;
+  const useCase = createCreatePhotoPostUseCase({
+    guestRepository: {
+      async findById() {
+        return activeGuest;
+      },
+    },
+    photoStorageProvider: {
+      async uploadPhoto() {
+        uploadCalled = true;
+        throw new Error("should not upload");
+      },
+    },
+    photoPostRepository: {
+      async save() {
+        throw new Error("should not save");
+      },
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      useCase.execute(
+        createValidCreatePhotoPostInput({
+          fileName: "casamento.png",
+          mediaMimeType: "image/jpeg",
+        }),
+      ),
+    (error) => {
+      assert.ok(error instanceof PhotoWallApplicationError);
+      assert.equal(error.reason, "media_type_extension_mismatch");
+      assert.equal(error.statusCode, 400);
+      assert.equal(uploadCalled, false);
+      return true;
+    },
+  );
+}
+
+async function testCreatePhotoPostRejectsFileTooLarge(): Promise<void> {
+  let uploadCalled = false;
+  const useCase = createCreatePhotoPostUseCase({
+    guestRepository: {
+      async findById() {
+        return activeGuest;
+      },
+    },
+    photoStorageProvider: {
+      async uploadPhoto() {
+        uploadCalled = true;
+        throw new Error("should not upload");
+      },
+    },
+    photoPostRepository: {
+      async save() {
+        throw new Error("should not save");
+      },
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      useCase.execute(
+        createValidCreatePhotoPostInput({
+          mediaSizeBytes: 10 * 1024 * 1024 + 1,
+        }),
+      ),
+    (error) => {
+      assert.ok(error instanceof PhotoWallApplicationError);
+      assert.equal(error.reason, "file_too_large");
+      assert.equal(error.statusCode, 400);
+      assert.equal(uploadCalled, false);
+      return true;
+    },
+  );
+}
+
 async function testCreatePhotoPostPropagatesUploadError(): Promise<void> {
   const useCase = createCreatePhotoPostUseCase({
     guestRepository: {
@@ -246,12 +486,36 @@ export async function runPhotoWallApplicationTests(): Promise<void> {
       run: testCreatePhotoPostCreatesPendingPost,
     },
     {
+      name: "create photo post accepts jpeg extension",
+      run: testCreatePhotoPostAcceptsJpegExtension,
+    },
+    {
+      name: "create photo post accepts png extension",
+      run: testCreatePhotoPostAcceptsPngExtension,
+    },
+    {
       name: "create photo post rejects unknown guest",
       run: testCreatePhotoPostRejectsUnknownGuest,
     },
     {
       name: "create photo post rejects inactive guest",
       run: testCreatePhotoPostRejectsInactiveGuest,
+    },
+    {
+      name: "create photo post rejects unsupported media type",
+      run: testCreatePhotoPostRejectsUnsupportedMediaType,
+    },
+    {
+      name: "create photo post rejects unsupported file extension",
+      run: testCreatePhotoPostRejectsUnsupportedFileExtension,
+    },
+    {
+      name: "create photo post rejects media type extension mismatch",
+      run: testCreatePhotoPostRejectsMediaTypeExtensionMismatch,
+    },
+    {
+      name: "create photo post rejects file too large",
+      run: testCreatePhotoPostRejectsFileTooLarge,
     },
     {
       name: "create photo post propagates upload error",
