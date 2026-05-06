@@ -56,10 +56,10 @@ export const PHOTO_WALL_HTTP_SCHEMAS = defineHttpSchemaCatalog({
   },
   bodies: {
     createPhotoPost: z.object({
-      guestId: uuidSchema,
       authorName: z.string().trim().min(1).max(120),
       message: z.string().trim().min(1).max(1_000),
       fileName: z.string().trim().min(1).max(255),
+      fileBodyBase64: z.string().trim().min(1),
       mediaMimeType: z.string().trim().min(1),
       mediaSizeBytes: z.number().int().positive(),
       mediaWidth: z.number().int().positive().optional(),

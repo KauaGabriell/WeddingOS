@@ -21,6 +21,7 @@ import {
 } from "./modules/identity-access/index.js";
 import { createApiLogger } from "./modules/shared/platform/logging/create-api-logger.js";
 import { createStorageClient } from "./modules/shared/platform/storage/create-storage-client.js";
+import type { StorageClient } from "./modules/shared/platform/storage/storage-client.js";
 
 const booleanFromEnv = z.preprocess((value) => {
   if (typeof value === "boolean") {
@@ -60,6 +61,7 @@ export type AppEnv = z.infer<typeof envSchema> & { corsOrigins: string[] };
 type BuildAppOptions = {
   loggerStream?: DestinationStream;
   prisma?: PrismaClient;
+  storageClient?: StorageClient;
   guestSessionService?: SignedGuestSessionService;
   adminSessionVerifier?: SignedAdminSessionService;
 };
@@ -119,7 +121,7 @@ export async function buildApp(env: AppEnv, options: BuildAppOptions = {}) {
       stream: options.loggerStream,
     }),
   });
-  const storageClient = createStorageClient(env);
+  const storageClient = options.storageClient ?? createStorageClient(env);
   const prisma =
     options.prisma ??
     (env.NODE_ENV === "test"

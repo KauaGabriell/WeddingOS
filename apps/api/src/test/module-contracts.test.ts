@@ -242,7 +242,7 @@ function testModuleLayerContractsAreExported(): void {
   assert.equal(IDENTITY_ACCESS_HTTP_CONTRACT.routePrefix, "/auth");
   assert.equal(GUESTS_RSVP_HTTP_CONTRACT.routePrefix, "/");
   assert.equal(GIFT_REGISTRY_HTTP_CONTRACT.routePrefix, "/gifts");
-  assert.equal(PHOTO_WALL_HTTP_CONTRACT.routePrefix, "/photos");
+  assert.equal(PHOTO_WALL_HTTP_CONTRACT.routePrefix, "/photo-wall");
   assert.equal(ADMIN_BACKOFFICE_HTTP_CONTRACT.routePrefix, "/admin");
   assert.equal(IDENTITY_ACCESS_MODULE_USE_CASES.guestAuthentication, "implemented");
   assert.equal(IDENTITY_ACCESS_MODULE_USE_CASES.adminAuthentication, "implemented");
@@ -294,6 +294,8 @@ function testModuleLayerContractsAreExported(): void {
   assert.ok(GIFT_REGISTRY_HTTP_SCHEMAS.bodies.releaseReservation.shape.reassignToGuestId);
   assert.ok(GIFT_REGISTRY_HTTP_SCHEMAS.responses.giftCatalogList.shape.items);
   assert.ok(PHOTO_WALL_HTTP_SCHEMAS.bodies.createPhotoPost.shape.fileName);
+  assert.ok(PHOTO_WALL_HTTP_SCHEMAS.bodies.createPhotoPost.shape.fileBodyBase64);
+  assert.equal("guestId" in PHOTO_WALL_HTTP_SCHEMAS.bodies.createPhotoPost.shape, false);
   assert.ok(PHOTO_WALL_HTTP_SCHEMAS.responses.photoGalleryList.shape.items);
   assert.ok(PHOTO_WALL_HTTP_SCHEMAS.responses.photoPostSubmission.shape.mediaUrl);
   assert.ok(ADMIN_BACKOFFICE_HTTP_SCHEMAS.responses.auditLogList.shape.items);

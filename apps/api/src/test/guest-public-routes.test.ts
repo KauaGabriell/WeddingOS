@@ -280,6 +280,47 @@ function createPrismaStub() {
       updatedAt: new Date("2026-05-10T12:00:00.000Z"),
     },
   ];
+  const photoPosts = [
+    {
+      id: "550e8400-e29b-41d4-a716-446655440119",
+      guestId: GUEST_ID,
+      authorName: "Ana",
+      message: "Memoria linda",
+      mediaStorageKey: "photos/post-approved.jpg",
+      mediaUrl: null,
+      mediaMimeType: "image/jpeg",
+      mediaSizeBytes: 2048,
+      mediaWidth: 1200,
+      mediaHeight: 800,
+      moderationStatus: "APPROVED",
+      submittedAt: new Date("2026-05-09T12:00:00.000Z"),
+      approvedAt: new Date("2026-05-10T12:00:00.000Z"),
+      hiddenAt: null,
+      moderatedByAdminUserId: "550e8400-e29b-41d4-a716-446655440113",
+      createdAt: new Date("2026-05-09T12:00:00.000Z"),
+      updatedAt: new Date("2026-05-10T12:00:00.000Z"),
+    },
+    {
+      id: "550e8400-e29b-41d4-a716-446655440120",
+      guestId: GUEST_ID,
+      authorName: "Ana",
+      message: "Aguardando moderacao",
+      mediaStorageKey: "photos/post-pending.jpg",
+      mediaUrl: null,
+      mediaMimeType: "image/jpeg",
+      mediaSizeBytes: 1024,
+      mediaWidth: 800,
+      mediaHeight: 600,
+      moderationStatus: "PENDING",
+      submittedAt: new Date("2026-05-11T12:00:00.000Z"),
+      approvedAt: null,
+      hiddenAt: null,
+      moderatedByAdminUserId: null,
+      createdAt: new Date("2026-05-11T12:00:00.000Z"),
+      updatedAt: new Date("2026-05-11T12:00:00.000Z"),
+    },
+  ];
+  let photoPostSequence = 0;
   let giftReservationSequence = 0;
   const responseTimestamps = [
     new Date("2026-05-11T12:00:00.000Z"),
@@ -464,6 +505,42 @@ function createPrismaStub() {
         return existing;
       },
     },
+    photoPost: {
+      async findUnique(args: { where: { id: string } }) {
+        return photoPosts.find((post) => post.id === args.where.id) ?? null;
+      },
+      async findMany(args: {
+        where: { guestId?: string; moderationStatus?: string };
+        orderBy: Array<{ submittedAt: "asc" | "desc" } | { createdAt: "asc" | "desc" }>;
+        skip: number;
+        take: number;
+      }) {
+        const filtered = photoPosts
+          .filter((post) => {
+            if (args.where.guestId && post.guestId !== args.where.guestId) return false;
+            if (args.where.moderationStatus && post.moderationStatus !== args.where.moderationStatus) {
+              return false;
+            }
+            return true;
+          })
+          .sort((left, right) => {
+            if (left.submittedAt.getTime() !== right.submittedAt.getTime()) {
+              return right.submittedAt.getTime() - left.submittedAt.getTime();
+            }
+            return right.createdAt.getTime() - left.createdAt.getTime();
+          });
+        return filtered.slice(args.skip, args.skip + args.take);
+      },
+      async upsert(args: { where: { id: string }; create: any; update: any }) {
+        const existing = photoPosts.find((post) => post.id === args.where.id);
+        if (existing) {
+          Object.assign(existing, args.update);
+          return existing;
+        }
+        photoPosts.push(args.create);
+        return args.create;
+      },
+    },
     eventGuestEligibility: {
       async findUnique(args: { where: { id?: string; eventId_guestId?: { eventId: string; guestId: string } } }) {
         if (args.where.id) {
@@ -592,10 +669,24 @@ function createPrismaStub() {
 async function testGuestLoginRoutesAndProtectedGuestPages(): Promise<void> {
   const env = createTestEnv();
   const prisma = createPrismaStub();
+  const uploadedPhotoBodies: Buffer[] = [];
+  const storageClient = {
+    async upload(input: { key: string; body: Buffer | Uint8Array; contentType: string }) {
+      uploadedPhotoBodies.push(Buffer.from(input.body));
+      return {
+        key: `uploads/${input.key}`,
+      };
+    },
+    async delete() {},
+    async getSignedUrl(key: string) {
+      return `https://signed.example.com/${key}`;
+    },
+  };
   const guestSessionService = new SignedGuestSessionService(env.JWT_SECRET, 300, () => new Date("2026-05-15T10:00:00.000Z"));
   const adminSessionService = new SignedAdminSessionService(env.JWT_SECRET, 300, () => new Date("2026-05-15T10:00:00.000Z"));
   const app = await buildApp(env, {
     prisma: prisma as never,
+    storageClient,
     guestSessionService,
     adminSessionVerifier: adminSessionService,
   });
@@ -846,6 +937,90 @@ async function testGuestLoginRoutesAndProtectedGuestPages(): Promise<void> {
     });
     assert.equal(reserveGiftMissingAuth.statusCode, 401);
 
+    const photoWallResponse = await app.inject({
+      method: "GET",
+      url: "/photo-wall?page=1&pageSize=10",
+      headers: {
+        authorization: `Bearer ${guestSession.accessToken}`,
+      },
+    });
+    assert.equal(photoWallResponse.statusCode, 200);
+    assert.deepEqual(
+      photoWallResponse.json().items.map((item: { id: string }) => item.id),
+      ["550e8400-e29b-41d4-a716-446655440119"],
+    );
+    assert.equal(
+      photoWallResponse.json().items[0]?.mediaUrl,
+      "https://signed.example.com/photos/post-approved.jpg",
+    );
+
+    const photoWallMissingAuth = await app.inject({
+      method: "GET",
+      url: "/photo-wall",
+    });
+    assert.equal(photoWallMissingAuth.statusCode, 401);
+
+    const createPhotoPost = await app.inject({
+      method: "POST",
+      url: "/photo-wall/posts",
+      headers: {
+        cookie: `weddingos_guest_session=${encodeURIComponent(guestSession.accessToken)}`,
+        [REQUEST_ID_HEADER]: "req-photo-post-1",
+      },
+      payload: {
+        authorName: "  Ana  ",
+        message: "  Viva os noivos  ",
+        fileName: "casamento.jpg",
+        fileBodyBase64: Buffer.from("photo-upload").toString("base64"),
+        mediaMimeType: "image/jpeg",
+        mediaSizeBytes: 12,
+        mediaWidth: 1024,
+        mediaHeight: 768,
+      },
+    });
+    assert.equal(createPhotoPost.statusCode, 200);
+    assert.equal(createPhotoPost.json().photoPost.guestId, GUEST_ID);
+    assert.equal(createPhotoPost.json().photoPost.authorName, "Ana");
+    assert.equal(createPhotoPost.json().photoPost.message, "Viva os noivos");
+    assert.equal(createPhotoPost.json().photoPost.mediaStorageKey, "uploads/casamento.jpg");
+    assert.equal(createPhotoPost.json().photoPost.mediaUrl, null);
+    assert.equal(
+      createPhotoPost.json().mediaUrl,
+      "https://signed.example.com/uploads/casamento.jpg",
+    );
+    assert.equal(uploadedPhotoBodies[0]?.toString("utf8"), "photo-upload");
+
+    const invalidPhotoBody = await app.inject({
+      method: "POST",
+      url: "/photo-wall/posts",
+      headers: {
+        authorization: `Bearer ${guestSession.accessToken}`,
+      },
+      payload: {
+        authorName: "Ana",
+        message: "Teste",
+        fileName: "casamento.jpg",
+        fileBodyBase64: "not-base64***",
+        mediaMimeType: "image/jpeg",
+        mediaSizeBytes: 10,
+      },
+    });
+    assert.equal(invalidPhotoBody.statusCode, 400);
+
+    const createPhotoMissingAuth = await app.inject({
+      method: "POST",
+      url: "/photo-wall/posts",
+      payload: {
+        authorName: "Ana",
+        message: "Teste",
+        fileName: "casamento.jpg",
+        fileBodyBase64: Buffer.from("x").toString("base64"),
+        mediaMimeType: "image/jpeg",
+        mediaSizeBytes: 1,
+      },
+    });
+    assert.equal(createPhotoMissingAuth.statusCode, 401);
+
     const adminSession = await adminSessionService.issueSession({
       adminUserId: "550e8400-e29b-41d4-a716-446655440113",
       role: "super_admin",
@@ -882,6 +1057,32 @@ async function testGuestLoginRoutesAndProtectedGuestPages(): Promise<void> {
       payload: {},
     });
     assert.equal(forbiddenReserveGift.statusCode, 403);
+
+    const forbiddenPhotoWall = await app.inject({
+      method: "GET",
+      url: "/photo-wall",
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    assert.equal(forbiddenPhotoWall.statusCode, 403);
+
+    const forbiddenCreatePhoto = await app.inject({
+      method: "POST",
+      url: "/photo-wall/posts",
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+      payload: {
+        authorName: "Ana",
+        message: "Teste",
+        fileName: "casamento.jpg",
+        fileBodyBase64: Buffer.from("x").toString("base64"),
+        mediaMimeType: "image/jpeg",
+        mediaSizeBytes: 1,
+      },
+    });
+    assert.equal(forbiddenCreatePhoto.statusCode, 403);
 
     const forbiddenRsvp = await app.inject({
       method: "POST",
