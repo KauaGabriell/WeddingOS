@@ -6,7 +6,11 @@ docs
 dist/
 out/
 .next/
+.turbo/
+.vercel/
 coverage/
+playwright-report/
+test-results/
 *.tsbuildinfo
 
 # env files
