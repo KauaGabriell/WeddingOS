@@ -4,6 +4,7 @@ import { runAdminBackofficeInfrastructureTests } from "./admin-backoffice/infras
 import { runBootstrapTests } from "./bootstrap.test.js";
 import { runGiftRegistryApplicationTests } from "./gift-registry/application.test.js";
 import { runGiftRegistryInfrastructureTests } from "./gift-registry/infrastructure.test.js";
+import { runGuestPublicRouteTests } from "./guest-public-routes.test.js";
 import { runGuestsRsvpApplicationTests } from "./guests-rsvp/application.test.js";
 import { runGuestsRsvpAdminQueryTests } from "./guests-rsvp/admin-query.test.js";
 import { runGuestsRsvpInfrastructureTests } from "./guests-rsvp/infrastructure.test.js";
@@ -24,6 +25,7 @@ async function run(): Promise<void> {
   await runIdentityAccessInfrastructureTests();
   await runGiftRegistryApplicationTests();
   await runGiftRegistryInfrastructureTests();
+  await runGuestPublicRouteTests();
   await runGuestsRsvpApplicationTests();
   await runGuestsRsvpAdminQueryTests();
   await runGuestsRsvpInfrastructureTests();

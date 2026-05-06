@@ -43,6 +43,7 @@ import {
   GUESTS_RSVP_INFRASTRUCTURE_PORTS,
   GUESTS_RSVP_MODULE_USE_CASES,
   GUESTS_RSVP_ROUTE_ACCESS,
+  createListGuestEventsUseCase,
 } from "../modules/guests-rsvp/index.js";
 import {
   IDENTITY_ACCESS_HTTP_CONTRACT,
@@ -238,8 +239,8 @@ function testDomainEntitiesAreExportedByModuleBarrels(): void {
 }
 
 function testModuleLayerContractsAreExported(): void {
-  assert.equal(IDENTITY_ACCESS_HTTP_CONTRACT.routePrefix, "/identity");
-  assert.equal(GUESTS_RSVP_HTTP_CONTRACT.routePrefix, "/guests");
+  assert.equal(IDENTITY_ACCESS_HTTP_CONTRACT.routePrefix, "/auth");
+  assert.equal(GUESTS_RSVP_HTTP_CONTRACT.routePrefix, "/");
   assert.equal(GIFT_REGISTRY_HTTP_CONTRACT.routePrefix, "/gifts");
   assert.equal(PHOTO_WALL_HTTP_CONTRACT.routePrefix, "/photos");
   assert.equal(ADMIN_BACKOFFICE_HTTP_CONTRACT.routePrefix, "/admin");
@@ -277,6 +278,7 @@ function testModuleLayerContractsAreExported(): void {
   assert.equal(ADMIN_BACKOFFICE_INFRASTRUCTURE_PORTS.repositories.includes("audit-log-repository"), true);
   assert.equal(IDENTITY_ACCESS_ROUTE_ACCESS.loginWithInviteToken.config.access, "public");
   assert.equal(IDENTITY_ACCESS_INVITE_TOKEN_LIFECYCLE_CONTRACTS.usagePolicy, "single-use");
+  assert.equal(typeof createListGuestEventsUseCase, "function");
   assert.equal(GUESTS_RSVP_ROUTE_ACCESS.guestHome.config.access, "guest");
   assert.equal(GUESTS_RSVP_ROUTE_ACCESS.listAdminGuests.config.access, "admin");
   assert.equal(GUESTS_RSVP_ROUTE_ACCESS.listAdminRsvps.config.access, "admin");

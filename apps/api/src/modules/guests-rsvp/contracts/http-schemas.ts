@@ -130,7 +130,6 @@ export const GUESTS_RSVP_HTTP_SCHEMAS = defineHttpSchemaCatalog({
     }),
     eventList: paginationQuerySchema.extend({
       eventType: z.enum(EVENT_TYPES).optional(),
-      isActive: z.coerce.boolean().optional(),
     }),
   },
   bodies: {
@@ -189,6 +188,9 @@ export type GuestsRsvpAdminRsvpListResponseDto = z.infer<
 >;
 export type GuestsRsvpSubmitRsvpRequestDto = z.infer<
   typeof GUESTS_RSVP_HTTP_SCHEMAS.bodies.submitRsvp
+>;
+export type GuestsRsvpEventListQueryDto = z.infer<
+  typeof GUESTS_RSVP_HTTP_SCHEMAS.queries.eventList
 >;
 export type GuestsRsvpAdminGuestListQueryDto = z.infer<
   typeof GUESTS_RSVP_HTTP_SCHEMAS.queries.adminGuestList

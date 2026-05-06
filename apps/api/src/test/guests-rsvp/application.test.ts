@@ -5,6 +5,7 @@ import {
   createConfirmAttendanceUseCase,
   createDeclineAttendanceUseCase,
   createGetGuestInvitationOverviewUseCase,
+  createListGuestEventsUseCase,
   GuestsRsvpApplicationError,
 } from "../../modules/guests-rsvp/index.js";
 import { runNamedTests } from "../test-helpers.js";
@@ -428,10 +429,117 @@ async function testConfirmAndDeclineAttendanceUseCases(): Promise<void> {
   });
 }
 
+async function testListGuestEventsUseCase(): Promise<void> {
+  const activeGuest: Guest = {
+    id: "guest-1",
+    guestGroupId: "group-1",
+    fullName: "Ana Souza",
+    phone: null,
+    email: "ana@example.com",
+    isPrimary: true,
+    status: "active",
+    lastAccessAt: null,
+    createdAt: new Date("2026-04-01T10:00:00.000Z"),
+    updatedAt: new Date("2026-04-01T10:00:00.000Z"),
+  };
+  const bridalShower: Event = {
+    id: "event-1",
+    slug: "cha",
+    name: "Cha de Panela",
+    eventType: "bridal_shower",
+    startsAt: new Date("2026-05-01T12:00:00.000Z"),
+    location: {
+      venueName: "Salao",
+      addressLine: "Rua A",
+      addressNumber: "10",
+      neighborhood: null,
+      city: "Sao Paulo",
+      state: "SP",
+      postalCode: null,
+      latitude: null,
+      longitude: null,
+      mapUrl: null,
+    },
+    notes: null,
+    isActive: true,
+    createdAt: new Date("2026-04-01T10:00:00.000Z"),
+    updatedAt: new Date("2026-04-01T10:00:00.000Z"),
+  };
+  const wedding: Event = {
+    ...bridalShower,
+    id: "event-2",
+    slug: "casamento",
+    name: "Casamento",
+    eventType: "wedding",
+    startsAt: new Date("2026-06-01T12:00:00.000Z"),
+  };
+  const inactiveEvent: Event = {
+    ...wedding,
+    id: "event-3",
+    slug: "desativado",
+    isActive: false,
+  };
+
+  const useCase = createListGuestEventsUseCase({
+    guestRepository: {
+      async findById(guestId: string) {
+        if (guestId === activeGuest.id) {
+          return activeGuest;
+        }
+        if (guestId === "guest-inactive") {
+          return { ...activeGuest, id: guestId, status: "inactive" as const };
+        }
+
+        return null;
+      },
+    },
+    eventGuestEligibilityRepository: {
+      async findMany() {
+        return [
+          { id: "elig-1", eventId: bridalShower.id, guestId: activeGuest.id, canRsvp: true, createdAt: new Date("2026-04-02T10:00:00.000Z") },
+          { id: "elig-2", eventId: wedding.id, guestId: activeGuest.id, canRsvp: true, createdAt: new Date("2026-04-02T10:00:00.000Z") },
+          { id: "elig-3", eventId: inactiveEvent.id, guestId: activeGuest.id, canRsvp: true, createdAt: new Date("2026-04-02T10:00:00.000Z") },
+          { id: "elig-4", eventId: wedding.id, guestId: activeGuest.id, canRsvp: true, createdAt: new Date("2026-04-02T10:00:00.000Z") },
+        ];
+      },
+    },
+    eventRepository: {
+      async findById(eventId: string) {
+        if (eventId === bridalShower.id) return bridalShower;
+        if (eventId === wedding.id) return wedding;
+        if (eventId === inactiveEvent.id) return inactiveEvent;
+        return null;
+      },
+    },
+  });
+
+  const listed = await useCase.execute({ guestId: activeGuest.id });
+  assert.deepEqual(listed.items.map((item) => item.id), ["event-1", "event-2"]);
+  assert.equal(listed.page, 1);
+  assert.equal(listed.pageSize, 20);
+
+  const filtered = await useCase.execute({
+    guestId: activeGuest.id,
+    eventType: "wedding",
+    page: 1,
+    pageSize: 10,
+  });
+  assert.deepEqual(filtered.items.map((item) => item.id), ["event-2"]);
+
+  await assert.rejects(() => useCase.execute({ guestId: "missing-guest" }), (error: unknown) => {
+    return error instanceof GuestsRsvpApplicationError && error.reason === "guest_not_found";
+  });
+
+  await assert.rejects(() => useCase.execute({ guestId: "guest-inactive" }), (error: unknown) => {
+    return error instanceof GuestsRsvpApplicationError && error.reason === "guest_inactive";
+  });
+}
+
 export async function runGuestsRsvpApplicationTests(): Promise<void> {
   await runNamedTests("guests-rsvp/application", [
     { name: "builds RSVP idempotency key", run: testRsvpIdempotencyKeyBuilder },
     { name: "gets invitation overview", run: testGetGuestInvitationOverviewUseCase },
     { name: "confirms and declines attendance", run: testConfirmAndDeclineAttendanceUseCases },
+    { name: "lists guest events", run: testListGuestEventsUseCase },
   ]);
 }

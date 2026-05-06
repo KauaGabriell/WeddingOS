@@ -7,6 +7,10 @@ export const paginationQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 });
 export const sortDirectionSchema = z.enum(["asc", "desc"]).default("desc");
+export const errorResponseSchema = z.object({
+  code: z.string().min(1),
+  message: z.string().min(1),
+});
 
 export interface HttpSchemaCatalog<
   TParams extends Record<string, ZodTypeAny> = Record<string, never>,

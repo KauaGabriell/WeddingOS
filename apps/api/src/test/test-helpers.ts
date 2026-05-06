@@ -20,13 +20,17 @@ export function createTestEnv(): AppEnv {
     S3_FORCE_PATH_STYLE: true,
     S3_SIGNED_URL_EXPIRES_IN_SECONDS: 900,
     JWT_SECRET: "12345678901234567890123456789012",
+    DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/weddingos?schema=public",
     corsOrigins: ["http://localhost:3000"],
   };
 }
 
-export function createAuthRequest(authorization?: string): FastifyRequest {
+export function createAuthRequest(authorization?: string, cookie?: string): FastifyRequest {
   return {
-    headers: authorization ? { authorization } : {},
+    headers: {
+      ...(authorization ? { authorization } : {}),
+      ...(cookie ? { cookie } : {}),
+    },
     id: "req-auth-1",
     correlationId: "req-auth-1",
     auth: undefined,

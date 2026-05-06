@@ -4,7 +4,7 @@ import type { GuestPrincipal } from "../../shared/platform/http/auth-context.js"
 const SESSION_TOKEN_ALGORITHM = "HS256";
 const SESSION_TOKEN_TYPE = "JWT";
 const DEFAULT_GUEST_SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
-const DEFAULT_GUEST_SESSION_COOKIE_NAME = "weddingos_guest_session";
+export const DEFAULT_GUEST_SESSION_COOKIE_NAME = "weddingos_guest_session";
 
 export interface SessionVerificationInput {
   readonly token: string;

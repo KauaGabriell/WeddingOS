@@ -83,6 +83,10 @@ async function testAuthGuardsSeparateGuestAndAdmin(): Promise<void> {
   await assert.rejects(() => guestGuard(createAuthRequest("Bearer admin-token")), (error: unknown) => {
     return (error as HttpStatusError).statusCode === 403;
   });
+
+  const cookieRequest = createAuthRequest(undefined, "weddingos_guest_session=guest-token");
+  const resolvedGuestByCookie = await guestGuard(cookieRequest);
+  assert.deepEqual(resolvedGuestByCookie, guestPrincipal);
 }
 
 async function testAccessPolicies(): Promise<void> {

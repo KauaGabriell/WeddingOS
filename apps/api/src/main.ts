@@ -8,15 +8,19 @@ import {
 } from "fastify-type-provider-zod";
 import type { DestinationStream } from "pino";
 import { z } from "zod";
+import { PrismaClient } from "./generated/prisma/client.js";
 import { MODULE_REGISTRATIONS } from "./modules/index.js";
 import {
   attachRequestContext,
   logRequestCompletion,
   requestContextConfig,
 } from "./modules/shared/platform/http/request-context.js";
+import {
+  SignedAdminSessionService,
+  SignedGuestSessionService,
+} from "./modules/identity-access/index.js";
 import { createApiLogger } from "./modules/shared/platform/logging/create-api-logger.js";
 import { createStorageClient } from "./modules/shared/platform/storage/create-storage-client.js";
-import { SignedAdminSessionService } from "./modules/identity-access/index.js";
 
 const booleanFromEnv = z.preprocess((value) => {
   if (typeof value === "boolean") {
@@ -49,12 +53,52 @@ const envSchema = z.object({
   S3_FORCE_PATH_STYLE: booleanFromEnv.default(true),
   S3_SIGNED_URL_EXPIRES_IN_SECONDS: z.coerce.number().int().min(60).default(900),
   JWT_SECRET: z.string().min(32).default("CHANGE_ME_JWT_SECRET_MIN_32_CHARS"),
+  DATABASE_URL: z.string().min(1).default("postgresql://postgres:postgres@localhost:5432/weddingos?schema=public"),
 });
 
 export type AppEnv = z.infer<typeof envSchema> & { corsOrigins: string[] };
 type BuildAppOptions = {
   loggerStream?: DestinationStream;
+  prisma?: PrismaClient;
+  guestSessionService?: SignedGuestSessionService;
+  adminSessionVerifier?: SignedAdminSessionService;
 };
+
+function createNoopPrismaClient(): PrismaClient {
+  const noopDelegate = {
+    async findUnique() {
+      return null;
+    },
+    async findFirst() {
+      return null;
+    },
+    async findMany() {
+      return [];
+    },
+    async upsert(args: { create: unknown }) {
+      return args.create;
+    },
+    async update(args: { data: unknown }) {
+      return args.data;
+    },
+  };
+
+  return {
+    inviteToken: noopDelegate,
+    guest: noopDelegate,
+    guestGroup: noopDelegate,
+    event: noopDelegate,
+    eventGuestEligibility: noopDelegate,
+    rsvpResponse: noopDelegate,
+    auditLog: noopDelegate,
+    async $transaction<T>(operation: (transactionClient: { inviteToken: typeof noopDelegate }) => Promise<T>) {
+      return operation({
+        inviteToken: noopDelegate,
+      });
+    },
+    async $disconnect() {},
+  } as unknown as PrismaClient;
+}
 
 export function loadEnv(): AppEnv {
   const parsed = envSchema.parse(process.env);
@@ -76,8 +120,26 @@ export async function buildApp(env: AppEnv, options: BuildAppOptions = {}) {
     }),
   });
   const storageClient = createStorageClient(env);
+  const prisma =
+    options.prisma ??
+    (env.NODE_ENV === "test"
+      ? createNoopPrismaClient()
+      : (() => {
+          throw new Error(
+            "Prisma adapter not configured. Provide a PrismaClient instance to buildApp or install and wire a Prisma driver adapter for non-test environments.",
+          );
+        })());
+  const guestSessionService =
+    options.guestSessionService ?? new SignedGuestSessionService(env.JWT_SECRET);
+  const adminSessionVerifier =
+    options.adminSessionVerifier ?? new SignedAdminSessionService(env.JWT_SECRET);
+  app.decorate("prisma", prisma);
   app.decorate("storageClient", storageClient);
-  app.decorate("adminSessionVerifier", new SignedAdminSessionService(env.JWT_SECRET));
+  app.decorate("guestSessionService", guestSessionService);
+  app.decorate("adminSessionVerifier", adminSessionVerifier);
+  app.addHook("onClose", async () => {
+    await prisma.$disconnect();
+  });
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
