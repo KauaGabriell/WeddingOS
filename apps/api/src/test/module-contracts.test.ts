@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   ADMIN_BACKOFFICE_HTTP_CONTRACT,
+  ADMIN_BACKOFFICE_HTTP_SCHEMAS,
   ADMIN_BACKOFFICE_INFRASTRUCTURE_PORTS,
   ADMIN_BACKOFFICE_MODULE_USE_CASES,
   ADMIN_BACKOFFICE_ROUTE_ACCESS,
@@ -57,6 +58,7 @@ import type {
 } from "../modules/identity-access/index.js";
 import {
   PHOTO_WALL_HTTP_CONTRACT,
+  PHOTO_WALL_HTTP_SCHEMAS,
   PHOTO_WALL_INFRASTRUCTURE_PORTS,
   PHOTO_WALL_MODULE_USE_CASES,
   PhotoWallApplicationError,
@@ -281,8 +283,15 @@ function testModuleLayerContractsAreExported(): void {
   assert.equal(GUESTS_RSVP_IDEMPOTENCY_CONTRACTS.idempotencyKey, "eventId+guestId");
   assert.ok(GUESTS_RSVP_HTTP_SCHEMAS.queries.adminGuestList);
   assert.ok(GUESTS_RSVP_HTTP_SCHEMAS.queries.adminRsvpList);
+  assert.ok(GUESTS_RSVP_HTTP_SCHEMAS.responses.adminGuestList.shape.items);
+  assert.ok(GUESTS_RSVP_HTTP_SCHEMAS.responses.eventList.shape.items);
   assert.ok(GIFT_REGISTRY_HTTP_SCHEMAS.queries.giftCatalog.shape.reservationStatus);
   assert.ok(GIFT_REGISTRY_HTTP_SCHEMAS.bodies.releaseReservation.shape.reassignToGuestId);
+  assert.ok(GIFT_REGISTRY_HTTP_SCHEMAS.responses.giftCatalogList.shape.items);
+  assert.ok(PHOTO_WALL_HTTP_SCHEMAS.bodies.createPhotoPost.shape.fileName);
+  assert.ok(PHOTO_WALL_HTTP_SCHEMAS.responses.photoGalleryList.shape.items);
+  assert.ok(PHOTO_WALL_HTTP_SCHEMAS.responses.photoPostSubmission.shape.mediaUrl);
+  assert.ok(ADMIN_BACKOFFICE_HTTP_SCHEMAS.responses.auditLogList.shape.items);
   assert.equal(GIFT_REGISTRY_ROUTE_ACCESS.reserveGift.config.access, "guest");
   assert.equal(PHOTO_WALL_ROUTE_ACCESS.createPhotoPost.config.access, "guest");
   assert.equal(ADMIN_BACKOFFICE_ROUTE_ACCESS.dashboard.config.access, "admin");
@@ -377,6 +386,73 @@ function testGiftCatalogItemResponseContractMatchesApplicationShape(): void {
   assert.equal(parsed.activeReservation?.reservationStatus, "active");
 }
 
+function testPhotoWallSubmissionResponseContractMatchesApplicationShape(): void {
+  const parsed = PHOTO_WALL_HTTP_SCHEMAS.responses.photoPostSubmission.parse({
+    photoPost: {
+      id: "550e8400-e29b-41d4-a716-446655440010",
+      guestId: "550e8400-e29b-41d4-a716-446655440011",
+      authorName: "Joao",
+      message: "Parabens",
+      mediaStorageKey: "photo-wall/post-1.jpg",
+      mediaUrl: null,
+      mediaMimeType: "image/jpeg",
+      mediaSizeBytes: 1024,
+      mediaWidth: 1200,
+      mediaHeight: 800,
+      moderationStatus: "pending",
+      submittedAt: "2026-05-06T10:00:00.000Z",
+      approvedAt: null,
+      hiddenAt: null,
+      moderatedByAdminUserId: null,
+      createdAt: "2026-05-06T10:00:00.000Z",
+      updatedAt: "2026-05-06T10:00:00.000Z",
+    },
+    mediaUrl: "https://example.com/signed/photo.jpg",
+  });
+
+  assert.equal(parsed.photoPost.mediaUrl, null);
+  assert.equal(parsed.mediaUrl, "https://example.com/signed/photo.jpg");
+}
+
+function testGuestsAdminListResponseContractMatchesApplicationShape(): void {
+  const parsed = GUESTS_RSVP_HTTP_SCHEMAS.responses.adminGuestList.parse({
+    items: [
+      {
+        guestGroup: {
+          id: "550e8400-e29b-41d4-a716-446655440020",
+          displayName: "Familia Silva",
+          groupCode: "SILVA",
+          allowedCompanions: 2,
+          primaryContactName: "Joao",
+          primaryContactPhone: null,
+          primaryContactEmail: null,
+          notes: null,
+          createdAt: "2026-05-06T10:00:00.000Z",
+          updatedAt: "2026-05-06T10:00:00.000Z",
+        },
+        guest: {
+          id: "550e8400-e29b-41d4-a716-446655440021",
+          guestGroupId: "550e8400-e29b-41d4-a716-446655440020",
+          fullName: "Joao Silva",
+          phone: null,
+          email: "joao@example.com",
+          isPrimary: true,
+          status: "active",
+          lastAccessAt: null,
+          createdAt: "2026-05-06T10:00:00.000Z",
+          updatedAt: "2026-05-06T10:00:00.000Z",
+        },
+        eligibility: [],
+        responses: [],
+      },
+    ],
+    page: 1,
+    pageSize: 20,
+  });
+
+  assert.equal(parsed.items[0]?.guest.fullName, "Joao Silva");
+}
+
 export async function runModuleContractTests(): Promise<void> {
   await runNamedTests("module-contracts", [
     { name: "exports domain entities by barrels", run: testDomainEntitiesAreExportedByModuleBarrels },
@@ -390,6 +466,14 @@ export async function runModuleContractTests(): Promise<void> {
     {
       name: "matches gift catalog item response shape with application contract",
       run: testGiftCatalogItemResponseContractMatchesApplicationShape,
+    },
+    {
+      name: "matches photo wall submission response shape with application contract",
+      run: testPhotoWallSubmissionResponseContractMatchesApplicationShape,
+    },
+    {
+      name: "matches admin guest list response shape with application contract",
+      run: testGuestsAdminListResponseContractMatchesApplicationShape,
     },
   ]);
 }

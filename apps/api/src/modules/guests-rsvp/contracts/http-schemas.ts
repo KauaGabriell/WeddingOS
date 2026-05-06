@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   defineHttpSchemaCatalog,
   isoDateTimeSchema,
+  paginatedItemsResponseSchema,
   paginationQuerySchema,
   uuidSchema,
 } from "../../shared/platform/http/http-contracts.js";
@@ -89,6 +90,13 @@ const guestHomeResponseSchema = z.object({
   responses: z.array(rsvpResponseSchema),
 });
 
+const adminGuestRsvpRowResponseSchema = z.object({
+  guestGroup: guestGroupResponseSchema,
+  guest: guestResponseSchema,
+  eligibility: z.array(eventGuestEligibilityResponseSchema),
+  responses: z.array(rsvpResponseSchema),
+});
+
 export const GUESTS_RSVP_HTTP_SCHEMAS = defineHttpSchemaCatalog({
   params: {
     guestId: z.object({
@@ -142,6 +150,10 @@ export const GUESTS_RSVP_HTTP_SCHEMAS = defineHttpSchemaCatalog({
     eventGuestEligibility: eventGuestEligibilityResponseSchema,
     rsvpResponse: rsvpResponseSchema,
     guestHome: guestHomeResponseSchema,
+    eventList: paginatedItemsResponseSchema(eventResponseSchema),
+    adminGuestRsvpRow: adminGuestRsvpRowResponseSchema,
+    adminGuestList: paginatedItemsResponseSchema(adminGuestRsvpRowResponseSchema),
+    adminRsvpList: paginatedItemsResponseSchema(adminGuestRsvpRowResponseSchema),
   },
 });
 
@@ -159,6 +171,21 @@ export type GuestsRsvpEventGuestEligibilityResponseDto = z.infer<
 >;
 export type GuestsRsvpRsvpResponseDto = z.infer<
   typeof GUESTS_RSVP_HTTP_SCHEMAS.responses.rsvpResponse
+>;
+export type GuestsRsvpGuestHomeResponseDto = z.infer<
+  typeof GUESTS_RSVP_HTTP_SCHEMAS.responses.guestHome
+>;
+export type GuestsRsvpEventListResponseDto = z.infer<
+  typeof GUESTS_RSVP_HTTP_SCHEMAS.responses.eventList
+>;
+export type GuestsRsvpAdminGuestRsvpRowResponseDto = z.infer<
+  typeof GUESTS_RSVP_HTTP_SCHEMAS.responses.adminGuestRsvpRow
+>;
+export type GuestsRsvpAdminGuestListResponseDto = z.infer<
+  typeof GUESTS_RSVP_HTTP_SCHEMAS.responses.adminGuestList
+>;
+export type GuestsRsvpAdminRsvpListResponseDto = z.infer<
+  typeof GUESTS_RSVP_HTTP_SCHEMAS.responses.adminRsvpList
 >;
 export type GuestsRsvpSubmitRsvpRequestDto = z.infer<
   typeof GUESTS_RSVP_HTTP_SCHEMAS.bodies.submitRsvp

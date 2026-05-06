@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   defineHttpSchemaCatalog,
   isoDateTimeSchema,
+  paginatedItemsResponseSchema,
   paginationQuerySchema,
   sortDirectionSchema,
   uuidSchema,
@@ -19,6 +20,10 @@ const auditLogResponseSchema = z.object({
   requestId: z.string().min(1).nullable(),
   metadata: z.record(z.string(), z.unknown()).nullable(),
   createdAt: isoDateTimeSchema,
+});
+
+const dashboardSummaryResponseSchema = z.object({
+  available: z.literal(false),
 });
 
 export const ADMIN_BACKOFFICE_HTTP_SCHEMAS = defineHttpSchemaCatalog({
@@ -50,12 +55,20 @@ export const ADMIN_BACKOFFICE_HTTP_SCHEMAS = defineHttpSchemaCatalog({
     }),
   },
   responses: {
+    dashboardSummary: dashboardSummaryResponseSchema,
     auditLog: auditLogResponseSchema,
+    auditLogList: paginatedItemsResponseSchema(auditLogResponseSchema),
   },
 });
 
+export type AdminBackofficeDashboardSummaryResponseDto = z.infer<
+  typeof ADMIN_BACKOFFICE_HTTP_SCHEMAS.responses.dashboardSummary
+>;
 export type AdminBackofficeAuditLogResponseDto = z.infer<
   typeof ADMIN_BACKOFFICE_HTTP_SCHEMAS.responses.auditLog
+>;
+export type AdminBackofficeAuditLogListResponseDto = z.infer<
+  typeof ADMIN_BACKOFFICE_HTTP_SCHEMAS.responses.auditLogList
 >;
 export type AdminBackofficeCreateAuditLogRequestDto = z.infer<
   typeof ADMIN_BACKOFFICE_HTTP_SCHEMAS.bodies.createAuditLog

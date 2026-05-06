@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   defineHttpSchemaCatalog,
   isoDateTimeSchema,
+  paginatedItemsResponseSchema,
   paginationQuerySchema,
   uuidSchema,
 } from "../../shared/platform/http/http-contracts.js";
@@ -43,6 +44,9 @@ export const PHOTO_WALL_HTTP_SCHEMAS = defineHttpSchemaCatalog({
     photoPostId: z.object({
       photoPostId: uuidSchema,
     }),
+    postId: z.object({
+      postId: uuidSchema,
+    }),
   },
   queries: {
     galleryList: paginationQuerySchema,
@@ -55,6 +59,7 @@ export const PHOTO_WALL_HTTP_SCHEMAS = defineHttpSchemaCatalog({
       guestId: uuidSchema,
       authorName: z.string().trim().min(1).max(120),
       message: z.string().trim().min(1).max(1_000),
+      fileName: z.string().trim().min(1).max(255),
       mediaMimeType: z.string().trim().min(1),
       mediaSizeBytes: z.number().int().positive(),
       mediaWidth: z.number().int().positive().optional(),
@@ -68,11 +73,29 @@ export const PHOTO_WALL_HTTP_SCHEMAS = defineHttpSchemaCatalog({
   responses: {
     photoPost: photoPostResponseSchema,
     photoGalleryItem: photoGalleryItemResponseSchema,
+    photoGalleryList: paginatedItemsResponseSchema(photoGalleryItemResponseSchema),
+    moderationQueueList: paginatedItemsResponseSchema(photoPostResponseSchema),
+    photoPostSubmission: z.object({
+      photoPost: photoPostResponseSchema,
+      mediaUrl: z.string().url(),
+    }),
   },
 });
 
 export type PhotoWallPhotoPostResponseDto = z.infer<
   typeof PHOTO_WALL_HTTP_SCHEMAS.responses.photoPost
+>;
+export type PhotoWallPhotoGalleryItemResponseDto = z.infer<
+  typeof PHOTO_WALL_HTTP_SCHEMAS.responses.photoGalleryItem
+>;
+export type PhotoWallPhotoGalleryListResponseDto = z.infer<
+  typeof PHOTO_WALL_HTTP_SCHEMAS.responses.photoGalleryList
+>;
+export type PhotoWallModerationQueueListResponseDto = z.infer<
+  typeof PHOTO_WALL_HTTP_SCHEMAS.responses.moderationQueueList
+>;
+export type PhotoWallPhotoPostSubmissionResponseDto = z.infer<
+  typeof PHOTO_WALL_HTTP_SCHEMAS.responses.photoPostSubmission
 >;
 export type PhotoWallCreatePhotoPostRequestDto = z.infer<
   typeof PHOTO_WALL_HTTP_SCHEMAS.bodies.createPhotoPost

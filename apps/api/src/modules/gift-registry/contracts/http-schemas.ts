@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   defineHttpSchemaCatalog,
   isoDateTimeSchema,
+  paginatedItemsResponseSchema,
   paginationQuerySchema,
   uuidSchema,
 } from "../../shared/platform/http/http-contracts.js";
@@ -84,6 +85,8 @@ export const GIFT_REGISTRY_HTTP_SCHEMAS = defineHttpSchemaCatalog({
     gift: giftResponseSchema,
     giftReservation: giftReservationResponseSchema,
     giftCatalogItem: giftCatalogItemResponseSchema,
+    giftCatalogList: paginatedItemsResponseSchema(giftCatalogItemResponseSchema),
+    adminGiftList: paginatedItemsResponseSchema(giftResponseSchema),
   },
 });
 
@@ -95,6 +98,12 @@ export type GiftRegistryGiftReservationResponseDto = z.infer<
 >;
 export type GiftRegistryGiftCatalogItemResponseDto = z.infer<
   typeof GIFT_REGISTRY_HTTP_SCHEMAS.responses.giftCatalogItem
+>;
+export type GiftRegistryGiftCatalogListResponseDto = z.infer<
+  typeof GIFT_REGISTRY_HTTP_SCHEMAS.responses.giftCatalogList
+>;
+export type GiftRegistryAdminGiftListResponseDto = z.infer<
+  typeof GIFT_REGISTRY_HTTP_SCHEMAS.responses.adminGiftList
 >;
 export type GiftRegistryReserveGiftRequestDto = z.infer<
   typeof GIFT_REGISTRY_HTTP_SCHEMAS.bodies.reserveGift

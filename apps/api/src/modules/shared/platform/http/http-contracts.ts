@@ -28,3 +28,11 @@ export function defineHttpSchemaCatalog<
 >(catalog: HttpSchemaCatalog<TParams, TQueries, TBodies, TResponses>) {
   return catalog;
 }
+
+export function paginatedItemsResponseSchema<TItem extends ZodTypeAny>(itemSchema: TItem) {
+  return z.object({
+    items: z.array(itemSchema),
+    page: z.number().int().min(1),
+    pageSize: z.number().int().min(1).max(100),
+  });
+}
