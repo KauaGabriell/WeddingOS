@@ -76,6 +76,7 @@ export const GIFT_REGISTRY_HTTP_SCHEMAS = defineHttpSchemaCatalog({
     }),
     releaseReservation: z.object({
       releasedByAdminUserId: uuidSchema,
+      reassignToGuestId: uuidSchema.optional(),
       reason: z.string().trim().max(255).optional(),
     }),
   },

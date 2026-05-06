@@ -25,11 +25,17 @@ export class PrismaGiftReservationTransactionRunner
       const repository = new PrismaGiftReservationRepository(transactionClient.giftReservation);
 
       return operation({
+        findReservationById(reservationId) {
+          return repository.findById(reservationId);
+        },
         findActiveReservationByGiftId(giftId) {
           return repository.findActiveByGiftId(giftId);
         },
         createActiveReservation(input) {
           return repository.createActiveReservation(input);
+        },
+        releaseActiveReservation(input) {
+          return repository.releaseActiveReservation(input);
         },
       });
     });

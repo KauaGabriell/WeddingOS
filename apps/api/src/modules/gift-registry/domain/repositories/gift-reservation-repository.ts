@@ -20,4 +20,8 @@ export interface GiftReservationRepository
     readonly guestId: string;
     readonly purchaseNotes?: string;
   }): Promise<GiftReservation>;
+  releaseActiveReservation(input: {
+    readonly reservationId: string;
+    readonly releasedByAdminUserId: string;
+  }): Promise<GiftReservation>;
 }

@@ -14,8 +14,10 @@ import {
   GIFT_REGISTRY_ROUTE_ACCESS,
   GIFT_REGISTRY_TRANSACTIONAL_CONTRACTS,
   GiftRegistryApplicationError,
+  GiftReservationManagementError,
   PrismaGiftReservationTransactionRunner,
   GiftReservationConflictError,
+  createManageGiftReservationUseCase,
   createReserveGiftUseCase,
 } from "../modules/gift-registry/index.js";
 import type { Gift, GiftReservation } from "../modules/gift-registry/index.js";
@@ -233,6 +235,7 @@ function testModuleLayerContractsAreExported(): void {
   assert.equal(GUESTS_RSVP_MODULE_USE_CASES.adminGuestQuery, "implemented");
   assert.equal(GIFT_REGISTRY_MODULE_USE_CASES.giftCatalogListing, "implemented");
   assert.equal(GIFT_REGISTRY_MODULE_USE_CASES.giftReservationLifecycle, "implemented");
+  assert.equal(GIFT_REGISTRY_MODULE_USE_CASES.adminGiftRelease, "implemented");
   assert.equal(PHOTO_WALL_MODULE_USE_CASES.photoSubmission, "planned");
   assert.equal(ADMIN_BACKOFFICE_MODULE_USE_CASES.auditTrailQuery, "planned");
   assert.equal(IDENTITY_ACCESS_INFRASTRUCTURE_PORTS.repositories.includes("invite-token-repository"), true);
@@ -249,10 +252,12 @@ function testModuleLayerContractsAreExported(): void {
   assert.ok(GUESTS_RSVP_HTTP_SCHEMAS.queries.adminGuestList);
   assert.ok(GUESTS_RSVP_HTTP_SCHEMAS.queries.adminRsvpList);
   assert.ok(GIFT_REGISTRY_HTTP_SCHEMAS.queries.giftCatalog.shape.reservationStatus);
+  assert.ok(GIFT_REGISTRY_HTTP_SCHEMAS.bodies.releaseReservation.shape.reassignToGuestId);
   assert.equal(GIFT_REGISTRY_ROUTE_ACCESS.reserveGift.config.access, "guest");
   assert.equal(PHOTO_WALL_ROUTE_ACCESS.createPhotoPost.config.access, "guest");
   assert.equal(ADMIN_BACKOFFICE_ROUTE_ACCESS.dashboard.config.access, "admin");
   assert.equal(GIFT_REGISTRY_TRANSACTIONAL_CONTRACTS.reserveAvailableGift, "transactional");
+  assert.equal(typeof createManageGiftReservationUseCase, "function");
   assert.equal(typeof createReserveGiftUseCase, "function");
   assert.equal(typeof PrismaGiftReservationTransactionRunner, "function");
   assert.equal(
@@ -276,6 +281,13 @@ function testGiftRegistryApplicationError(): void {
   assert.equal(error.name, "GiftRegistryApplicationError");
   assert.equal(error.reason, "gift_unavailable");
   assert.equal(error.statusCode, 403);
+}
+
+function testGiftReservationManagementError(): void {
+  const error = new GiftReservationManagementError("reservation_not_active");
+  assert.equal(error.name, "GiftReservationManagementError");
+  assert.equal(error.reason, "reservation_not_active");
+  assert.equal(error.statusCode, 409);
 }
 
 function testGiftCatalogItemResponseContractMatchesApplicationShape(): void {
@@ -317,6 +329,7 @@ export async function runModuleContractTests(): Promise<void> {
     { name: "exports module layer contracts", run: testModuleLayerContractsAreExported },
     { name: "keeps gift reservation conflict error contract", run: testGiftReservationConflictError },
     { name: "keeps gift registry application error contract", run: testGiftRegistryApplicationError },
+    { name: "keeps gift reservation management error contract", run: testGiftReservationManagementError },
     {
       name: "matches gift catalog item response shape with application contract",
       run: testGiftCatalogItemResponseContractMatchesApplicationShape,

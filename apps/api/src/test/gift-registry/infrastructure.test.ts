@@ -118,6 +118,15 @@ async function testPrismaGiftReservationRepository(): Promise<void> {
         purchaseNotes: args.data.purchaseNotes,
       };
     },
+    async update(args: any) {
+      calls.push({ method: "update", args });
+      return {
+        ...reservationRecord,
+        reservationStatus: args.data.reservationStatus,
+        releasedAt: args.data.releasedAt,
+        releasedByAdminUserId: args.data.releasedByAdminUserId,
+      };
+    },
   };
 
   const repository = new PrismaGiftReservationRepository(
@@ -158,6 +167,15 @@ async function testPrismaGiftReservationRepository(): Promise<void> {
       },
     },
   });
+
+  const released = await repository.releaseActiveReservation({
+    reservationId: "reservation-1",
+    releasedByAdminUserId: "admin-1",
+  });
+
+  assert.equal(released.reservationStatus, "released");
+  assert.equal(released.releasedByAdminUserId, "admin-1");
+  assert.equal(calls.at(-1)?.method, "update");
 }
 
 async function testPrismaGiftReservationRepositoryMapsUniqueConstraintToConflict(): Promise<void> {
@@ -176,6 +194,9 @@ async function testPrismaGiftReservationRepositoryMapsUniqueConstraintToConflict
     },
     async create() {
       throw { code: "P2002" };
+    },
+    async update() {
+      throw new Error("not used");
     },
   };
 
@@ -222,6 +243,10 @@ async function testPrismaGiftReservationTransactionRunner(): Promise<void> {
             calls.push({ method: "findFirst", args });
             return reservationRecord;
           },
+          async findUnique(args: any) {
+            calls.push({ method: "findUnique", args });
+            return reservationRecord;
+          },
           async create(args: any) {
             calls.push({ method: "create", args });
             return {
@@ -230,6 +255,15 @@ async function testPrismaGiftReservationTransactionRunner(): Promise<void> {
               giftId: args.data.giftId,
               guestId: args.data.guestId,
               purchaseNotes: args.data.purchaseNotes,
+            };
+          },
+          async update(args: any) {
+            calls.push({ method: "update", args });
+            return {
+              ...reservationRecord,
+              reservationStatus: args.data.reservationStatus,
+              releasedAt: args.data.releasedAt,
+              releasedByAdminUserId: args.data.releasedByAdminUserId,
             };
           },
         },
@@ -242,8 +276,15 @@ async function testPrismaGiftReservationTransactionRunner(): Promise<void> {
   );
 
   const created = await runner.run(async (context) => {
+    const reservation = await context.findReservationById("reservation-1");
+    assert.equal(reservation?.id, "reservation-1");
     const activeReservation = await context.findActiveReservationByGiftId("gift-1");
     assert.equal(activeReservation?.giftId, "gift-1");
+    const released = await context.releaseActiveReservation({
+      reservationId: "reservation-1",
+      releasedByAdminUserId: "admin-1",
+    });
+    assert.equal(released.reservationStatus, "released");
 
     return context.createActiveReservation({
       giftId: "gift-2",
@@ -254,30 +295,49 @@ async function testPrismaGiftReservationTransactionRunner(): Promise<void> {
 
   assert.equal(created.id, "reservation-created");
   assert.equal(created.purchaseNotes, "pago no pix");
-  assert.deepEqual(calls, [
-    { method: "$transaction" },
-    {
-      method: "findFirst",
-      args: {
-        where: {
-          giftId: "gift-1",
-          reservationStatus: "ACTIVE",
-        },
-        orderBy: { reservedAt: "desc" },
+  assert.equal(calls[0]?.method, "$transaction");
+  assert.deepEqual(calls[1], {
+    method: "findUnique",
+    args: {
+      where: { id: "reservation-1" },
+    },
+  });
+  assert.deepEqual(calls[2], {
+    method: "findFirst",
+    args: {
+      where: {
+        giftId: "gift-1",
+        reservationStatus: "ACTIVE",
+      },
+      orderBy: { reservedAt: "desc" },
+    },
+  });
+  assert.equal(calls[3]?.method, "update");
+  assert.deepEqual((calls[3] as { args: { where: { id: string } } }).args.where, {
+    id: "reservation-1",
+  });
+  assert.equal(
+    (calls[3] as { args: { data: { reservationStatus: string } } }).args.data.reservationStatus,
+    "RELEASED",
+  );
+  assert.equal(
+    (calls[3] as { args: { data: { releasedByAdminUserId: string } } }).args.data.releasedByAdminUserId,
+    "admin-1",
+  );
+  assert.ok(
+    (calls[3] as { args: { data: { releasedAt: Date } } }).args.data.releasedAt instanceof Date,
+  );
+  assert.deepEqual(calls[4], {
+    method: "create",
+    args: {
+      data: {
+        giftId: "gift-2",
+        guestId: "guest-2",
+        reservationStatus: "ACTIVE",
+        purchaseNotes: "pago no pix",
       },
     },
-    {
-      method: "create",
-      args: {
-        data: {
-          giftId: "gift-2",
-          guestId: "guest-2",
-          reservationStatus: "ACTIVE",
-          purchaseNotes: "pago no pix",
-        },
-      },
-    },
-  ]);
+  });
 }
 
 export async function runGiftRegistryInfrastructureTests(): Promise<void> {

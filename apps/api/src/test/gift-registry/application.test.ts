@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import type { Gift, GiftReservation } from "../../modules/gift-registry/index.js";
 import {
   GiftRegistryApplicationError,
+  GiftReservationManagementError,
   GiftReservationConflictError,
   createListPublicGiftCatalogUseCase,
+  createManageGiftReservationUseCase,
   createReserveGiftUseCase,
 } from "../../modules/gift-registry/index.js";
 import { runNamedTests } from "../test-helpers.js";
@@ -11,6 +13,23 @@ import { runNamedTests } from "../test-helpers.js";
 const activeGuest = {
   id: "guest-1",
   status: "active" as const,
+};
+
+const activeAdmin = {
+  id: "admin-1",
+};
+
+const activeReservation: GiftReservation = {
+  id: "reservation-1",
+  giftId: "gift-1",
+  guestId: "guest-1",
+  reservationStatus: "active",
+  purchaseNotes: null,
+  reservedAt: new Date("2026-01-03T00:00:00.000Z"),
+  releasedAt: null,
+  releasedByAdminUserId: null,
+  createdAt: new Date("2026-01-03T00:00:00.000Z"),
+  updatedAt: new Date("2026-01-03T00:00:00.000Z"),
 };
 
 const availableGift: Gift = {
@@ -28,19 +47,6 @@ const availableGift: Gift = {
 };
 
 async function testListPublicGiftCatalogAttachesActiveReservation(): Promise<void> {
-  const reservation: GiftReservation = {
-    id: "reservation-1",
-    giftId: "gift-1",
-    guestId: "guest-1",
-    reservationStatus: "active",
-    purchaseNotes: null,
-    reservedAt: new Date("2026-01-03T00:00:00.000Z"),
-    releasedAt: null,
-    releasedByAdminUserId: null,
-    createdAt: new Date("2026-01-03T00:00:00.000Z"),
-    updatedAt: new Date("2026-01-03T00:00:00.000Z"),
-  };
-
   const useCase = createListPublicGiftCatalogUseCase({
     giftRepository: {
       async findMany(filter) {
@@ -57,7 +63,7 @@ async function testListPublicGiftCatalogAttachesActiveReservation(): Promise<voi
     giftReservationRepository: {
       async findActiveByGiftId(giftId: string) {
         assert.equal(giftId, "gift-1");
-        return reservation;
+        return activeReservation;
       },
     },
   });
@@ -72,6 +78,308 @@ async function testListPublicGiftCatalogAttachesActiveReservation(): Promise<voi
   assert.equal(result.items[0]?.activeReservation?.id, "reservation-1");
   assert.equal(result.page, 1);
   assert.equal(result.pageSize, 20);
+}
+
+async function testManageGiftReservationReleasesReservation(): Promise<void> {
+  const useCase = createManageGiftReservationUseCase({
+    giftReservationRepository: {
+      async findById(id: string) {
+        assert.equal(id, "reservation-1");
+        return activeReservation;
+      },
+    },
+    adminUserRepository: {
+      async findById(id: string) {
+        assert.equal(id, "admin-1");
+        return activeAdmin;
+      },
+    },
+    guestRepository: {
+      async findById() {
+        throw new Error("should not load target guest");
+      },
+    },
+    giftReservationTransactionRunner: {
+      async run(operation) {
+        return operation({
+          async findReservationById(id: string) {
+            assert.equal(id, "reservation-1");
+            return activeReservation;
+          },
+          async findActiveReservationByGiftId() {
+            throw new Error("not used");
+          },
+          async createActiveReservation() {
+            throw new Error("should not create replacement");
+          },
+          async releaseActiveReservation(input) {
+            assert.deepEqual(input, {
+              reservationId: "reservation-1",
+              releasedByAdminUserId: "admin-1",
+            });
+            return {
+              ...activeReservation,
+              reservationStatus: "released",
+              releasedAt: new Date("2026-01-04T00:00:00.000Z"),
+              releasedByAdminUserId: "admin-1",
+              updatedAt: new Date("2026-01-04T00:00:00.000Z"),
+            };
+          },
+        });
+      },
+    },
+  });
+
+  const result = await useCase.execute({
+    reservationId: "reservation-1",
+    releasedByAdminUserId: "admin-1",
+    reason: "manual fix",
+  });
+
+  assert.equal(result.releasedReservation.reservationStatus, "released");
+  assert.equal(result.releasedReservation.releasedByAdminUserId, "admin-1");
+  assert.equal(result.newActiveReservation, null);
+}
+
+async function testManageGiftReservationReassignsReservation(): Promise<void> {
+  const useCase = createManageGiftReservationUseCase({
+    giftReservationRepository: {
+      async findById() {
+        return activeReservation;
+      },
+    },
+    adminUserRepository: {
+      async findById() {
+        return activeAdmin;
+      },
+    },
+    guestRepository: {
+      async findById(id: string) {
+        assert.equal(id, "guest-2");
+        return { id: "guest-2", status: "active" as const };
+      },
+    },
+    giftReservationTransactionRunner: {
+      async run(operation) {
+        return operation({
+          async findReservationById() {
+            return activeReservation;
+          },
+          async findActiveReservationByGiftId() {
+            throw new Error("not used");
+          },
+          async releaseActiveReservation() {
+            return {
+              ...activeReservation,
+              reservationStatus: "released",
+              releasedAt: new Date("2026-01-04T00:00:00.000Z"),
+              releasedByAdminUserId: "admin-1",
+            };
+          },
+          async createActiveReservation(input) {
+            assert.deepEqual(input, {
+              giftId: "gift-1",
+              guestId: "guest-2",
+            });
+            return {
+              ...activeReservation,
+              id: "reservation-2",
+              guestId: "guest-2",
+            };
+          },
+        });
+      },
+    },
+  });
+
+  const result = await useCase.execute({
+    reservationId: "reservation-1",
+    releasedByAdminUserId: "admin-1",
+    reassignToGuestId: "guest-2",
+  });
+
+  assert.equal(result.releasedReservation.reservationStatus, "released");
+  assert.equal(result.newActiveReservation?.id, "reservation-2");
+  assert.equal(result.newActiveReservation?.guestId, "guest-2");
+}
+
+async function testManageGiftReservationFailsWhenReservationNotFound(): Promise<void> {
+  const useCase = createManageGiftReservationUseCase({
+    giftReservationRepository: { async findById() { return null; } },
+    adminUserRepository: { async findById() { throw new Error("should not load admin"); } },
+    guestRepository: { async findById() { throw new Error("should not load guest"); } },
+    giftReservationTransactionRunner: { async run() { throw new Error("should not start transaction"); } },
+  });
+
+  await assert.rejects(
+    () => useCase.execute({ reservationId: "reservation-1", releasedByAdminUserId: "admin-1" }),
+    (error) => {
+      assert.ok(error instanceof GiftReservationManagementError);
+      assert.equal(error.reason, "reservation_not_found");
+      assert.equal(error.statusCode, 404);
+      return true;
+    },
+  );
+}
+
+async function testManageGiftReservationFailsWhenReservationNotActive(): Promise<void> {
+  const useCase = createManageGiftReservationUseCase({
+    giftReservationRepository: {
+      async findById() {
+        return { ...activeReservation, reservationStatus: "released" as const };
+      },
+    },
+    adminUserRepository: { async findById() { throw new Error("should not load admin"); } },
+    guestRepository: { async findById() { throw new Error("should not load guest"); } },
+    giftReservationTransactionRunner: { async run() { throw new Error("should not start transaction"); } },
+  });
+
+  await assert.rejects(
+    () => useCase.execute({ reservationId: "reservation-1", releasedByAdminUserId: "admin-1" }),
+    (error) => {
+      assert.ok(error instanceof GiftReservationManagementError);
+      assert.equal(error.reason, "reservation_not_active");
+      assert.equal(error.statusCode, 409);
+      return true;
+    },
+  );
+}
+
+async function testManageGiftReservationFailsWhenAdminMissing(): Promise<void> {
+  const useCase = createManageGiftReservationUseCase({
+    giftReservationRepository: { async findById() { return activeReservation; } },
+    adminUserRepository: { async findById() { return null; } },
+    guestRepository: { async findById() { throw new Error("should not load guest"); } },
+    giftReservationTransactionRunner: { async run() { throw new Error("should not start transaction"); } },
+  });
+
+  await assert.rejects(
+    () => useCase.execute({ reservationId: "reservation-1", releasedByAdminUserId: "admin-1" }),
+    (error) => {
+      assert.ok(error instanceof GiftReservationManagementError);
+      assert.equal(error.reason, "admin_user_not_found");
+      assert.equal(error.statusCode, 404);
+      return true;
+    },
+  );
+}
+
+async function testManageGiftReservationFailsWhenTargetGuestMissing(): Promise<void> {
+  const useCase = createManageGiftReservationUseCase({
+    giftReservationRepository: { async findById() { return activeReservation; } },
+    adminUserRepository: { async findById() { return activeAdmin; } },
+    guestRepository: { async findById() { return null; } },
+    giftReservationTransactionRunner: { async run() { throw new Error("should not start transaction"); } },
+  });
+
+  await assert.rejects(
+    () =>
+      useCase.execute({
+        reservationId: "reservation-1",
+        releasedByAdminUserId: "admin-1",
+        reassignToGuestId: "guest-2",
+      }),
+    (error) => {
+      assert.ok(error instanceof GiftReservationManagementError);
+      assert.equal(error.reason, "target_guest_not_found");
+      assert.equal(error.statusCode, 404);
+      return true;
+    },
+  );
+}
+
+async function testManageGiftReservationFailsWhenTargetGuestInactive(): Promise<void> {
+  const useCase = createManageGiftReservationUseCase({
+    giftReservationRepository: { async findById() { return activeReservation; } },
+    adminUserRepository: { async findById() { return activeAdmin; } },
+    guestRepository: { async findById() { return { id: "guest-2", status: "inactive" as const }; } },
+    giftReservationTransactionRunner: { async run() { throw new Error("should not start transaction"); } },
+  });
+
+  await assert.rejects(
+    () =>
+      useCase.execute({
+        reservationId: "reservation-1",
+        releasedByAdminUserId: "admin-1",
+        reassignToGuestId: "guest-2",
+      }),
+    (error) => {
+      assert.ok(error instanceof GiftReservationManagementError);
+      assert.equal(error.reason, "target_guest_inactive");
+      assert.equal(error.statusCode, 403);
+      return true;
+    },
+  );
+}
+
+async function testManageGiftReservationFailsWhenTargetGuestSameAsCurrent(): Promise<void> {
+  const useCase = createManageGiftReservationUseCase({
+    giftReservationRepository: { async findById() { return activeReservation; } },
+    adminUserRepository: { async findById() { return activeAdmin; } },
+    guestRepository: { async findById() { throw new Error("should not load guest"); } },
+    giftReservationTransactionRunner: { async run() { throw new Error("should not start transaction"); } },
+  });
+
+  await assert.rejects(
+    () =>
+      useCase.execute({
+        reservationId: "reservation-1",
+        releasedByAdminUserId: "admin-1",
+        reassignToGuestId: "guest-1",
+      }),
+    (error) => {
+      assert.ok(error instanceof GiftReservationManagementError);
+      assert.equal(error.reason, "target_guest_same_as_current");
+      assert.equal(error.statusCode, 409);
+      return true;
+    },
+  );
+}
+
+async function testManageGiftReservationPropagatesReservationConflict(): Promise<void> {
+  const useCase = createManageGiftReservationUseCase({
+    giftReservationRepository: { async findById() { return activeReservation; } },
+    adminUserRepository: { async findById() { return activeAdmin; } },
+    guestRepository: { async findById() { return { id: "guest-2", status: "active" as const }; } },
+    giftReservationTransactionRunner: {
+      async run(operation) {
+        return operation({
+          async findReservationById() {
+            return activeReservation;
+          },
+          async findActiveReservationByGiftId() {
+            throw new Error("not used");
+          },
+          async releaseActiveReservation() {
+            return {
+              ...activeReservation,
+              reservationStatus: "released",
+              releasedAt: new Date("2026-01-04T00:00:00.000Z"),
+              releasedByAdminUserId: "admin-1",
+            };
+          },
+          async createActiveReservation() {
+            throw new GiftReservationConflictError("gift-1");
+          },
+        });
+      },
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      useCase.execute({
+        reservationId: "reservation-1",
+        releasedByAdminUserId: "admin-1",
+        reassignToGuestId: "guest-2",
+      }),
+    (error) => {
+      assert.ok(error instanceof GiftReservationConflictError);
+      assert.equal(error.giftId, "gift-1");
+      assert.equal(error.statusCode, 409);
+      return true;
+    },
+  );
 }
 
 async function testListPublicGiftCatalogFiltersAvailableOnly(): Promise<void> {
@@ -175,6 +483,9 @@ async function testReserveGiftCreatesActiveReservation(): Promise<void> {
     giftReservationTransactionRunner: {
       async run(operation) {
         return operation({
+          async findReservationById() {
+            throw new Error("not used");
+          },
           async findActiveReservationByGiftId(giftId: string) {
             assert.equal(giftId, "gift-1");
             return null;
@@ -197,6 +508,9 @@ async function testReserveGiftCreatesActiveReservation(): Promise<void> {
               createdAt: new Date("2026-01-03T00:00:00.000Z"),
               updatedAt: new Date("2026-01-03T00:00:00.000Z"),
             };
+          },
+          async releaseActiveReservation() {
+            throw new Error("not used");
           },
         });
       },
@@ -309,6 +623,9 @@ async function testReserveGiftPropagatesReservationConflict(): Promise<void> {
     giftReservationTransactionRunner: {
       async run(operation) {
         return operation({
+          async findReservationById() {
+            throw new Error("not used");
+          },
           async findActiveReservationByGiftId() {
             return {
               id: "reservation-1",
@@ -325,6 +642,9 @@ async function testReserveGiftPropagatesReservationConflict(): Promise<void> {
           },
           async createActiveReservation() {
             throw new Error("should not create reservation");
+          },
+          async releaseActiveReservation() {
+            throw new Error("not used");
           },
         });
       },
@@ -380,6 +700,42 @@ export async function runGiftRegistryApplicationTests(): Promise<void> {
     {
       name: "reserve gift propagates reservation conflict",
       run: testReserveGiftPropagatesReservationConflict,
+    },
+    {
+      name: "manage gift reservation releases reservation",
+      run: testManageGiftReservationReleasesReservation,
+    },
+    {
+      name: "manage gift reservation reassigns reservation",
+      run: testManageGiftReservationReassignsReservation,
+    },
+    {
+      name: "manage gift reservation fails when reservation is missing",
+      run: testManageGiftReservationFailsWhenReservationNotFound,
+    },
+    {
+      name: "manage gift reservation fails when reservation is not active",
+      run: testManageGiftReservationFailsWhenReservationNotActive,
+    },
+    {
+      name: "manage gift reservation fails when admin is missing",
+      run: testManageGiftReservationFailsWhenAdminMissing,
+    },
+    {
+      name: "manage gift reservation fails when target guest is missing",
+      run: testManageGiftReservationFailsWhenTargetGuestMissing,
+    },
+    {
+      name: "manage gift reservation fails when target guest is inactive",
+      run: testManageGiftReservationFailsWhenTargetGuestInactive,
+    },
+    {
+      name: "manage gift reservation fails when target guest is current guest",
+      run: testManageGiftReservationFailsWhenTargetGuestSameAsCurrent,
+    },
+    {
+      name: "manage gift reservation propagates reservation conflict",
+      run: testManageGiftReservationPropagatesReservationConflict,
     },
   ]);
 }

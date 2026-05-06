@@ -36,6 +36,14 @@ interface GiftReservationModelDelegate {
   create(args: {
     data: CreateActiveGiftReservationPersistenceData;
   }): Promise<PrismaGiftReservation>;
+  update(args: {
+    where: { id: string };
+    data: {
+      reservationStatus: keyof typeof PrismaGiftReservationStatus;
+      releasedAt: Date;
+      releasedByAdminUserId: string;
+    };
+  }): Promise<PrismaGiftReservation>;
 }
 
 interface GiftReservationPersistenceData {
@@ -201,6 +209,22 @@ export class PrismaGiftReservationRepository implements GiftReservationRepositor
 
       throw error;
     }
+
+    return mapRecord(record);
+  }
+
+  async releaseActiveReservation(input: {
+    readonly reservationId: string;
+    readonly releasedByAdminUserId: string;
+  }): Promise<GiftReservation> {
+    const record = await this.reservations.update({
+      where: { id: input.reservationId },
+      data: {
+        reservationStatus: PrismaGiftReservationStatus.RELEASED,
+        releasedAt: new Date(),
+        releasedByAdminUserId: input.releasedByAdminUserId,
+      },
+    });
 
     return mapRecord(record);
   }
