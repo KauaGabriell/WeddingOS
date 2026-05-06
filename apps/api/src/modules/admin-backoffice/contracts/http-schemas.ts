@@ -23,7 +23,12 @@ const auditLogResponseSchema = z.object({
 });
 
 const dashboardSummaryResponseSchema = z.object({
-  available: z.literal(false),
+  totalGuests: z.number().int().nonnegative(),
+  totalRsvps: z.number().int().nonnegative(),
+  confirmedGuests: z.number().int().nonnegative(),
+  totalGifts: z.number().int().nonnegative(),
+  reservedGifts: z.number().int().nonnegative(),
+  pendingPhotos: z.number().int().nonnegative(),
 });
 
 export const ADMIN_BACKOFFICE_HTTP_SCHEMAS = defineHttpSchemaCatalog({

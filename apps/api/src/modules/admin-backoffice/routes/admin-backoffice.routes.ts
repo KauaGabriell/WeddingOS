@@ -38,8 +38,16 @@ import {
   PhotoWallModerationError,
 } from "../../photo-wall/index.js";
 import { PrismaAdminUserRepository } from "../../identity-access/index.js";
-import { PrismaAuditLogRepository, createAuditLogWriter } from "../index.js";
-import { ADMIN_BACKOFFICE_HTTP_CONTRACT } from "../contracts/index.js";
+import {
+  PrismaAuditLogRepository,
+  createAuditLogWriter,
+  createGetDashboardSummaryUseCase,
+  createListAuditTrailUseCase,
+} from "../index.js";
+import {
+  ADMIN_BACKOFFICE_HTTP_CONTRACT,
+  ADMIN_BACKOFFICE_HTTP_SCHEMAS,
+} from "../contracts/index.js";
 
 export const ADMIN_BACKOFFICE_ROUTE_ACCESS = {
   dashboard: adminRoute(),
@@ -50,6 +58,7 @@ export const ADMIN_BACKOFFICE_ROUTE_ACCESS = {
   updateGift: adminRoute(),
   listPhotoWallPosts: adminRoute(),
   moderatePhotoPost: adminRoute(),
+  listAuditLogs: adminRoute(),
 };
 
 interface RegisterAdminBackofficeRoutesOptions {
@@ -192,6 +201,13 @@ function serializePhotoPost(photoPost: {
   };
 }
 
+function serializeAuditLog(auditLog: any) {
+  return {
+    ...auditLog,
+    createdAt: auditLog.createdAt.toISOString(),
+  };
+}
+
 export const registerAdminBackofficeRoutes: FastifyPluginAsync<RegisterAdminBackofficeRoutesOptions> =
   async (app, options) => {
     const auditLogRepository = new PrismaAuditLogRepository(
@@ -242,6 +258,9 @@ export const registerAdminBackofficeRoutes: FastifyPluginAsync<RegisterAdminBack
     const listModerationPhotoPosts = createListModerationPhotoPostsUseCase(photoWallDependencies);
     const moderatePhotoPost = createModeratePhotoPostUseCase(photoWallDependencies);
 
+    const getDashboardSummary = createGetDashboardSummaryUseCase({ prisma: app.prisma });
+    const listAuditTrail = createListAuditTrailUseCase({ auditLogRepository });
+
     await app.register(async (protectedRoutes) => {
       protectedRoutes.setErrorHandler((error, _request, reply) => {
         const httpError = error as Partial<HttpStatusError>;
@@ -269,14 +288,14 @@ export const registerAdminBackofficeRoutes: FastifyPluginAsync<RegisterAdminBack
         schema: {
           tags: [...ADMIN_BACKOFFICE_HTTP_CONTRACT.tags],
           response: {
-            501: errorResponseSchema,
+            200: ADMIN_BACKOFFICE_HTTP_SCHEMAS.responses.dashboardSummary,
+            401: errorResponseSchema,
+            403: errorResponseSchema,
           },
         },
         handler: async (_request, reply) => {
-          return reply.code(501).send({
-            code: "ADMIN_DASHBOARD_NOT_IMPLEMENTED",
-            message: "Admin dashboard route is protected but not implemented yet",
-          });
+          const summary = await getDashboardSummary.execute();
+          return reply.code(200).send(summary);
         },
       });
 
@@ -558,6 +577,37 @@ export const registerAdminBackofficeRoutes: FastifyPluginAsync<RegisterAdminBack
 
             throw error;
           }
+        },
+      });
+
+      protectedRoutes.get("/audit-logs", {
+        ...ADMIN_BACKOFFICE_ROUTE_ACCESS.listAuditLogs,
+        preHandler: options.preHandler,
+        schema: {
+          tags: [...ADMIN_BACKOFFICE_HTTP_CONTRACT.tags],
+          querystring: ADMIN_BACKOFFICE_HTTP_SCHEMAS.queries.auditLogList,
+          response: {
+            200: ADMIN_BACKOFFICE_HTTP_SCHEMAS.responses.auditLogList,
+            401: errorResponseSchema,
+            403: errorResponseSchema,
+          },
+        },
+        handler: async (request, reply) => {
+          const query = request.query as any;
+
+          const result = await listAuditTrail.execute({
+            page: query.page,
+            pageSize: query.pageSize,
+            actorType: query.actorType,
+            entityType: query.entityType,
+            actionType: query.actionType,
+          });
+
+          return reply.code(200).send({
+            items: result.items.map(serializeAuditLog),
+            page: result.page,
+            pageSize: result.pageSize,
+          });
         },
       });
     }, {

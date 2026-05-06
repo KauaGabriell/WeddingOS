@@ -402,7 +402,7 @@ async function testAdminRoutesRequireAdminAuth(): Promise<void> {
         authorization: `Bearer ${adminSession.accessToken}`,
       },
     });
-    assert.equal(adminResponse.statusCode, 501);
+    assert.equal(adminResponse.statusCode, 200);
   } finally {
     await app.close();
   }
@@ -684,12 +684,74 @@ async function testAdminPhotoWallModerationRoutes(): Promise<void> {
   }
 }
 
+async function testAdminDashboardSummaryRoute(): Promise<void> {
+  const env = createTestEnv();
+  const adminSessionService = new SignedAdminSessionService(env.JWT_SECRET, 300, () => new Date());
+  const adminSession = await adminSessionService.issueSession({
+    adminUserId: "550e8400-e29b-41d4-a716-446655440206",
+    role: "super_admin",
+  });
+  const app = await buildApp(env, {
+    prisma: createPrismaStub() as never,
+    adminSessionVerifier: adminSessionService,
+  });
+
+  try {
+    const response = await app.inject({
+      method: "GET",
+      url: "/admin/dashboard",
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+
+    assert.equal(response.statusCode, 200);
+    const body = response.json();
+    assert.equal(typeof body.totalGuests, "number");
+    assert.equal(typeof body.totalRsvps, "number");
+  } finally {
+    await app.close();
+  }
+}
+
+async function testAdminAuditLogsRoute(): Promise<void> {
+  const env = createTestEnv();
+  const adminSessionService = new SignedAdminSessionService(env.JWT_SECRET, 300, () => new Date());
+  const adminSession = await adminSessionService.issueSession({
+    adminUserId: "550e8400-e29b-41d4-a716-446655440206",
+    role: "super_admin",
+  });
+  const app = await buildApp(env, {
+    prisma: createPrismaStub() as never,
+    adminSessionVerifier: adminSessionService,
+  });
+
+  try {
+    const response = await app.inject({
+      method: "GET",
+      url: "/admin/audit-logs?page=1&pageSize=10",
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+
+    assert.equal(response.statusCode, 200);
+    const body = response.json();
+    assert.equal(body.page, 1);
+    assert.equal(Array.isArray(body.items), true);
+  } finally {
+    await app.close();
+  }
+}
+
 export async function runAdminRouteTests(): Promise<void> {
   await runNamedTests("admin-routes", [
     { name: "admin login returns accepted without leaking account state", run: testAdminLoginReturnsAcceptedForKnownAndUnknownEmails },
     { name: "requires admin auth on admin routes", run: testAdminRoutesRequireAdminAuth },
     { name: "lists filtered admin guest rows", run: testAdminGuestsRouteListsFilteredRows },
     { name: "lists filtered admin rsvp rows", run: testAdminRsvpsRouteListsFilteredRows },
+    { name: "returns dashboard summary", run: testAdminDashboardSummaryRoute },
+    { name: "lists audit logs", run: testAdminAuditLogsRoute },
     { name: "manages gifts as admin", run: testAdminGiftManagementRoutes },
     { name: "moderates photo wall posts as admin", run: testAdminPhotoWallModerationRoutes },
   ]);
