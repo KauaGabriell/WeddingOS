@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import type { PhotoPost as PrismaPhotoPostRecord } from "../../generated/prisma/client.js";
-import { PrismaPhotoPostRepository } from "../../modules/photo-wall/index.js";
+import {
+  PrismaPhotoPostRepository,
+  StorageBackedPhotoStorageProvider,
+} from "../../modules/photo-wall/index.js";
 import { runNamedTests } from "../test-helpers.js";
 
 async function testPrismaPhotoPostRepository(): Promise<void> {
@@ -135,11 +138,72 @@ async function testPrismaPhotoPostRepository(): Promise<void> {
   });
 }
 
+async function testStorageBackedPhotoStorageProvider(): Promise<void> {
+  const calls: Record<string, unknown>[] = [];
+  const fileBytes = Buffer.from("photo-bytes");
+  const storageClient = {
+    async upload(args: any) {
+      calls.push({ method: "upload", args });
+      return { key: "photos/uploaded-post.jpg" };
+    },
+    async delete() {
+      throw new Error("not used");
+    },
+    async getSignedUrl(key: string, expiresInSeconds?: number) {
+      calls.push({ method: "getSignedUrl", args: { key, expiresInSeconds } });
+      return `https://signed.example.com/${key}?exp=${expiresInSeconds ?? "default"}`;
+    },
+  };
+
+  const provider = new StorageBackedPhotoStorageProvider(storageClient);
+
+  const uploaded = await provider.uploadPhoto({
+    fileName: "uploaded-post.jpg",
+    body: fileBytes,
+    contentType: "image/jpeg",
+  });
+
+  assert.deepEqual(calls[0], {
+    method: "upload",
+    args: {
+      key: "uploaded-post.jpg",
+      body: fileBytes,
+      contentType: "image/jpeg",
+    },
+  });
+  assert.deepEqual(calls[1], {
+    method: "getSignedUrl",
+    args: {
+      key: "photos/uploaded-post.jpg",
+      expiresInSeconds: undefined,
+    },
+  });
+  assert.deepEqual(uploaded, {
+    mediaStorageKey: "photos/uploaded-post.jpg",
+    mediaUrl: "https://signed.example.com/photos/uploaded-post.jpg?exp=default",
+  });
+
+  const signedUrl = await provider.getSignedMediaUrl("photos/existing-post.png", 120);
+
+  assert.equal(signedUrl, "https://signed.example.com/photos/existing-post.png?exp=120");
+  assert.deepEqual(calls[2], {
+    method: "getSignedUrl",
+    args: {
+      key: "photos/existing-post.png",
+      expiresInSeconds: 120,
+    },
+  });
+}
+
 export async function runPhotoWallInfrastructureTests(): Promise<void> {
   await runNamedTests("photo-wall/infrastructure", [
     {
       name: "prisma photo post repository",
       run: testPrismaPhotoPostRepository,
+    },
+    {
+      name: "storage backed photo storage provider",
+      run: testStorageBackedPhotoStorageProvider,
     },
   ]);
 }
