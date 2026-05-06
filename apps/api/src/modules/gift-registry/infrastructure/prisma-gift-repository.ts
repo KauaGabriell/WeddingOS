@@ -133,10 +133,10 @@ function mapFilters(filter: GiftRepositoryFilters): {
 }
 
 export class PrismaGiftRepository implements GiftRepository {
-  constructor(private readonly gifts: GiftModelDelegate) {}
+  constructor(private readonly gift: any) {}
 
   async findById(id: string): Promise<Gift | null> {
-    const record = await this.gifts.findUnique({
+    const record = await this.gift.findUnique({
       where: { id },
     });
 
@@ -144,7 +144,7 @@ export class PrismaGiftRepository implements GiftRepository {
   }
 
   async save(entity: Gift): Promise<Gift> {
-    const record = await this.gifts.upsert({
+    const record = await this.gift.upsert({
       where: { id: entity.id },
       create: mapEntity(entity),
       update: mapEntity(entity),
@@ -155,7 +155,7 @@ export class PrismaGiftRepository implements GiftRepository {
 
   async findMany(filter: GiftRepositoryFilters): Promise<readonly Gift[]> {
     const { where, skip, take } = mapFilters(filter);
-    const records = await this.gifts.findMany({
+    const records = await this.gift.findMany({
       where,
       orderBy: [{ displayOrder: "asc" }, { createdAt: "desc" }],
       skip,

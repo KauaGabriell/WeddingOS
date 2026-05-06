@@ -125,28 +125,23 @@ function createPrismaStub() {
     },
   ];
 
-  const noopDelegate = {
-    async findUnique() {
-      return null;
-    },
-    async findFirst() {
-      return null;
-    },
-    async findMany() {
-      return [];
-    },
-    async upsert(args: { create: unknown }) {
-      return args.create;
-    },
-    async create(args: { data: unknown }) {
-      return args.data;
-    },
-    async update(args: { data: unknown }) {
-      return args.data;
-    },
-  };
+  function createNoopDelegate() {
+    const delegate = {};
+    Object.defineProperties(delegate, {
+      findUnique: { value: async () => null, enumerable: true },
+      findFirst: { value: async () => null, enumerable: true },
+      findMany: { value: async () => [], enumerable: true },
+      upsert: { value: async (args: any) => args.create, enumerable: true },
+      create: { value: async (args: any) => args.data, enumerable: true },
+      update: { value: async (args: any) => args.data, enumerable: true },
+      count: { value: async () => 0, enumerable: true },
+    });
+    return delegate;
+  }
 
-  return {
+  const noopDelegate = createNoopDelegate();
+
+  const stub = {
     adminUser: {
       async findUnique(args: { where: { id?: string; email?: string } }) {
         if (args.where.email) {
@@ -157,10 +152,11 @@ function createPrismaStub() {
           [...adminUsers.values()].find((adminUser) => adminUser.id === args.where.id) ?? null
         );
       },
-      findMany: noopDelegate.findMany,
-      upsert: noopDelegate.upsert,
+      findMany: async () => [],
+      upsert: async (args: any) => args.create,
     },
     guest: {
+      ...createNoopDelegate(),
       async findUnique(args: { where: { id: string } }) {
         return guests.find((guest) => guest.id === args.where.id) ?? null;
       },
@@ -174,16 +170,7 @@ function createPrismaStub() {
         );
       },
       async findMany(args: {
-        where: {
-          guestGroupId?: string;
-          status?: string;
-          eventEligibilities?: { some: { eventId: string } };
-          OR?: Array<{
-            fullName?: { contains: string; mode: "insensitive" };
-            email?: { contains: string; mode: "insensitive" };
-            phone?: { contains: string; mode: "insensitive" };
-          }>;
-        };
+        where: any;
         skip: number;
         take: number;
       }) {
@@ -218,17 +205,18 @@ function createPrismaStub() {
 
         return filtered.slice(args.skip, args.skip + args.take);
       },
-      upsert: noopDelegate.upsert,
+      async count() {
+        return guests.length;
+      },
     },
     guestGroup: {
+      ...createNoopDelegate(),
       async findUnique(args: { where: { id: string } }) {
         return guestGroups.get(args.where.id) ?? null;
       },
-      findMany: noopDelegate.findMany,
-      upsert: noopDelegate.upsert,
     },
     eventGuestEligibility: {
-      findUnique: noopDelegate.findUnique,
+      ...createNoopDelegate(),
       async findMany(args: {
         where: { eventId?: string; guestId?: string | { in: string[] } };
         skip?: number;
@@ -252,9 +240,9 @@ function createPrismaStub() {
         const take = args.take ?? scoped.length;
         return scoped.slice(skip, skip + take);
       },
-      upsert: noopDelegate.upsert,
     },
     rsvpResponse: {
+      ...createNoopDelegate(),
       async findUnique(args: { where: { id?: string; eventId_guestId?: { eventId: string; guestId: string } } }) {
         if (args.where.id) {
           return responses.find((response) => response.id === args.where.id) ?? null;
@@ -268,19 +256,7 @@ function createPrismaStub() {
         );
       },
       async findMany(args: {
-        where: {
-          eventId?: string;
-          guestId?: string | { in: string[] };
-          responseStatus?: string;
-          guest?: {
-            guestGroupId?: string;
-            OR?: Array<{
-              fullName?: { contains: string; mode: "insensitive" };
-              email?: { contains: string; mode: "insensitive" };
-              phone?: { contains: string; mode: "insensitive" };
-            }>;
-          };
-        };
+        where: any;
         skip?: number;
         take?: number;
       }) {
@@ -321,26 +297,25 @@ function createPrismaStub() {
         const take = args.take ?? filtered.length;
         return filtered.slice(skip, skip + take);
       },
-      upsert: noopDelegate.upsert,
-      create: noopDelegate.create,
-      update: noopDelegate.update,
+      async count() {
+        return responses.length;
+      },
     },
-    inviteToken: noopDelegate,
-    gift: noopDelegate,
-    giftReservation: noopDelegate,
-    photoPost: noopDelegate,
-    auditLog: {
-      findUnique: noopDelegate.findUnique,
-      findMany: noopDelegate.findMany,
-      upsert: noopDelegate.upsert,
-    },
-    async $transaction<T>(operation: (tx: any) => Promise<T>) {
-      return operation({
-        inviteToken: this.inviteToken,
-      });
+    inviteToken: createNoopDelegate(),
+    gift: createNoopDelegate(),
+    giftReservation: createNoopDelegate(),
+    photoPost: createNoopDelegate(),
+    auditLog: createNoopDelegate(),
+    async $transaction(operation: any) {
+      if (typeof operation === "function") {
+        return operation(this);
+      }
+      return operation;
     },
     async $disconnect() {},
   };
+
+  return stub;
 }
 
 async function testAdminLoginReturnsAcceptedForKnownAndUnknownEmails(): Promise<void> {
@@ -474,10 +449,248 @@ async function testAdminGuestsRouteListsFilteredRows(): Promise<void> {
   }
 }
 
+async function testAdminRsvpsRouteListsFilteredRows(): Promise<void> {
+  const env = createTestEnv();
+  const adminSessionService = new SignedAdminSessionService(env.JWT_SECRET, 300, () => new Date());
+  const adminSession = await adminSessionService.issueSession({
+    adminUserId: "550e8400-e29b-41d4-a716-446655440206",
+    role: "super_admin",
+  });
+  const app = await buildApp(env, {
+    prisma: createPrismaStub() as never,
+    adminSessionVerifier: adminSessionService,
+  });
+
+  try {
+    const response = await app.inject({
+      method: "GET",
+      url: `/admin/rsvps?eventId=${EVENT_ID}&guestGroupId=${GROUP_ONE_ID}&responseStatus=yes&search=Ana&page=1&pageSize=10`,
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+
+    assert.equal(response.statusCode, 200);
+    const body = response.json();
+    assert.equal(body.page, 1);
+    assert.equal(body.pageSize, 10);
+    assert.equal(body.items.length, 1);
+    assert.equal(body.items[0].guest.id, GUEST_ONE_ID);
+    assert.equal(body.items[0].guest.fullName, "Ana Souza");
+    assert.equal(body.items[0].guestGroup.id, GROUP_ONE_ID);
+    assert.equal(body.items[0].responses.length, 1);
+    assert.equal(body.items[0].responses[0].responseStatus, "yes");
+  } finally {
+    await app.close();
+  }
+}
+
+async function testAdminGiftManagementRoutes(): Promise<void> {
+  const env = createTestEnv();
+  const adminSessionService = new SignedAdminSessionService(env.JWT_SECRET, 300, () => new Date());
+  const adminSession = await adminSessionService.issueSession({
+    adminUserId: "550e8400-e29b-41d4-a716-446655440206",
+    role: "super_admin",
+  });
+
+  const gifts = new Map<string, any>();
+  const prisma = createPrismaStub() as any;
+
+  prisma.gift = {
+    async findUnique(args: { where: { id: string } }) {
+      return gifts.get(args.where.id) ?? null;
+    },
+    async findMany() {
+      return Array.from(gifts.values());
+    },
+    async create(args: { data: any }) {
+      const gift = { ...args.data, id: args.data.id || "gift-1" };
+      gifts.set(gift.id, gift);
+      return gift;
+    },
+    async update(args: { where: { id: string }; data: any }) {
+      const existing = gifts.get(args.where.id);
+      if (!existing) throw new Error("Not found");
+      const updated = { ...existing, ...args.data, updatedAt: new Date() };
+      gifts.set(args.where.id, updated);
+      return updated;
+    },
+    async upsert(args: { where: { id: string }; create: any; update: any }) {
+      const existing = gifts.get(args.where.id);
+      if (existing) {
+        const updated = { ...existing, ...args.update, updatedAt: new Date() };
+        gifts.set(args.where.id, updated);
+        return updated;
+      }
+      const created = { ...args.create, id: args.where.id || "gift-1" };
+      gifts.set(created.id, created);
+      return created;
+    },
+  };
+
+  const app = await buildApp(env, {
+    prisma,
+    adminSessionVerifier: adminSessionService,
+  });
+
+  try {
+    // 1. Create gift
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/admin/gifts",
+      headers: { authorization: `Bearer ${adminSession.accessToken}` },
+      payload: {
+        name: "Liquidificador",
+        category: "Cozinha",
+        displayOrder: 1,
+        status: "available",
+        isActive: true,
+      },
+    });
+    if (createResponse.statusCode !== 200) {
+      console.error(createResponse.json());
+    }
+    assert.equal(createResponse.statusCode, 200);
+    const createdGift = createResponse.json();
+    assert.equal(createdGift.name, "Liquidificador");
+
+    // 2. List gifts
+    const listResponse = await app.inject({
+      method: "GET",
+      url: "/admin/gifts",
+      headers: { authorization: `Bearer ${adminSession.accessToken}` },
+    });
+    assert.equal(listResponse.statusCode, 200);
+    assert.equal(listResponse.json().items.length, 1);
+
+    // 3. Update gift
+    const updateResponse = await app.inject({
+      method: "PATCH",
+      url: `/admin/gifts/${createdGift.id}`,
+      headers: { authorization: `Bearer ${adminSession.accessToken}` },
+      payload: {
+        name: "Liquidificador Turbo",
+        category: "Cozinha",
+        displayOrder: 1,
+        status: "available",
+        isActive: true,
+      },
+    });
+    assert.equal(updateResponse.statusCode, 200);
+    assert.equal(updateResponse.json().name, "Liquidificador Turbo");
+  } finally {
+    await app.close();
+  }
+}
+
+async function testAdminPhotoWallModerationRoutes(): Promise<void> {
+  const env = createTestEnv();
+  const adminSessionService = new SignedAdminSessionService(env.JWT_SECRET, 300, () => new Date());
+  const adminSession = await adminSessionService.issueSession({
+    adminUserId: "550e8400-e29b-41d4-a716-446655440206",
+    role: "super_admin",
+  });
+
+  const PHOTO_POST_ID = "550e8400-e29b-41d4-a716-446655440210";
+
+  const photoPosts = new Map<string, any>([
+    [
+      PHOTO_POST_ID,
+      {
+        id: PHOTO_POST_ID,
+        guestId: GUEST_ONE_ID,
+        authorName: "Ana Souza",
+        message: "Felicidades!",
+        mediaStorageKey: "key-1",
+        mediaUrl: "http://example.com/photo.jpg",
+        mediaMimeType: "image/jpeg",
+        mediaSizeBytes: 1024,
+        mediaWidth: 800,
+        mediaHeight: 600,
+        moderationStatus: "pending",
+        submittedAt: new Date(),
+        approvedAt: null,
+        hiddenAt: null,
+        moderatedByAdminUserId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ],
+  ]);
+
+  const prisma = createPrismaStub() as any;
+  prisma.photoPost = {
+    async findUnique(args: { where: { id: string } }) {
+      return photoPosts.get(args.where.id) ?? null;
+    },
+    async findMany() {
+      return Array.from(photoPosts.values());
+    },
+    async update(args: { where: { id: string }; data: any }) {
+      const existing = photoPosts.get(args.where.id);
+      if (!existing) throw new Error("Not found");
+      const updated = { ...existing, ...args.data, updatedAt: new Date() };
+      photoPosts.set(args.where.id, updated);
+      return updated;
+    },
+    async upsert(args: { where: { id: string }; create: any; update: any }) {
+      const existing = photoPosts.get(args.where.id);
+      if (existing) {
+        const updated = { ...existing, ...args.update, updatedAt: new Date() };
+        photoPosts.set(args.where.id, updated);
+        return updated;
+      }
+      const created = { ...args.create, id: args.where.id || PHOTO_POST_ID };
+      photoPosts.set(created.id, created);
+      return created;
+    },
+  };
+
+  const app = await buildApp(env, {
+    prisma,
+    adminSessionVerifier: adminSessionService,
+  });
+
+  try {
+    // 1. List moderation queue
+    const listResponse = await app.inject({
+      method: "GET",
+      url: "/admin/photo-wall",
+      headers: { authorization: `Bearer ${adminSession.accessToken}` },
+    });
+    if (listResponse.statusCode !== 200) {
+      console.error(listResponse.json());
+    }
+    assert.equal(listResponse.statusCode, 200);
+    assert.equal(listResponse.json().items.length, 1);
+
+    // 2. Moderate post (Approve)
+    const moderateResponse = await app.inject({
+      method: "POST",
+      url: `/admin/photo-wall/posts/${PHOTO_POST_ID}/moderate`,
+      headers: { authorization: `Bearer ${adminSession.accessToken}` },
+      payload: {
+        moderationStatus: "approved",
+        moderatedByAdminUserId: "550e8400-e29b-41d4-a716-446655440206",
+      },
+    });
+    if (moderateResponse.statusCode !== 200) {
+      console.error(moderateResponse.json());
+    }
+    assert.equal(moderateResponse.statusCode, 200);
+    assert.equal(moderateResponse.json().moderationStatus, "approved");
+  } finally {
+    await app.close();
+  }
+}
+
 export async function runAdminRouteTests(): Promise<void> {
   await runNamedTests("admin-routes", [
     { name: "admin login returns accepted without leaking account state", run: testAdminLoginReturnsAcceptedForKnownAndUnknownEmails },
     { name: "requires admin auth on admin routes", run: testAdminRoutesRequireAdminAuth },
     { name: "lists filtered admin guest rows", run: testAdminGuestsRouteListsFilteredRows },
+    { name: "lists filtered admin rsvp rows", run: testAdminRsvpsRouteListsFilteredRows },
+    { name: "manages gifts as admin", run: testAdminGiftManagementRoutes },
+    { name: "moderates photo wall posts as admin", run: testAdminPhotoWallModerationRoutes },
   ]);
 }

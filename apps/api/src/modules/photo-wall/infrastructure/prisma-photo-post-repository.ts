@@ -117,10 +117,10 @@ function mapFilters(filter: PhotoPostRepositoryFilters): {
 }
 
 export class PrismaPhotoPostRepository implements PhotoPostRepository {
-  constructor(private readonly photoPosts: PhotoPostModelDelegate) {}
+  constructor(private readonly photoPost: PhotoPostModelDelegate) {}
 
   async findById(id: string): Promise<PhotoPost | null> {
-    const record = await this.photoPosts.findUnique({
+    const record = await this.photoPost.findUnique({
       where: { id },
     });
 
@@ -128,7 +128,7 @@ export class PrismaPhotoPostRepository implements PhotoPostRepository {
   }
 
   async save(entity: PhotoPost): Promise<PhotoPost> {
-    const record = await this.photoPosts.upsert({
+    const record = await this.photoPost.upsert({
       where: { id: entity.id },
       create: mapEntity(entity),
       update: mapEntity(entity),
@@ -139,7 +139,7 @@ export class PrismaPhotoPostRepository implements PhotoPostRepository {
 
   async findMany(filter: PhotoPostRepositoryFilters): Promise<readonly PhotoPost[]> {
     const { where, skip, take } = mapFilters(filter);
-    const records = await this.photoPosts.findMany({
+    const records = await this.photoPost.findMany({
       where,
       orderBy: [{ submittedAt: "desc" }, { createdAt: "desc" }],
       skip,

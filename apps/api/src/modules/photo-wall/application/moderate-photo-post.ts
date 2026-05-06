@@ -37,7 +37,7 @@ export interface ModeratePhotoPostUseCase {
 
 interface ModerationAdminUser {
   readonly id: string;
-  readonly status: "active" | "inactive";
+  readonly status: "active" | "disabled" | "inactive";
 }
 
 export interface PhotoWallModerationDependencies {
