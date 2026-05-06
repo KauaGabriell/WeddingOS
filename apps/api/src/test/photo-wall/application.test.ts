@@ -3,6 +3,7 @@ import type { PhotoPost } from "../../modules/photo-wall/index.js";
 import {
   PhotoWallApplicationError,
   createCreatePhotoPostUseCase,
+  createListApprovedPhotoPostsUseCase,
 } from "../../modules/photo-wall/index.js";
 import { runNamedTests } from "../test-helpers.js";
 
@@ -479,6 +480,150 @@ async function testCreatePhotoPostPropagatesSaveError(): Promise<void> {
   );
 }
 
+async function testListApprovedPhotoPostsUsesDefaultPaginationAndMapsPublicItems(): Promise<void> {
+  const approvedPost: PhotoPost = {
+    id: "post-1",
+    guestId: "guest-1",
+    authorName: "Joao",
+    message: "Parabens",
+    mediaStorageKey: "photos/post-1.jpg",
+    mediaUrl: null,
+    mediaMimeType: "image/jpeg",
+    mediaSizeBytes: 1024,
+    mediaWidth: 1080,
+    mediaHeight: 720,
+    moderationStatus: "approved",
+    submittedAt: new Date("2026-01-03T00:00:00.000Z"),
+    approvedAt: new Date("2026-01-03T00:05:00.000Z"),
+    hiddenAt: null,
+    moderatedByAdminUserId: "admin-1",
+    createdAt: new Date("2026-01-03T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-03T00:05:00.000Z"),
+  };
+  const repositoryCalls: Record<string, unknown>[] = [];
+  const signedUrlCalls: Record<string, unknown>[] = [];
+  const useCase = createListApprovedPhotoPostsUseCase({
+    photoPostRepository: {
+      async findMany(filter: {
+        moderationStatus?: "pending" | "approved" | "hidden" | "removed";
+        page: number;
+        pageSize: number;
+      }) {
+        repositoryCalls.push(filter as Record<string, unknown>);
+        return [approvedPost];
+      },
+    },
+    photoStorageProvider: {
+      async getSignedMediaUrl(storageKey: string, expiresInSeconds?: number) {
+        signedUrlCalls.push({ storageKey, expiresInSeconds });
+        return `https://signed.example.com/${storageKey}`;
+      },
+    },
+  });
+
+  const result = await useCase.execute({});
+
+  assert.deepEqual(repositoryCalls[0], {
+    moderationStatus: "approved",
+    page: 1,
+    pageSize: 20,
+  });
+  assert.deepEqual(signedUrlCalls[0], {
+    storageKey: "photos/post-1.jpg",
+    expiresInSeconds: undefined,
+  });
+  assert.deepEqual(result, {
+    items: [
+      {
+        id: "post-1",
+        authorName: "Joao",
+        message: "Parabens",
+        mediaUrl: "https://signed.example.com/photos/post-1.jpg",
+        mediaMimeType: "image/jpeg",
+        mediaWidth: 1080,
+        mediaHeight: 720,
+        submittedAt: new Date("2026-01-03T00:00:00.000Z"),
+      },
+    ],
+    page: 1,
+    pageSize: 20,
+  });
+  assert.equal("guestId" in result.items[0]!, false);
+  assert.equal("mediaStorageKey" in result.items[0]!, false);
+  assert.equal("moderationStatus" in result.items[0]!, false);
+}
+
+async function testListApprovedPhotoPostsUsesCustomPagination(): Promise<void> {
+  const useCase = createListApprovedPhotoPostsUseCase({
+    photoPostRepository: {
+      async findMany(filter: {
+        moderationStatus?: "pending" | "approved" | "hidden" | "removed";
+        page: number;
+        pageSize: number;
+      }) {
+        assert.deepEqual(filter, {
+          moderationStatus: "approved",
+          page: 3,
+          pageSize: 5,
+        });
+        return [];
+      },
+    },
+    photoStorageProvider: {
+      async getSignedMediaUrl() {
+        throw new Error("not used");
+      },
+    },
+  });
+
+  const result = await useCase.execute({
+    page: 3,
+    pageSize: 5,
+  });
+
+  assert.deepEqual(result, {
+    items: [],
+    page: 3,
+    pageSize: 5,
+  });
+}
+
+async function testListApprovedPhotoPostsPropagatesSignedUrlError(): Promise<void> {
+  const approvedPost: PhotoPost = {
+    id: "post-1",
+    guestId: "guest-1",
+    authorName: "Joao",
+    message: "Parabens",
+    mediaStorageKey: "photos/post-1.jpg",
+    mediaUrl: null,
+    mediaMimeType: "image/jpeg",
+    mediaSizeBytes: 1024,
+    mediaWidth: 1080,
+    mediaHeight: 720,
+    moderationStatus: "approved",
+    submittedAt: new Date("2026-01-03T00:00:00.000Z"),
+    approvedAt: new Date("2026-01-03T00:05:00.000Z"),
+    hiddenAt: null,
+    moderatedByAdminUserId: "admin-1",
+    createdAt: new Date("2026-01-03T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-03T00:05:00.000Z"),
+  };
+  const useCase = createListApprovedPhotoPostsUseCase({
+    photoPostRepository: {
+      async findMany() {
+        return [approvedPost];
+      },
+    },
+    photoStorageProvider: {
+      async getSignedMediaUrl() {
+        throw new Error("signed url failed");
+      },
+    },
+  });
+
+  await assert.rejects(() => useCase.execute({}), /signed url failed/);
+}
+
 export async function runPhotoWallApplicationTests(): Promise<void> {
   await runNamedTests("photo-wall/application", [
     {
@@ -524,6 +669,18 @@ export async function runPhotoWallApplicationTests(): Promise<void> {
     {
       name: "create photo post propagates save error",
       run: testCreatePhotoPostPropagatesSaveError,
+    },
+    {
+      name: "list approved photo posts uses default pagination and maps public items",
+      run: testListApprovedPhotoPostsUsesDefaultPaginationAndMapsPublicItems,
+    },
+    {
+      name: "list approved photo posts uses custom pagination",
+      run: testListApprovedPhotoPostsUsesCustomPagination,
+    },
+    {
+      name: "list approved photo posts propagates signed url error",
+      run: testListApprovedPhotoPostsPropagatesSignedUrlError,
     },
   ]);
 }
