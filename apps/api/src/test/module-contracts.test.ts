@@ -56,6 +56,7 @@ import {
   PHOTO_WALL_HTTP_CONTRACT,
   PHOTO_WALL_INFRASTRUCTURE_PORTS,
   PHOTO_WALL_MODULE_USE_CASES,
+  PrismaPhotoPostRepository,
   PHOTO_WALL_ROUTE_ACCESS,
 } from "../modules/photo-wall/index.js";
 import type { PhotoPost } from "../modules/photo-wall/index.js";
@@ -242,6 +243,7 @@ function testModuleLayerContractsAreExported(): void {
   assert.equal(GIFT_REGISTRY_MODULE_USE_CASES.adminGiftRelease, "implemented");
   assert.equal(GIFT_REGISTRY_MODULE_USE_CASES.adminGiftManagement, "implemented");
   assert.equal(PHOTO_WALL_MODULE_USE_CASES.photoSubmission, "planned");
+  assert.equal(typeof PrismaPhotoPostRepository, "function");
   assert.equal(ADMIN_BACKOFFICE_MODULE_USE_CASES.auditTrailQuery, "planned");
   assert.equal(IDENTITY_ACCESS_INFRASTRUCTURE_PORTS.repositories.includes("invite-token-repository"), true);
   assert.equal(GUESTS_RSVP_INFRASTRUCTURE_PORTS.repositories.includes("rsvp-response-repository"), true);

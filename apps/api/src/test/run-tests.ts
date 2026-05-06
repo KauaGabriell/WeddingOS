@@ -8,6 +8,7 @@ import { runGuestsRsvpInfrastructureTests } from "./guests-rsvp/infrastructure.t
 import { runIdentityAccessApplicationTests } from "./identity-access/application.test.js";
 import { runIdentityAccessInfrastructureTests } from "./identity-access/infrastructure.test.js";
 import { runModuleContractTests } from "./module-contracts.test.js";
+import { runPhotoWallInfrastructureTests } from "./photo-wall/infrastructure.test.js";
 import { runSharedHttpAuthTests } from "./shared/http-auth.test.js";
 
 async function run(): Promise<void> {
@@ -21,6 +22,7 @@ async function run(): Promise<void> {
   await runGuestsRsvpApplicationTests();
   await runGuestsRsvpAdminQueryTests();
   await runGuestsRsvpInfrastructureTests();
+  await runPhotoWallInfrastructureTests();
   await runAdminRouteTests();
   console.log("api test suites passed");
 }
