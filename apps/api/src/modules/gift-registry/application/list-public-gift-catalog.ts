@@ -30,6 +30,22 @@ function normalizePagination(input: ListPublicGiftCatalogInput): {
   };
 }
 
+function buildGiftFilter(
+  input: ListPublicGiftCatalogInput,
+  page: number,
+  pageSize: number,
+) {
+  return {
+    category: input.category,
+    status: input.status,
+    isActive: true as const,
+    ...(input.minEstimatedValue === undefined ? {} : { minEstimatedValue: input.minEstimatedValue }),
+    ...(input.maxEstimatedValue === undefined ? {} : { maxEstimatedValue: input.maxEstimatedValue }),
+    page,
+    pageSize,
+  };
+}
+
 function filterCatalogItems(
   items: readonly GiftCatalogItem[],
   reservationStatus: ListPublicGiftCatalogInput["reservationStatus"],
@@ -69,13 +85,7 @@ async function findFilteredCatalogPage(
   let rawPage = 1;
 
   while (collected.length < pageSize) {
-    const gifts = await dependencies.giftRepository.findMany({
-      category: input.category,
-      status: input.status,
-      isActive: true,
-      page: rawPage,
-      pageSize,
-    });
+    const gifts = await dependencies.giftRepository.findMany(buildGiftFilter(input, rawPage, pageSize));
 
     if (gifts.length === 0) {
       break;
@@ -118,13 +128,7 @@ export function createListPublicGiftCatalogUseCase(
       const items =
         input.reservationStatus === undefined
           ? await composeCatalogItems(
-              await dependencies.giftRepository.findMany({
-                category: input.category,
-                status: input.status,
-                isActive: true,
-                page,
-                pageSize,
-              }),
+              await dependencies.giftRepository.findMany(buildGiftFilter(input, page, pageSize)),
               dependencies.giftReservationRepository,
             )
           : await findFilteredCatalogPage(dependencies, input, page, pageSize);

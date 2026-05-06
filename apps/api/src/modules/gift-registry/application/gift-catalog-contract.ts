@@ -5,6 +5,8 @@ export interface ListPublicGiftCatalogInput {
   readonly category?: string;
   readonly status?: Gift["status"];
   readonly reservationStatus?: GiftCatalogReservationStatus;
+  readonly minEstimatedValue?: number;
+  readonly maxEstimatedValue?: number;
   readonly page?: number;
   readonly pageSize?: number;
 }

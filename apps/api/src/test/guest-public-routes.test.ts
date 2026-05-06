@@ -225,6 +225,61 @@ function createPrismaStub() {
       updatedAt: new Date("2026-05-10T12:00:00.000Z"),
     },
   ];
+  const gifts = [
+    {
+      id: "550e8400-e29b-41d4-a716-446655440115",
+      name: "Jogo de Panelas",
+      category: "cozinha",
+      description: "Inox",
+      estimatedValue: 220,
+      imageUrl: "https://example.com/panelas.jpg",
+      displayOrder: 1,
+      status: "AVAILABLE",
+      isActive: true,
+      createdAt: new Date("2026-05-01T10:00:00.000Z"),
+      updatedAt: new Date("2026-05-01T10:00:00.000Z"),
+    },
+    {
+      id: "550e8400-e29b-41d4-a716-446655440116",
+      name: "Aparelho de Jantar",
+      category: "mesa",
+      description: "42 pecas",
+      estimatedValue: 350,
+      imageUrl: null,
+      displayOrder: 2,
+      status: "AVAILABLE",
+      isActive: true,
+      createdAt: new Date("2026-05-01T10:00:00.000Z"),
+      updatedAt: new Date("2026-05-01T10:00:00.000Z"),
+    },
+    {
+      id: "550e8400-e29b-41d4-a716-446655440117",
+      name: "Liquidificador",
+      category: "cozinha",
+      description: null,
+      estimatedValue: 180,
+      imageUrl: null,
+      displayOrder: 3,
+      status: "AVAILABLE",
+      isActive: false,
+      createdAt: new Date("2026-05-01T10:00:00.000Z"),
+      updatedAt: new Date("2026-05-01T10:00:00.000Z"),
+    },
+  ];
+  const giftReservations = [
+    {
+      id: "550e8400-e29b-41d4-a716-446655440118",
+      giftId: "550e8400-e29b-41d4-a716-446655440116",
+      guestId: GUEST_ID,
+      reservationStatus: "ACTIVE",
+      purchaseNotes: null,
+      reservedAt: new Date("2026-05-10T12:00:00.000Z"),
+      releasedAt: null,
+      releasedByAdminUserId: null,
+      createdAt: new Date("2026-05-10T12:00:00.000Z"),
+      updatedAt: new Date("2026-05-10T12:00:00.000Z"),
+    },
+  ];
   const responseTimestamps = [
     new Date("2026-05-11T12:00:00.000Z"),
     new Date("2026-05-12T12:00:00.000Z"),
@@ -301,6 +356,81 @@ function createPrismaStub() {
       },
       async upsert(args: { create: any }) {
         return args.create;
+      },
+    },
+    gift: {
+      async findUnique(args: { where: { id: string } }) {
+        return gifts.find((gift) => gift.id === args.where.id) ?? null;
+      },
+      async findMany(args: {
+        where: {
+          category?: string;
+          status?: string;
+          isActive?: boolean;
+          estimatedValue?: { gte?: number; lte?: number };
+        };
+        orderBy: Array<{ displayOrder: "asc" | "desc" } | { createdAt: "asc" | "desc" }>;
+        skip: number;
+        take: number;
+      }) {
+        const filtered = gifts
+          .filter((gift) => {
+            if (args.where.category && gift.category !== args.where.category) return false;
+            if (args.where.status && gift.status !== args.where.status) return false;
+            if (args.where.isActive !== undefined && gift.isActive !== args.where.isActive) return false;
+            if (args.where.estimatedValue?.gte !== undefined) {
+              if (gift.estimatedValue === null || gift.estimatedValue < args.where.estimatedValue.gte) {
+                return false;
+              }
+            }
+            if (args.where.estimatedValue?.lte !== undefined) {
+              if (gift.estimatedValue === null || gift.estimatedValue > args.where.estimatedValue.lte) {
+                return false;
+              }
+            }
+            return true;
+          })
+          .sort((left, right) => {
+            if (left.displayOrder !== right.displayOrder) {
+              return left.displayOrder - right.displayOrder;
+            }
+            return right.createdAt.getTime() - left.createdAt.getTime();
+          });
+        return filtered.slice(args.skip, args.skip + args.take);
+      },
+      async upsert(args: { create: any }) {
+        return args.create;
+      },
+    },
+    giftReservation: {
+      async findUnique(args: { where: { id: string } }) {
+        return giftReservations.find((reservation) => reservation.id === args.where.id) ?? null;
+      },
+      async findFirst(args: {
+        where: { giftId?: string; guestId?: string; reservationStatus?: string };
+        orderBy: { reservedAt: "asc" | "desc" };
+      }) {
+        const filtered = giftReservations.filter((reservation) => {
+          if (args.where.giftId && reservation.giftId !== args.where.giftId) return false;
+          if (args.where.guestId && reservation.guestId !== args.where.guestId) return false;
+          if (args.where.reservationStatus && reservation.reservationStatus !== args.where.reservationStatus) {
+            return false;
+          }
+          return true;
+        });
+        return filtered[0] ?? null;
+      },
+      async findMany() {
+        return giftReservations;
+      },
+      async upsert(args: { create: any }) {
+        return args.create;
+      },
+      async create(args: { data: any }) {
+        return args.data;
+      },
+      async update(args: { data: any }) {
+        return args.data;
       },
     },
     eventGuestEligibility: {
@@ -421,6 +551,7 @@ function createPrismaStub() {
       return operation({
         inviteToken: this.inviteToken,
         rsvpResponse: this.rsvpResponse,
+        giftReservation: this.giftReservation,
       });
     },
     async $disconnect() {},
@@ -609,6 +740,43 @@ async function testGuestLoginRoutesAndProtectedGuestPages(): Promise<void> {
     assert.equal(eventsResponse.statusCode, 200);
     assert.deepEqual(eventsResponse.json().items.map((item: { id: string }) => item.id), [EVENT_TWO_ID]);
 
+    const giftsResponse = await app.inject({
+      method: "GET",
+      url: "/gifts?category=cozinha&reservationStatus=available&minEstimatedValue=200&page=1&pageSize=10",
+      headers: {
+        authorization: `Bearer ${guestSession.accessToken}`,
+      },
+    });
+    assert.equal(giftsResponse.statusCode, 200);
+    assert.deepEqual(
+      giftsResponse.json().items.map((item: { gift: { id: string } }) => item.gift.id),
+      ["550e8400-e29b-41d4-a716-446655440115"],
+    );
+    assert.equal(giftsResponse.json().items[0]?.activeReservation, null);
+
+    const reservedGiftsResponse = await app.inject({
+      method: "GET",
+      url: "/gifts?reservationStatus=reserved&page=1&pageSize=10",
+      headers: {
+        cookie: `weddingos_guest_session=${encodeURIComponent(guestSession.accessToken)}`,
+      },
+    });
+    assert.equal(reservedGiftsResponse.statusCode, 200);
+    assert.deepEqual(
+      reservedGiftsResponse.json().items.map((item: { gift: { id: string } }) => item.gift.id),
+      ["550e8400-e29b-41d4-a716-446655440116"],
+    );
+    assert.equal(
+      reservedGiftsResponse.json().items[0]?.activeReservation?.reservationStatus,
+      "active",
+    );
+
+    const giftsMissingAuth = await app.inject({
+      method: "GET",
+      url: "/gifts",
+    });
+    assert.equal(giftsMissingAuth.statusCode, 401);
+
     const adminSession = await adminSessionService.issueSession({
       adminUserId: "550e8400-e29b-41d4-a716-446655440113",
       role: "super_admin",
@@ -626,6 +794,15 @@ async function testGuestLoginRoutesAndProtectedGuestPages(): Promise<void> {
       code: "GUEST_ACCESS_FORBIDDEN",
       message: "Access forbidden",
     });
+
+    const forbiddenGifts = await app.inject({
+      method: "GET",
+      url: "/gifts",
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    assert.equal(forbiddenGifts.statusCode, 403);
 
     const forbiddenRsvp = await app.inject({
       method: "POST",
