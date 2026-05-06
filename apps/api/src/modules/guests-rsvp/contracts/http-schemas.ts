@@ -90,6 +90,11 @@ const guestHomeResponseSchema = z.object({
   responses: z.array(rsvpResponseSchema),
 });
 
+const submitRsvpResponseSchema = z.object({
+  persistedResponse: rsvpResponseSchema,
+  outcome: z.enum(["created", "updated", "replayed"]),
+});
+
 const adminGuestRsvpRowResponseSchema = z.object({
   guestGroup: guestGroupResponseSchema,
   guest: guestResponseSchema,
@@ -135,7 +140,6 @@ export const GUESTS_RSVP_HTTP_SCHEMAS = defineHttpSchemaCatalog({
   bodies: {
     submitRsvp: z.object({
       eventId: uuidSchema,
-      guestId: uuidSchema,
       responseStatus: z.enum(RSVP_RESPONSE_STATUSES),
       companionsConfirmed: z.number().int().min(0),
       message: z.string().trim().max(500).optional(),
@@ -148,6 +152,7 @@ export const GUESTS_RSVP_HTTP_SCHEMAS = defineHttpSchemaCatalog({
     event: eventResponseSchema,
     eventGuestEligibility: eventGuestEligibilityResponseSchema,
     rsvpResponse: rsvpResponseSchema,
+    submitRsvp: submitRsvpResponseSchema,
     guestHome: guestHomeResponseSchema,
     eventList: paginatedItemsResponseSchema(eventResponseSchema),
     adminGuestRsvpRow: adminGuestRsvpRowResponseSchema,
@@ -170,6 +175,9 @@ export type GuestsRsvpEventGuestEligibilityResponseDto = z.infer<
 >;
 export type GuestsRsvpRsvpResponseDto = z.infer<
   typeof GUESTS_RSVP_HTTP_SCHEMAS.responses.rsvpResponse
+>;
+export type GuestsRsvpSubmitRsvpResponseDto = z.infer<
+  typeof GUESTS_RSVP_HTTP_SCHEMAS.responses.submitRsvp
 >;
 export type GuestsRsvpGuestHomeResponseDto = z.infer<
   typeof GUESTS_RSVP_HTTP_SCHEMAS.responses.guestHome

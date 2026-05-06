@@ -287,6 +287,8 @@ function testModuleLayerContractsAreExported(): void {
   assert.ok(GUESTS_RSVP_HTTP_SCHEMAS.queries.adminRsvpList);
   assert.ok(GUESTS_RSVP_HTTP_SCHEMAS.responses.adminGuestList.shape.items);
   assert.ok(GUESTS_RSVP_HTTP_SCHEMAS.responses.eventList.shape.items);
+  assert.ok(GUESTS_RSVP_HTTP_SCHEMAS.responses.submitRsvp.shape.persistedResponse);
+  assert.equal("guestId" in GUESTS_RSVP_HTTP_SCHEMAS.bodies.submitRsvp.shape, false);
   assert.ok(GIFT_REGISTRY_HTTP_SCHEMAS.queries.giftCatalog.shape.reservationStatus);
   assert.ok(GIFT_REGISTRY_HTTP_SCHEMAS.bodies.releaseReservation.shape.reassignToGuestId);
   assert.ok(GIFT_REGISTRY_HTTP_SCHEMAS.responses.giftCatalogList.shape.items);
@@ -455,6 +457,26 @@ function testGuestsAdminListResponseContractMatchesApplicationShape(): void {
   assert.equal(parsed.items[0]?.guest.fullName, "Joao Silva");
 }
 
+function testGuestsSubmitRsvpResponseContractMatchesApplicationShape(): void {
+  const parsed = GUESTS_RSVP_HTTP_SCHEMAS.responses.submitRsvp.parse({
+    persistedResponse: {
+      id: "550e8400-e29b-41d4-a716-446655440030",
+      eventId: "550e8400-e29b-41d4-a716-446655440031",
+      guestId: "550e8400-e29b-41d4-a716-446655440032",
+      responseStatus: "yes",
+      companionsConfirmed: 2,
+      message: "Estaremos la",
+      respondedAt: "2026-05-06T10:00:00.000Z",
+      createdAt: "2026-05-06T10:00:00.000Z",
+      updatedAt: "2026-05-06T10:00:00.000Z",
+    },
+    outcome: "created",
+  });
+
+  assert.equal(parsed.persistedResponse.guestId, "550e8400-e29b-41d4-a716-446655440032");
+  assert.equal(parsed.outcome, "created");
+}
+
 export async function runModuleContractTests(): Promise<void> {
   await runNamedTests("module-contracts", [
     { name: "exports domain entities by barrels", run: testDomainEntitiesAreExportedByModuleBarrels },
@@ -476,6 +498,10 @@ export async function runModuleContractTests(): Promise<void> {
     {
       name: "matches admin guest list response shape with application contract",
       run: testGuestsAdminListResponseContractMatchesApplicationShape,
+    },
+    {
+      name: "matches submit RSVP response shape with application contract",
+      run: testGuestsSubmitRsvpResponseContractMatchesApplicationShape,
     },
   ]);
 }

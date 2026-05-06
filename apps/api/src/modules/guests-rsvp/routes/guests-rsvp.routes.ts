@@ -6,7 +6,10 @@ import {
   type GuestPrincipal,
   type HttpStatusError,
 } from "../../shared/index.js";
+import { PrismaAuditLogRepository, createAuditLogWriter } from "../../admin-backoffice/index.js";
 import {
+  createConfirmAttendanceUseCase,
+  createDeclineAttendanceUseCase,
   createGetGuestInvitationOverviewUseCase,
   createListGuestEventsUseCase,
   GUESTS_RSVP_HTTP_CONTRACT,
@@ -17,11 +20,13 @@ import {
   type Guest,
   type GuestGroup,
   type GuestsRsvpEventListQueryDto,
+  type GuestsRsvpSubmitRsvpRequestDto,
   PrismaEventGuestEligibilityRepository,
   PrismaEventRepository,
   PrismaGuestGroupRepository,
   PrismaGuestRepository,
   PrismaRsvpResponseRepository,
+  PrismaRsvpResponseTransactionRunner,
 } from "../index.js";
 
 export const GUESTS_RSVP_ROUTE_ACCESS = {
@@ -92,6 +97,25 @@ function serializeEligibility(entry: EventGuestEligibility) {
   };
 }
 
+function serializeRsvpResponse(response: {
+  id: string;
+  eventId: string;
+  guestId: string;
+  responseStatus: string;
+  companionsConfirmed: number;
+  message: string | null;
+  respondedAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  return {
+    ...response,
+    respondedAt: response.respondedAt.toISOString(),
+    createdAt: response.createdAt.toISOString(),
+    updatedAt: response.updatedAt.toISOString(),
+  };
+}
+
 export const registerGuestsRsvpRoutes: FastifyPluginAsync<RegisterGuestsRsvpRoutesOptions> =
   async (app, options) => {
     const guestRepository = new PrismaGuestRepository(
@@ -111,6 +135,13 @@ export const registerGuestsRsvpRoutes: FastifyPluginAsync<RegisterGuestsRsvpRout
     const rsvpResponseRepository = new PrismaRsvpResponseRepository(
       app.prisma.rsvpResponse as unknown as ConstructorParameters<typeof PrismaRsvpResponseRepository>[0],
     );
+    const rsvpResponseTransactionRunner = new PrismaRsvpResponseTransactionRunner(app.prisma);
+    const auditLogRepository = new PrismaAuditLogRepository(
+      app.prisma.auditLog as unknown as ConstructorParameters<typeof PrismaAuditLogRepository>[0],
+    );
+    const auditLogWriter = createAuditLogWriter({
+      auditLogRepository,
+    });
 
     const getGuestInvitationOverview = createGetGuestInvitationOverviewUseCase({
       guestRepository,
@@ -123,6 +154,22 @@ export const registerGuestsRsvpRoutes: FastifyPluginAsync<RegisterGuestsRsvpRout
       guestRepository,
       eventRepository,
       eventGuestEligibilityRepository,
+    });
+    const confirmAttendance = createConfirmAttendanceUseCase({
+      guestRepository,
+      guestGroupRepository,
+      eventRepository,
+      eventGuestEligibilityRepository,
+      rsvpResponseTransactionRunner,
+      auditLogWriter,
+    });
+    const declineAttendance = createDeclineAttendanceUseCase({
+      guestRepository,
+      guestGroupRepository,
+      eventRepository,
+      eventGuestEligibilityRepository,
+      rsvpResponseTransactionRunner,
+      auditLogWriter,
     });
 
     await app.register(async (guestRoutes) => {
@@ -170,12 +217,7 @@ export const registerGuestsRsvpRoutes: FastifyPluginAsync<RegisterGuestsRsvpRout
               guests: overview.guests.map(serializeGuest),
               events: overview.events.map(serializeEvent),
               eligibility: overview.eligibility.map(serializeEligibility),
-              responses: overview.responses.map((response) => ({
-                ...response,
-                respondedAt: response.respondedAt.toISOString(),
-                createdAt: response.createdAt.toISOString(),
-                updatedAt: response.updatedAt.toISOString(),
-              })),
+              responses: overview.responses.map(serializeRsvpResponse),
             });
           } catch (error) {
             if (error instanceof GuestsRsvpApplicationError) {
@@ -215,6 +257,56 @@ export const registerGuestsRsvpRoutes: FastifyPluginAsync<RegisterGuestsRsvpRout
               items: result.items.map(serializeEvent),
               page: result.page,
               pageSize: result.pageSize,
+            });
+          } catch (error) {
+            if (error instanceof GuestsRsvpApplicationError) {
+              return sendGuestsError(error, reply);
+            }
+
+            throw error;
+          }
+        },
+      });
+
+      guestRoutes.post("/rsvp/respond", {
+        ...GUESTS_RSVP_ROUTE_ACCESS.submitRsvp,
+        preHandler: options.preHandler,
+        schema: {
+          tags: [...GUESTS_RSVP_HTTP_CONTRACT.tags],
+          body: GUESTS_RSVP_HTTP_SCHEMAS.bodies.submitRsvp,
+          response: {
+            200: GUESTS_RSVP_HTTP_SCHEMAS.responses.submitRsvp,
+            400: errorResponseSchema,
+            401: errorResponseSchema,
+            403: errorResponseSchema,
+            404: errorResponseSchema,
+          },
+        },
+        handler: async (request, reply) => {
+          const auth = request.auth as GuestPrincipal;
+          const body = request.body as GuestsRsvpSubmitRsvpRequestDto;
+
+          try {
+            const result =
+              body.responseStatus === "no"
+                ? await declineAttendance.execute({
+                    eventId: body.eventId,
+                    guestId: auth.guestId,
+                    message: body.message,
+                    requestId: request.correlationId,
+                  })
+                : await confirmAttendance.execute({
+                    eventId: body.eventId,
+                    guestId: auth.guestId,
+                    responseStatus: body.responseStatus,
+                    companionsConfirmed: body.companionsConfirmed,
+                    message: body.message,
+                    requestId: request.correlationId,
+                  });
+
+            return reply.code(200).send({
+              persistedResponse: serializeRsvpResponse(result.persistedResponse),
+              outcome: result.outcome,
             });
           } catch (error) {
             if (error instanceof GuestsRsvpApplicationError) {

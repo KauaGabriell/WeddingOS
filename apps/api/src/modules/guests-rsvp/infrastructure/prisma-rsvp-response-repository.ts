@@ -9,7 +9,7 @@ interface RsvpResponseWhereInput {
   guestId?:
     | string
     | {
-        in: readonly string[];
+        in: string[];
       };
   responseStatus?: keyof typeof PrismaRsvpResponseStatus;
   guest?: {

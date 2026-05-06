@@ -225,6 +225,17 @@ function createPrismaStub() {
       updatedAt: new Date("2026-05-10T12:00:00.000Z"),
     },
   ];
+  const responseTimestamps = [
+    new Date("2026-05-11T12:00:00.000Z"),
+    new Date("2026-05-12T12:00:00.000Z"),
+    new Date("2026-05-13T12:00:00.000Z"),
+    new Date("2026-05-14T12:00:00.000Z"),
+  ];
+  let responseSequence = 0;
+
+  function nextResponseTimestamp() {
+    return responseTimestamps[responseSequence++] ?? new Date("2026-05-15T12:00:00.000Z");
+  }
 
   return {
     inviteToken: {
@@ -293,7 +304,19 @@ function createPrismaStub() {
       },
     },
     eventGuestEligibility: {
-      async findUnique() {
+      async findUnique(args: { where: { id?: string; eventId_guestId?: { eventId: string; guestId: string } } }) {
+        if (args.where.id) {
+          return eligibility.find((entry) => entry.id === args.where.id) ?? null;
+        }
+        if (args.where.eventId_guestId) {
+          return (
+            eligibility.find(
+              (entry) =>
+                entry.eventId === args.where.eventId_guestId?.eventId &&
+                entry.guestId === args.where.eventId_guestId?.guestId,
+            ) ?? null
+          );
+        }
         return null;
       },
       async findFirst(args: { where: { eventId: string; guestId: string } }) {
@@ -316,7 +339,19 @@ function createPrismaStub() {
       },
     },
     rsvpResponse: {
-      async findUnique() {
+      async findUnique(args: { where: { id?: string; eventId_guestId?: { eventId: string; guestId: string } } }) {
+        if (args.where.id) {
+          return responses.find((entry) => entry.id === args.where.id) ?? null;
+        }
+        if (args.where.eventId_guestId) {
+          return (
+            responses.find(
+              (entry) =>
+                entry.eventId === args.where.eventId_guestId?.eventId &&
+                entry.guestId === args.where.eventId_guestId?.guestId,
+            ) ?? null
+          );
+        }
         return null;
       },
       async findFirst(args: { where: { eventId?: string; guestId?: string } }) {
@@ -334,8 +369,38 @@ function createPrismaStub() {
       async upsert(args: { create: any }) {
         return args.create;
       },
-      async update(args: { data: any }) {
-        return args.data;
+      async create(args: { data: any }) {
+        const timestamp = args.data.respondedAt ?? nextResponseTimestamp();
+        const created = {
+          id: `550e8400-e29b-41d4-a716-44665544012${responseSequence}`,
+          eventId: args.data.eventId,
+          guestId: args.data.guestId,
+          responseStatus: args.data.responseStatus,
+          companionsConfirmed: args.data.companionsConfirmed,
+          message: args.data.message ?? null,
+          respondedAt: timestamp,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        };
+        responses.push(created);
+        return created;
+      },
+      async update(args: { where: { id: string }; data: any }) {
+        const existing = responses.find((entry) => entry.id === args.where.id);
+        if (!existing) {
+          throw new Error("RSVP response not found");
+        }
+        const timestamp = args.data.respondedAt ?? nextResponseTimestamp();
+        Object.assign(existing, {
+          eventId: args.data.eventId,
+          guestId: args.data.guestId,
+          responseStatus: args.data.responseStatus,
+          companionsConfirmed: args.data.companionsConfirmed,
+          message: args.data.message ?? null,
+          respondedAt: timestamp,
+          updatedAt: timestamp,
+        });
+        return existing;
       },
     },
     auditLog: {
@@ -355,6 +420,7 @@ function createPrismaStub() {
     async $transaction<T>(operation: (tx: any) => Promise<T>) {
       return operation({
         inviteToken: this.inviteToken,
+        rsvpResponse: this.rsvpResponse,
       });
     },
     async $disconnect() {},
@@ -437,6 +503,102 @@ async function testGuestLoginRoutesAndProtectedGuestPages(): Promise<void> {
     assert.equal(guestHome.json().guestGroup.id, GROUP_ID);
     assert.equal(guestHome.json().events.length, 3);
 
+    const submitYes = await app.inject({
+      method: "POST",
+      url: "/rsvp/respond",
+      headers: {
+        authorization: `Bearer ${guestSession.accessToken}`,
+        [REQUEST_ID_HEADER]: "req-rsvp-yes-1",
+      },
+      payload: {
+        eventId: EVENT_ONE_ID,
+        responseStatus: "yes",
+        companionsConfirmed: 2,
+        message: " Estaremos la ",
+      },
+    });
+    assert.equal(submitYes.statusCode, 200);
+    assert.equal(submitYes.json().outcome, "created");
+    assert.equal(submitYes.json().persistedResponse.guestId, GUEST_ID);
+    assert.equal(submitYes.json().persistedResponse.responseStatus, "yes");
+    assert.equal(submitYes.json().persistedResponse.companionsConfirmed, 2);
+    assert.equal(submitYes.json().persistedResponse.message, "Estaremos la");
+
+    const replayYes = await app.inject({
+      method: "POST",
+      url: "/rsvp/respond",
+      headers: {
+        cookie: `weddingos_guest_session=${encodeURIComponent(guestSession.accessToken)}`,
+      },
+      payload: {
+        eventId: EVENT_ONE_ID,
+        responseStatus: "yes",
+        companionsConfirmed: 2,
+        message: "Estaremos la",
+      },
+    });
+    assert.equal(replayYes.statusCode, 200);
+    assert.equal(replayYes.json().outcome, "replayed");
+
+    const updatePending = await app.inject({
+      method: "POST",
+      url: "/rsvp/respond",
+      headers: {
+        authorization: `Bearer ${guestSession.accessToken}`,
+      },
+      payload: {
+        eventId: EVENT_ONE_ID,
+        responseStatus: "pending",
+        companionsConfirmed: 1,
+        message: "Ainda decidindo",
+      },
+    });
+    assert.equal(updatePending.statusCode, 200);
+    assert.equal(updatePending.json().outcome, "updated");
+    assert.equal(updatePending.json().persistedResponse.responseStatus, "pending");
+
+    const submitNo = await app.inject({
+      method: "POST",
+      url: "/rsvp/respond",
+      headers: {
+        authorization: `Bearer ${guestSession.accessToken}`,
+      },
+      payload: {
+        eventId: EVENT_TWO_ID,
+        responseStatus: "no",
+        companionsConfirmed: 0,
+        message: "Nao vou conseguir",
+      },
+    });
+    assert.equal(submitNo.statusCode, 200);
+    assert.equal(submitNo.json().outcome, "updated");
+    assert.equal(submitNo.json().persistedResponse.responseStatus, "no");
+    assert.equal(submitNo.json().persistedResponse.companionsConfirmed, 0);
+
+    const invalidPayload = await app.inject({
+      method: "POST",
+      url: "/rsvp/respond",
+      headers: {
+        authorization: `Bearer ${guestSession.accessToken}`,
+      },
+      payload: {
+        eventId: EVENT_ONE_ID,
+        responseStatus: "yes",
+      },
+    });
+    assert.equal(invalidPayload.statusCode, 400);
+
+    const missingRsvpAuth = await app.inject({
+      method: "POST",
+      url: "/rsvp/respond",
+      payload: {
+        eventId: EVENT_ONE_ID,
+        responseStatus: "yes",
+        companionsConfirmed: 1,
+      },
+    });
+    assert.equal(missingRsvpAuth.statusCode, 401);
+
     const eventsResponse = await app.inject({
       method: "GET",
       url: "/events?eventType=wedding&page=1&pageSize=10",
@@ -464,6 +626,20 @@ async function testGuestLoginRoutesAndProtectedGuestPages(): Promise<void> {
       code: "GUEST_ACCESS_FORBIDDEN",
       message: "Access forbidden",
     });
+
+    const forbiddenRsvp = await app.inject({
+      method: "POST",
+      url: "/rsvp/respond",
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+      payload: {
+        eventId: EVENT_ONE_ID,
+        responseStatus: "yes",
+        companionsConfirmed: 1,
+      },
+    });
+    assert.equal(forbiddenRsvp.statusCode, 403);
   } finally {
     await app.close();
   }
