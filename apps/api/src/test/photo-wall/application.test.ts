@@ -2,8 +2,11 @@ import assert from "node:assert/strict";
 import type { PhotoPost } from "../../modules/photo-wall/index.js";
 import {
   PhotoWallApplicationError,
+  PhotoWallModerationError,
   createCreatePhotoPostUseCase,
   createListApprovedPhotoPostsUseCase,
+  createListModerationPhotoPostsUseCase,
+  createModeratePhotoPostUseCase,
 } from "../../modules/photo-wall/index.js";
 import { runNamedTests } from "../test-helpers.js";
 
@@ -14,6 +17,16 @@ const activeGuest = {
 
 const inactiveGuest = {
   id: "guest-2",
+  status: "inactive" as const,
+};
+
+const activeAdmin = {
+  id: "admin-1",
+  status: "active" as const,
+};
+
+const inactiveAdmin = {
+  id: "admin-2",
   status: "inactive" as const,
 };
 
@@ -624,6 +637,435 @@ async function testListApprovedPhotoPostsPropagatesSignedUrlError(): Promise<voi
   await assert.rejects(() => useCase.execute({}), /signed url failed/);
 }
 
+function createPhotoPostFixture(overrides: Partial<PhotoPost> = {}): PhotoPost {
+  return {
+    id: "post-1",
+    guestId: "guest-1",
+    authorName: "Joao",
+    message: "Parabens",
+    mediaStorageKey: "photos/post-1.jpg",
+    mediaUrl: null,
+    mediaMimeType: "image/jpeg",
+    mediaSizeBytes: 1024,
+    mediaWidth: 1080,
+    mediaHeight: 720,
+    moderationStatus: "pending",
+    submittedAt: new Date("2026-01-03T00:00:00.000Z"),
+    approvedAt: null,
+    hiddenAt: null,
+    moderatedByAdminUserId: null,
+    createdAt: new Date("2026-01-03T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-03T00:00:00.000Z"),
+    ...overrides,
+  };
+}
+
+async function testListModerationPhotoPostsUsesDefaultPaginationWithoutFilter(): Promise<void> {
+  const photoPost = createPhotoPostFixture();
+  const useCase = createListModerationPhotoPostsUseCase({
+    photoPostRepository: {
+      async findMany(filter) {
+        assert.deepEqual(filter, {
+          moderationStatus: undefined,
+          page: 1,
+          pageSize: 20,
+        });
+        return [photoPost];
+      },
+      async findById() {
+        throw new Error("not used");
+      },
+      async save() {
+        throw new Error("not used");
+      },
+    },
+    adminUserRepository: {
+      async findById() {
+        throw new Error("not used");
+      },
+    },
+  });
+
+  const result = await useCase.execute({});
+
+  assert.deepEqual(result, {
+    items: [photoPost],
+    page: 1,
+    pageSize: 20,
+  });
+}
+
+async function testListModerationPhotoPostsUsesCustomPaginationAndFilter(): Promise<void> {
+  const useCase = createListModerationPhotoPostsUseCase({
+    photoPostRepository: {
+      async findMany(filter) {
+        assert.deepEqual(filter, {
+          moderationStatus: "hidden",
+          page: 2,
+          pageSize: 5,
+        });
+        return [];
+      },
+      async findById() {
+        throw new Error("not used");
+      },
+      async save() {
+        throw new Error("not used");
+      },
+    },
+    adminUserRepository: {
+      async findById() {
+        throw new Error("not used");
+      },
+    },
+  });
+
+  const result = await useCase.execute({
+    moderationStatus: "hidden",
+    page: 2,
+    pageSize: 5,
+  });
+
+  assert.deepEqual(result, {
+    items: [],
+    page: 2,
+    pageSize: 5,
+  });
+}
+
+async function testModeratePhotoPostApprovesPendingPost(): Promise<void> {
+  const pendingPost = createPhotoPostFixture();
+  const useCase = createModeratePhotoPostUseCase({
+    photoPostRepository: {
+      async findById(photoPostId: string) {
+        assert.equal(photoPostId, "post-1");
+        return pendingPost;
+      },
+      async findMany() {
+        throw new Error("not used");
+      },
+      async save(entity: PhotoPost) {
+        assert.equal(entity.moderationStatus, "approved");
+        assert.ok(entity.approvedAt instanceof Date);
+        assert.equal(entity.hiddenAt, null);
+        assert.equal(entity.moderatedByAdminUserId, "admin-1");
+        assert.ok(entity.updatedAt instanceof Date);
+        return entity;
+      },
+    },
+    adminUserRepository: {
+      async findById(adminUserId: string) {
+        assert.equal(adminUserId, "admin-1");
+        return activeAdmin;
+      },
+    },
+  });
+
+  const result = await useCase.execute({
+    photoPostId: "post-1",
+    moderationStatus: "approved",
+    moderatedByAdminUserId: "admin-1",
+  });
+
+  assert.equal(result.moderationStatus, "approved");
+  assert.equal(result.hiddenAt, null);
+  assert.equal(result.moderatedByAdminUserId, "admin-1");
+}
+
+async function testModeratePhotoPostHidesPendingPost(): Promise<void> {
+  const pendingPost = createPhotoPostFixture();
+  const useCase = createModeratePhotoPostUseCase({
+    photoPostRepository: {
+      async findById() {
+        return pendingPost;
+      },
+      async findMany() {
+        throw new Error("not used");
+      },
+      async save(entity: PhotoPost) {
+        assert.equal(entity.moderationStatus, "hidden");
+        assert.ok(entity.hiddenAt instanceof Date);
+        assert.equal(entity.approvedAt, null);
+        return entity;
+      },
+    },
+    adminUserRepository: {
+      async findById() {
+        return activeAdmin;
+      },
+    },
+  });
+
+  const result = await useCase.execute({
+    photoPostId: "post-1",
+    moderationStatus: "hidden",
+    moderatedByAdminUserId: "admin-1",
+  });
+
+  assert.equal(result.moderationStatus, "hidden");
+  assert.ok(result.hiddenAt instanceof Date);
+}
+
+async function testModeratePhotoPostRemovesPendingPost(): Promise<void> {
+  const pendingPost = createPhotoPostFixture();
+  const useCase = createModeratePhotoPostUseCase({
+    photoPostRepository: {
+      async findById() {
+        return pendingPost;
+      },
+      async findMany() {
+        throw new Error("not used");
+      },
+      async save(entity: PhotoPost) {
+        assert.equal(entity.moderationStatus, "removed");
+        assert.ok(entity.hiddenAt instanceof Date);
+        assert.equal(entity.approvedAt, null);
+        return entity;
+      },
+    },
+    adminUserRepository: {
+      async findById() {
+        return activeAdmin;
+      },
+    },
+  });
+
+  const result = await useCase.execute({
+    photoPostId: "post-1",
+    moderationStatus: "removed",
+    moderatedByAdminUserId: "admin-1",
+  });
+
+  assert.equal(result.moderationStatus, "removed");
+  assert.ok(result.hiddenAt instanceof Date);
+}
+
+async function testModeratePhotoPostHidesApprovedPostPreservingApprovedAt(): Promise<void> {
+  const approvedAt = new Date("2026-01-03T00:05:00.000Z");
+  const approvedPost = createPhotoPostFixture({
+    moderationStatus: "approved",
+    approvedAt,
+    moderatedByAdminUserId: "admin-0",
+  });
+  const useCase = createModeratePhotoPostUseCase({
+    photoPostRepository: {
+      async findById() {
+        return approvedPost;
+      },
+      async findMany() {
+        throw new Error("not used");
+      },
+      async save(entity: PhotoPost) {
+        assert.equal(entity.moderationStatus, "hidden");
+        assert.equal(entity.approvedAt, approvedAt);
+        assert.ok(entity.hiddenAt instanceof Date);
+        assert.equal(entity.moderatedByAdminUserId, "admin-1");
+        return entity;
+      },
+    },
+    adminUserRepository: {
+      async findById() {
+        return activeAdmin;
+      },
+    },
+  });
+
+  const result = await useCase.execute({
+    photoPostId: "post-1",
+    moderationStatus: "hidden",
+    moderatedByAdminUserId: "admin-1",
+  });
+
+  assert.equal(result.approvedAt, approvedAt);
+  assert.ok(result.hiddenAt instanceof Date);
+}
+
+async function testModeratePhotoPostRejectsUnknownPost(): Promise<void> {
+  const useCase = createModeratePhotoPostUseCase({
+    photoPostRepository: {
+      async findById() {
+        return null;
+      },
+      async findMany() {
+        throw new Error("not used");
+      },
+      async save() {
+        throw new Error("not used");
+      },
+    },
+    adminUserRepository: {
+      async findById() {
+        throw new Error("not used");
+      },
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      useCase.execute({
+        photoPostId: "missing",
+        moderationStatus: "approved",
+        moderatedByAdminUserId: "admin-1",
+      }),
+    (error) => {
+      assert.ok(error instanceof PhotoWallModerationError);
+      assert.equal(error.reason, "photo_post_not_found");
+      assert.equal(error.statusCode, 404);
+      return true;
+    },
+  );
+}
+
+async function testModeratePhotoPostRejectsUnknownAdmin(): Promise<void> {
+  const useCase = createModeratePhotoPostUseCase({
+    photoPostRepository: {
+      async findById() {
+        return createPhotoPostFixture();
+      },
+      async findMany() {
+        throw new Error("not used");
+      },
+      async save() {
+        throw new Error("not used");
+      },
+    },
+    adminUserRepository: {
+      async findById() {
+        return null;
+      },
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      useCase.execute({
+        photoPostId: "post-1",
+        moderationStatus: "approved",
+        moderatedByAdminUserId: "missing-admin",
+      }),
+    (error) => {
+      assert.ok(error instanceof PhotoWallModerationError);
+      assert.equal(error.reason, "admin_user_not_found");
+      assert.equal(error.statusCode, 404);
+      return true;
+    },
+  );
+}
+
+async function testModeratePhotoPostRejectsInactiveAdmin(): Promise<void> {
+  const useCase = createModeratePhotoPostUseCase({
+    photoPostRepository: {
+      async findById() {
+        return createPhotoPostFixture();
+      },
+      async findMany() {
+        throw new Error("not used");
+      },
+      async save() {
+        throw new Error("not used");
+      },
+    },
+    adminUserRepository: {
+      async findById() {
+        return inactiveAdmin;
+      },
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      useCase.execute({
+        photoPostId: "post-1",
+        moderationStatus: "approved",
+        moderatedByAdminUserId: "admin-2",
+      }),
+    (error) => {
+      assert.ok(error instanceof PhotoWallModerationError);
+      assert.equal(error.reason, "admin_user_inactive");
+      assert.equal(error.statusCode, 403);
+      return true;
+    },
+  );
+}
+
+async function testModeratePhotoPostRejectsAlreadyRemovedPost(): Promise<void> {
+  const useCase = createModeratePhotoPostUseCase({
+    photoPostRepository: {
+      async findById() {
+        return createPhotoPostFixture({
+          moderationStatus: "removed",
+          hiddenAt: new Date("2026-01-03T00:05:00.000Z"),
+        });
+      },
+      async findMany() {
+        throw new Error("not used");
+      },
+      async save() {
+        throw new Error("not used");
+      },
+    },
+    adminUserRepository: {
+      async findById() {
+        return activeAdmin;
+      },
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      useCase.execute({
+        photoPostId: "post-1",
+        moderationStatus: "approved",
+        moderatedByAdminUserId: "admin-1",
+      }),
+    (error) => {
+      assert.ok(error instanceof PhotoWallModerationError);
+      assert.equal(error.reason, "photo_post_already_removed");
+      assert.equal(error.statusCode, 409);
+      return true;
+    },
+  );
+}
+
+async function testModeratePhotoPostRejectsNoOpStatusChange(): Promise<void> {
+  const useCase = createModeratePhotoPostUseCase({
+    photoPostRepository: {
+      async findById() {
+        return createPhotoPostFixture({
+          moderationStatus: "hidden",
+          hiddenAt: new Date("2026-01-03T00:05:00.000Z"),
+        });
+      },
+      async findMany() {
+        throw new Error("not used");
+      },
+      async save() {
+        throw new Error("not used");
+      },
+    },
+    adminUserRepository: {
+      async findById() {
+        return activeAdmin;
+      },
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      useCase.execute({
+        photoPostId: "post-1",
+        moderationStatus: "hidden",
+        moderatedByAdminUserId: "admin-1",
+      }),
+    (error) => {
+      assert.ok(error instanceof PhotoWallModerationError);
+      assert.equal(error.reason, "photo_post_already_in_target_status");
+      assert.equal(error.statusCode, 409);
+      return true;
+    },
+  );
+}
+
 export async function runPhotoWallApplicationTests(): Promise<void> {
   await runNamedTests("photo-wall/application", [
     {
@@ -681,6 +1123,50 @@ export async function runPhotoWallApplicationTests(): Promise<void> {
     {
       name: "list approved photo posts propagates signed url error",
       run: testListApprovedPhotoPostsPropagatesSignedUrlError,
+    },
+    {
+      name: "list moderation photo posts uses default pagination without filter",
+      run: testListModerationPhotoPostsUsesDefaultPaginationWithoutFilter,
+    },
+    {
+      name: "list moderation photo posts uses custom pagination and filter",
+      run: testListModerationPhotoPostsUsesCustomPaginationAndFilter,
+    },
+    {
+      name: "moderate photo post approves pending post",
+      run: testModeratePhotoPostApprovesPendingPost,
+    },
+    {
+      name: "moderate photo post hides pending post",
+      run: testModeratePhotoPostHidesPendingPost,
+    },
+    {
+      name: "moderate photo post removes pending post",
+      run: testModeratePhotoPostRemovesPendingPost,
+    },
+    {
+      name: "moderate photo post hides approved post preserving approvedAt",
+      run: testModeratePhotoPostHidesApprovedPostPreservingApprovedAt,
+    },
+    {
+      name: "moderate photo post rejects unknown post",
+      run: testModeratePhotoPostRejectsUnknownPost,
+    },
+    {
+      name: "moderate photo post rejects unknown admin",
+      run: testModeratePhotoPostRejectsUnknownAdmin,
+    },
+    {
+      name: "moderate photo post rejects inactive admin",
+      run: testModeratePhotoPostRejectsInactiveAdmin,
+    },
+    {
+      name: "moderate photo post rejects already removed post",
+      run: testModeratePhotoPostRejectsAlreadyRemovedPost,
+    },
+    {
+      name: "moderate photo post rejects no-op status change",
+      run: testModeratePhotoPostRejectsNoOpStatusChange,
     },
   ]);
 }

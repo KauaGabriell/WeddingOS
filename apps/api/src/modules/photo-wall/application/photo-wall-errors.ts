@@ -31,3 +31,34 @@ export class PhotoWallApplicationError extends Error {
     }
   }
 }
+
+export type PhotoWallModerationFailureReason =
+  | "photo_post_not_found"
+  | "admin_user_not_found"
+  | "admin_user_inactive"
+  | "photo_post_already_removed"
+  | "photo_post_already_in_target_status";
+
+export class PhotoWallModerationError extends Error {
+  readonly reason: PhotoWallModerationFailureReason;
+  readonly statusCode: 403 | 404 | 409;
+
+  constructor(reason: PhotoWallModerationFailureReason) {
+    super(`Photo wall moderation failed: ${reason}`);
+    this.name = "PhotoWallModerationError";
+    this.reason = reason;
+
+    switch (reason) {
+      case "admin_user_inactive":
+        this.statusCode = 403;
+        break;
+      case "photo_post_already_removed":
+      case "photo_post_already_in_target_status":
+        this.statusCode = 409;
+        break;
+      default:
+        this.statusCode = 404;
+        break;
+    }
+  }
+}

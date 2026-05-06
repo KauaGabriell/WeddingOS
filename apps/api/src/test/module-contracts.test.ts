@@ -57,10 +57,13 @@ import {
   PHOTO_WALL_INFRASTRUCTURE_PORTS,
   PHOTO_WALL_MODULE_USE_CASES,
   PhotoWallApplicationError,
+  PhotoWallModerationError,
   PrismaPhotoPostRepository,
   StorageBackedPhotoStorageProvider,
   createCreatePhotoPostUseCase,
   createListApprovedPhotoPostsUseCase,
+  createListModerationPhotoPostsUseCase,
+  createModeratePhotoPostUseCase,
   PHOTO_WALL_ROUTE_ACCESS,
 } from "../modules/photo-wall/index.js";
 import type { PhotoPost } from "../modules/photo-wall/index.js";
@@ -248,9 +251,13 @@ function testModuleLayerContractsAreExported(): void {
   assert.equal(GIFT_REGISTRY_MODULE_USE_CASES.adminGiftManagement, "implemented");
   assert.equal(PHOTO_WALL_MODULE_USE_CASES.photoSubmission, "implemented");
   assert.equal(PHOTO_WALL_MODULE_USE_CASES.galleryListing, "implemented");
+  assert.equal(PHOTO_WALL_MODULE_USE_CASES.moderationReview, "implemented");
   assert.equal(typeof createCreatePhotoPostUseCase, "function");
   assert.equal(typeof createListApprovedPhotoPostsUseCase, "function");
+  assert.equal(typeof createListModerationPhotoPostsUseCase, "function");
+  assert.equal(typeof createModeratePhotoPostUseCase, "function");
   assert.equal(typeof PhotoWallApplicationError, "function");
+  assert.equal(typeof PhotoWallModerationError, "function");
   assert.equal(typeof PrismaPhotoPostRepository, "function");
   assert.equal(typeof StorageBackedPhotoStorageProvider, "function");
   assert.equal(ADMIN_BACKOFFICE_MODULE_USE_CASES.auditTrailQuery, "planned");
@@ -316,6 +323,13 @@ function testAdminGiftManagementError(): void {
   assert.equal(error.statusCode, 400);
 }
 
+function testPhotoWallModerationError(): void {
+  const error = new PhotoWallModerationError("photo_post_already_removed");
+  assert.equal(error.name, "PhotoWallModerationError");
+  assert.equal(error.reason, "photo_post_already_removed");
+  assert.equal(error.statusCode, 409);
+}
+
 function testGiftCatalogItemResponseContractMatchesApplicationShape(): void {
   const parsed = GIFT_REGISTRY_HTTP_SCHEMAS.responses.giftCatalogItem.parse({
     gift: {
@@ -357,6 +371,7 @@ export async function runModuleContractTests(): Promise<void> {
     { name: "keeps gift registry application error contract", run: testGiftRegistryApplicationError },
     { name: "keeps gift reservation management error contract", run: testGiftReservationManagementError },
     { name: "keeps admin gift management error contract", run: testAdminGiftManagementError },
+    { name: "keeps photo wall moderation error contract", run: testPhotoWallModerationError },
     {
       name: "matches gift catalog item response shape with application contract",
       run: testGiftCatalogItemResponseContractMatchesApplicationShape,
