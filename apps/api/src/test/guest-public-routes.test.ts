@@ -280,6 +280,7 @@ function createPrismaStub() {
       updatedAt: new Date("2026-05-10T12:00:00.000Z"),
     },
   ];
+  let giftReservationSequence = 0;
   const responseTimestamps = [
     new Date("2026-05-11T12:00:00.000Z"),
     new Date("2026-05-12T12:00:00.000Z"),
@@ -427,10 +428,40 @@ function createPrismaStub() {
         return args.create;
       },
       async create(args: { data: any }) {
-        return args.data;
+        const existingActiveReservation = giftReservations.find(
+          (reservation) =>
+            reservation.giftId === args.data.giftId && reservation.reservationStatus === "ACTIVE",
+        );
+        if (existingActiveReservation) {
+          throw { code: "P2002" };
+        }
+
+        const timestamp = new Date(`2026-05-1${1 + giftReservationSequence}T12:00:00.000Z`);
+        const created = {
+          id: `550e8400-e29b-41d4-a716-44665544012${giftReservationSequence}`,
+          giftId: args.data.giftId,
+          guestId: args.data.guestId,
+          reservationStatus: args.data.reservationStatus,
+          purchaseNotes: args.data.purchaseNotes ?? null,
+          reservedAt: timestamp,
+          releasedAt: null,
+          releasedByAdminUserId: null,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        };
+        giftReservationSequence += 1;
+        giftReservations.push(created);
+        return created;
       },
-      async update(args: { data: any }) {
-        return args.data;
+      async update(args: { where: { id: string }; data: any }) {
+        const existing = giftReservations.find((reservation) => reservation.id === args.where.id);
+        if (!existing) {
+          throw new Error("Gift reservation not found");
+        }
+        Object.assign(existing, args.data, {
+          updatedAt: new Date("2026-05-20T12:00:00.000Z"),
+        });
+        return existing;
       },
     },
     eventGuestEligibility: {
@@ -771,11 +802,49 @@ async function testGuestLoginRoutesAndProtectedGuestPages(): Promise<void> {
       "active",
     );
 
+    const reserveGiftCreated = await app.inject({
+      method: "POST",
+      url: "/gifts/550e8400-e29b-41d4-a716-446655440115/reserve",
+      headers: {
+        authorization: `Bearer ${guestSession.accessToken}`,
+        [REQUEST_ID_HEADER]: "req-gift-reserve-1",
+      },
+      payload: {
+        purchaseNotes: "  PIX enviado  ",
+      },
+    });
+    assert.equal(reserveGiftCreated.statusCode, 200);
+    assert.equal(reserveGiftCreated.json().giftId, "550e8400-e29b-41d4-a716-446655440115");
+    assert.equal(reserveGiftCreated.json().guestId, GUEST_ID);
+    assert.equal(reserveGiftCreated.json().reservationStatus, "active");
+    assert.equal(reserveGiftCreated.json().purchaseNotes, "PIX enviado");
+
+    const reserveGiftConflict = await app.inject({
+      method: "POST",
+      url: "/gifts/550e8400-e29b-41d4-a716-446655440116/reserve",
+      headers: {
+        cookie: `weddingos_guest_session=${encodeURIComponent(guestSession.accessToken)}`,
+      },
+      payload: {},
+    });
+    assert.equal(reserveGiftConflict.statusCode, 409);
+    assert.deepEqual(reserveGiftConflict.json(), {
+      code: "GIFT_RESERVATION_CONFLICT",
+      message: "Request could not be completed",
+    });
+
     const giftsMissingAuth = await app.inject({
       method: "GET",
       url: "/gifts",
     });
     assert.equal(giftsMissingAuth.statusCode, 401);
+
+    const reserveGiftMissingAuth = await app.inject({
+      method: "POST",
+      url: "/gifts/550e8400-e29b-41d4-a716-446655440115/reserve",
+      payload: {},
+    });
+    assert.equal(reserveGiftMissingAuth.statusCode, 401);
 
     const adminSession = await adminSessionService.issueSession({
       adminUserId: "550e8400-e29b-41d4-a716-446655440113",
@@ -803,6 +872,16 @@ async function testGuestLoginRoutesAndProtectedGuestPages(): Promise<void> {
       },
     });
     assert.equal(forbiddenGifts.statusCode, 403);
+
+    const forbiddenReserveGift = await app.inject({
+      method: "POST",
+      url: "/gifts/550e8400-e29b-41d4-a716-446655440115/reserve",
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+      payload: {},
+    });
+    assert.equal(forbiddenReserveGift.statusCode, 403);
 
     const forbiddenRsvp = await app.inject({
       method: "POST",

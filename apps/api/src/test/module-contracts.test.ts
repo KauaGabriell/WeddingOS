@@ -290,6 +290,7 @@ function testModuleLayerContractsAreExported(): void {
   assert.ok(GUESTS_RSVP_HTTP_SCHEMAS.responses.submitRsvp.shape.persistedResponse);
   assert.equal("guestId" in GUESTS_RSVP_HTTP_SCHEMAS.bodies.submitRsvp.shape, false);
   assert.ok(GIFT_REGISTRY_HTTP_SCHEMAS.queries.giftCatalog.shape.reservationStatus);
+  assert.equal("guestId" in GIFT_REGISTRY_HTTP_SCHEMAS.bodies.reserveGift.shape, false);
   assert.ok(GIFT_REGISTRY_HTTP_SCHEMAS.bodies.releaseReservation.shape.reassignToGuestId);
   assert.ok(GIFT_REGISTRY_HTTP_SCHEMAS.responses.giftCatalogList.shape.items);
   assert.ok(PHOTO_WALL_HTTP_SCHEMAS.bodies.createPhotoPost.shape.fileName);

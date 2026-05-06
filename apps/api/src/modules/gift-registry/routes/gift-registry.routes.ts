@@ -1,16 +1,24 @@
 import type { FastifyPluginAsync, preHandlerHookHandler } from "fastify";
+import { PrismaAuditLogRepository, createAuditLogWriter } from "../../admin-backoffice/index.js";
+import { PrismaGuestRepository } from "../../guests-rsvp/index.js";
 import {
   errorResponseSchema,
   guestRoute,
+  type GuestPrincipal,
   type HttpStatusError,
 } from "../../shared/index.js";
 import {
+  createReserveGiftUseCase,
   createListPublicGiftCatalogUseCase,
   GIFT_REGISTRY_HTTP_CONTRACT,
   GIFT_REGISTRY_HTTP_SCHEMAS,
+  GiftRegistryApplicationError,
+  GiftReservationConflictError,
   type GiftRegistryGiftCatalogQueryDto,
+  type GiftRegistryReserveGiftRequestDto,
   PrismaGiftRepository,
   PrismaGiftReservationRepository,
+  PrismaGiftReservationTransactionRunner,
 } from "../index.js";
 
 export const GIFT_REGISTRY_ROUTE_ACCESS = {
@@ -71,6 +79,9 @@ export const registerGiftRegistryRoutes: FastifyPluginAsync<RegisterGiftRegistry
   app,
   options,
 ) => {
+  const guestRepository = new PrismaGuestRepository(
+    app.prisma.guest as unknown as ConstructorParameters<typeof PrismaGuestRepository>[0],
+  );
   const giftRepository = new PrismaGiftRepository(
     app.prisma.gift as unknown as ConstructorParameters<typeof PrismaGiftRepository>[0],
   );
@@ -79,9 +90,21 @@ export const registerGiftRegistryRoutes: FastifyPluginAsync<RegisterGiftRegistry
       typeof PrismaGiftReservationRepository
     >[0],
   );
+  const giftReservationTransactionRunner = new PrismaGiftReservationTransactionRunner(app.prisma);
+  const auditLogWriter = createAuditLogWriter({
+    auditLogRepository: new PrismaAuditLogRepository(
+      app.prisma.auditLog as unknown as ConstructorParameters<typeof PrismaAuditLogRepository>[0],
+    ),
+  });
   const listPublicGiftCatalog = createListPublicGiftCatalogUseCase({
     giftRepository,
     giftReservationRepository,
+  });
+  const reserveGift = createReserveGiftUseCase({
+    guestRepository,
+    giftRepository,
+    giftReservationTransactionRunner,
+    auditLogWriter,
   });
 
   await app.register(async (giftRoutes) => {
@@ -137,6 +160,63 @@ export const registerGiftRegistryRoutes: FastifyPluginAsync<RegisterGiftRegistry
           page: result.page,
           pageSize: result.pageSize,
         });
+      },
+    });
+
+    giftRoutes.post("/:giftId/reserve", {
+      ...GIFT_REGISTRY_ROUTE_ACCESS.reserveGift,
+      preHandler: options.preHandler,
+      schema: {
+        tags: [...GIFT_REGISTRY_HTTP_CONTRACT.tags],
+        params: GIFT_REGISTRY_HTTP_SCHEMAS.params.giftId,
+        body: GIFT_REGISTRY_HTTP_SCHEMAS.bodies.reserveGift,
+        response: {
+          200: GIFT_REGISTRY_HTTP_SCHEMAS.responses.giftReservation,
+          401: errorResponseSchema,
+          403: errorResponseSchema,
+          404: errorResponseSchema,
+          409: errorResponseSchema,
+        },
+      },
+      handler: async (request, reply) => {
+        const auth = request.auth as GuestPrincipal;
+        const params = request.params as { giftId: string };
+        const body = request.body as GiftRegistryReserveGiftRequestDto;
+
+        try {
+          const reservation = await reserveGift.execute({
+            giftId: params.giftId,
+            guestId: auth.guestId,
+            purchaseNotes: body.purchaseNotes,
+            requestId: request.correlationId,
+          });
+
+          return reply.code(200).send(serializeReservation(reservation));
+        } catch (error) {
+          if (error instanceof GiftReservationConflictError) {
+            return reply.code(409).send({
+              code: "GIFT_RESERVATION_CONFLICT",
+              message: "Request could not be completed",
+            });
+          }
+
+          if (error instanceof GiftRegistryApplicationError) {
+            const codeByReason: Record<GiftRegistryApplicationError["reason"], string> = {
+              guest_not_found: "GUEST_NOT_FOUND",
+              guest_inactive: "GUEST_INACTIVE",
+              gift_not_found: "GIFT_NOT_FOUND",
+              gift_inactive: "GIFT_INACTIVE",
+              gift_unavailable: "GIFT_UNAVAILABLE",
+            };
+
+            return reply.code(error.statusCode).send({
+              code: codeByReason[error.reason],
+              message: "Request could not be completed",
+            });
+          }
+
+          throw error;
+        }
       },
     });
   }, {

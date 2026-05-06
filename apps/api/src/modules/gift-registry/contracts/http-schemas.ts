@@ -62,7 +62,6 @@ export const GIFT_REGISTRY_HTTP_SCHEMAS = defineHttpSchemaCatalog({
   },
   bodies: {
     reserveGift: z.object({
-      guestId: uuidSchema,
       purchaseNotes: z.string().trim().max(500).optional(),
     }),
     upsertGift: z.object({
