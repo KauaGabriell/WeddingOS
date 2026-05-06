@@ -13,7 +13,10 @@ import {
   GIFT_REGISTRY_MODULE_USE_CASES,
   GIFT_REGISTRY_ROUTE_ACCESS,
   GIFT_REGISTRY_TRANSACTIONAL_CONTRACTS,
+  GiftRegistryApplicationError,
+  PrismaGiftReservationTransactionRunner,
   GiftReservationConflictError,
+  createReserveGiftUseCase,
 } from "../modules/gift-registry/index.js";
 import type { Gift, GiftReservation } from "../modules/gift-registry/index.js";
 import type {
@@ -229,7 +232,7 @@ function testModuleLayerContractsAreExported(): void {
   assert.equal(GUESTS_RSVP_MODULE_USE_CASES.rsvpSubmission, "implemented");
   assert.equal(GUESTS_RSVP_MODULE_USE_CASES.adminGuestQuery, "implemented");
   assert.equal(GIFT_REGISTRY_MODULE_USE_CASES.giftCatalogListing, "implemented");
-  assert.equal(GIFT_REGISTRY_MODULE_USE_CASES.giftReservationLifecycle, "planned");
+  assert.equal(GIFT_REGISTRY_MODULE_USE_CASES.giftReservationLifecycle, "implemented");
   assert.equal(PHOTO_WALL_MODULE_USE_CASES.photoSubmission, "planned");
   assert.equal(ADMIN_BACKOFFICE_MODULE_USE_CASES.auditTrailQuery, "planned");
   assert.equal(IDENTITY_ACCESS_INFRASTRUCTURE_PORTS.repositories.includes("invite-token-repository"), true);
@@ -250,6 +253,8 @@ function testModuleLayerContractsAreExported(): void {
   assert.equal(PHOTO_WALL_ROUTE_ACCESS.createPhotoPost.config.access, "guest");
   assert.equal(ADMIN_BACKOFFICE_ROUTE_ACCESS.dashboard.config.access, "admin");
   assert.equal(GIFT_REGISTRY_TRANSACTIONAL_CONTRACTS.reserveAvailableGift, "transactional");
+  assert.equal(typeof createReserveGiftUseCase, "function");
+  assert.equal(typeof PrismaGiftReservationTransactionRunner, "function");
   assert.equal(
     IDENTITY_ACCESS_HTTP_SCHEMAS.bodies.adminLogin.parse({
       email: "admin@example.com",
@@ -264,6 +269,13 @@ function testGiftReservationConflictError(): void {
   assert.equal(error.name, "GiftReservationConflictError");
   assert.equal(error.giftId, "gift-1");
   assert.equal(error.statusCode, 409);
+}
+
+function testGiftRegistryApplicationError(): void {
+  const error = new GiftRegistryApplicationError("gift_unavailable");
+  assert.equal(error.name, "GiftRegistryApplicationError");
+  assert.equal(error.reason, "gift_unavailable");
+  assert.equal(error.statusCode, 403);
 }
 
 function testGiftCatalogItemResponseContractMatchesApplicationShape(): void {
@@ -304,6 +316,7 @@ export async function runModuleContractTests(): Promise<void> {
     { name: "exports domain entities by barrels", run: testDomainEntitiesAreExportedByModuleBarrels },
     { name: "exports module layer contracts", run: testModuleLayerContractsAreExported },
     { name: "keeps gift reservation conflict error contract", run: testGiftReservationConflictError },
+    { name: "keeps gift registry application error contract", run: testGiftRegistryApplicationError },
     {
       name: "matches gift catalog item response shape with application contract",
       run: testGiftCatalogItemResponseContractMatchesApplicationShape,

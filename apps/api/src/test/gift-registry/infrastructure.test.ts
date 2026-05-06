@@ -6,6 +6,7 @@ import type {
 import {
   PrismaGiftRepository,
   PrismaGiftReservationRepository,
+  PrismaGiftReservationTransactionRunner,
 } from "../../modules/gift-registry/index.js";
 import { runNamedTests } from "../test-helpers.js";
 
@@ -158,12 +159,97 @@ async function testPrismaGiftReservationRepository(): Promise<void> {
   });
 }
 
+async function testPrismaGiftReservationTransactionRunner(): Promise<void> {
+  const reservationRecord: PrismaGiftReservationRecord = {
+    id: "reservation-1",
+    giftId: "gift-1",
+    guestId: "guest-1",
+    reservationStatus: "ACTIVE",
+    purchaseNotes: "observacao",
+    reservedAt: new Date("2026-01-01T00:00:00.000Z"),
+    releasedAt: null,
+    releasedByAdminUserId: null,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-02T00:00:00.000Z"),
+  };
+  const calls: Record<string, unknown>[] = [];
+  const prisma = {
+    async $transaction<T>(operation: (transactionClient: { giftReservation: any }) => Promise<T>) {
+      calls.push({ method: "$transaction" });
+      return operation({
+        giftReservation: {
+          async findFirst(args: any) {
+            calls.push({ method: "findFirst", args });
+            return reservationRecord;
+          },
+          async create(args: any) {
+            calls.push({ method: "create", args });
+            return {
+              ...reservationRecord,
+              id: "reservation-created",
+              giftId: args.data.giftId,
+              guestId: args.data.guestId,
+              purchaseNotes: args.data.purchaseNotes,
+            };
+          },
+        },
+      });
+    },
+  };
+
+  const runner = new PrismaGiftReservationTransactionRunner(
+    prisma as unknown as ConstructorParameters<typeof PrismaGiftReservationTransactionRunner>[0],
+  );
+
+  const created = await runner.run(async (context) => {
+    const activeReservation = await context.findActiveReservationByGiftId("gift-1");
+    assert.equal(activeReservation?.giftId, "gift-1");
+
+    return context.createActiveReservation({
+      giftId: "gift-2",
+      guestId: "guest-2",
+      purchaseNotes: "  pago no pix  ",
+    });
+  });
+
+  assert.equal(created.id, "reservation-created");
+  assert.equal(created.purchaseNotes, "pago no pix");
+  assert.deepEqual(calls, [
+    { method: "$transaction" },
+    {
+      method: "findFirst",
+      args: {
+        where: {
+          giftId: "gift-1",
+          reservationStatus: "ACTIVE",
+        },
+        orderBy: { reservedAt: "desc" },
+      },
+    },
+    {
+      method: "create",
+      args: {
+        data: {
+          giftId: "gift-2",
+          guestId: "guest-2",
+          reservationStatus: "ACTIVE",
+          purchaseNotes: "pago no pix",
+        },
+      },
+    },
+  ]);
+}
+
 export async function runGiftRegistryInfrastructureTests(): Promise<void> {
   await runNamedTests("gift-registry/infrastructure", [
     { name: "prisma gift repository", run: testPrismaGiftRepository },
     {
       name: "prisma gift reservation repository",
       run: testPrismaGiftReservationRepository,
+    },
+    {
+      name: "prisma gift reservation transaction runner",
+      run: testPrismaGiftReservationTransactionRunner,
     },
   ]);
 }
