@@ -16,6 +16,7 @@ import {
   requestContextConfig,
 } from "./modules/shared/platform/http/request-context.js";
 import {
+  SignedAdminMagicLinkService,
   SignedAdminSessionService,
   SignedGuestSessionService,
 } from "./modules/identity-access/index.js";
@@ -63,6 +64,7 @@ type BuildAppOptions = {
   prisma?: PrismaClient;
   storageClient?: StorageClient;
   guestSessionService?: SignedGuestSessionService;
+  adminMagicLinkService?: SignedAdminMagicLinkService;
   adminSessionVerifier?: SignedAdminSessionService;
 };
 
@@ -133,11 +135,14 @@ export async function buildApp(env: AppEnv, options: BuildAppOptions = {}) {
         })());
   const guestSessionService =
     options.guestSessionService ?? new SignedGuestSessionService(env.JWT_SECRET);
+  const adminMagicLinkService =
+    options.adminMagicLinkService ?? new SignedAdminMagicLinkService(env.JWT_SECRET);
   const adminSessionVerifier =
     options.adminSessionVerifier ?? new SignedAdminSessionService(env.JWT_SECRET);
   app.decorate("prisma", prisma);
   app.decorate("storageClient", storageClient);
   app.decorate("guestSessionService", guestSessionService);
+  app.decorate("adminMagicLinkService", adminMagicLinkService);
   app.decorate("adminSessionVerifier", adminSessionVerifier);
   app.addHook("onClose", async () => {
     await prisma.$disconnect();

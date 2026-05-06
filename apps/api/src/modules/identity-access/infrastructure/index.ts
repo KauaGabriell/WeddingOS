@@ -2,6 +2,7 @@ export * from "./admin-magic-link.js";
 export * from "./guest-session.js";
 export * from "./identity-access-ports.js";
 export * from "./invite-token-transactions.js";
+export * from "./logger-admin-magic-link-dispatcher.js";
 export * from "./prisma-admin-user-repository.js";
 export * from "./prisma-guest-repository.js";
 export * from "./prisma-invite-token-repository.js";

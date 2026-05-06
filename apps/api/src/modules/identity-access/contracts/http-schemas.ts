@@ -69,7 +69,7 @@ export const IDENTITY_ACCESS_HTTP_SCHEMAS = defineHttpSchemaCatalog({
       code: z.string().trim().min(4).max(32),
     }),
     adminLogin: z.object({
-      email: z.string().email(),
+      email: z.string().trim().email(),
     }),
     revokeInviteToken: z.object({
       reason: z.string().trim().min(3).max(255),

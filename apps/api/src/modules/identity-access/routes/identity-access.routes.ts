@@ -2,13 +2,17 @@ import type { FastifyPluginAsync } from "fastify";
 import { createAuditLogWriter, PrismaAuditLogRepository } from "../../admin-backoffice/index.js";
 import { errorResponseSchema, publicRoute } from "../../shared/index.js";
 import {
+  createRequestAdminMagicLinkUseCase,
   createIssueGuestSessionUseCase,
   createLoginGuestWithInviteTokenUseCase,
   createLoginGuestWithShortCodeUseCase,
   GuestInviteTokenAuthenticationError,
   IDENTITY_ACCESS_HTTP_CONTRACT,
   IDENTITY_ACCESS_HTTP_SCHEMAS,
+  LoggerAdminMagicLinkDispatcher,
+  PrismaAdminUserRepository,
   type IdentityAccessGuestCodeLoginRequestDto,
+  type IdentityAccessAdminLoginRequestDto,
   type IdentityAccessGuestTokenLoginRequestDto,
   PrismaGuestRepository,
   PrismaInviteTokenConsumptionTransactionRunner,
@@ -62,6 +66,9 @@ export const registerIdentityAccessRoutes: FastifyPluginAsync = async (app) => {
   const inviteTokenRepository = new PrismaInviteTokenRepository(
     app.prisma.inviteToken as unknown as ConstructorParameters<typeof PrismaInviteTokenRepository>[0],
   );
+  const adminUserRepository = new PrismaAdminUserRepository(
+    app.prisma.adminUser as unknown as ConstructorParameters<typeof PrismaAdminUserRepository>[0],
+  );
   const guestRepository = new PrismaGuestRepository(
     app.prisma.guest as unknown as ConstructorParameters<typeof PrismaGuestRepository>[0],
   );
@@ -84,6 +91,13 @@ export const registerIdentityAccessRoutes: FastifyPluginAsync = async (app) => {
     guestRepository,
     inviteTokenConsumptionTransactionRunner,
     auditLogWriter,
+  });
+  const requestAdminMagicLink = createRequestAdminMagicLinkUseCase({
+    adminUserRepository,
+    adminMagicLinkIssuer: app.adminMagicLinkService,
+    adminMagicLinkDispatcher: new LoggerAdminMagicLinkDispatcher(app.log, {
+      includeTokenInLogs: process.env.NODE_ENV !== "production",
+    }),
   });
   const issueGuestSession = createIssueGuestSessionUseCase({
     guestSessionIssuer: app.guestSessionService,
@@ -182,6 +196,26 @@ export const registerIdentityAccessRoutes: FastifyPluginAsync = async (app) => {
 
           throw error;
         }
+      },
+    });
+
+    protectedRoutes.post("/admin/login", {
+      ...IDENTITY_ACCESS_ROUTE_ACCESS.adminLogin,
+      schema: {
+        tags: [...IDENTITY_ACCESS_HTTP_CONTRACT.tags],
+        body: IDENTITY_ACCESS_HTTP_SCHEMAS.bodies.adminLogin,
+        response: {
+          200: IDENTITY_ACCESS_HTTP_SCHEMAS.responses.requestAccepted,
+        },
+      },
+      handler: async (request, reply) => {
+        const body = request.body as IdentityAccessAdminLoginRequestDto;
+        const result = await requestAdminMagicLink.execute({
+          email: body.email,
+          requestId: request.correlationId,
+        });
+
+        return reply.code(200).send(result);
       },
     });
   }, {
