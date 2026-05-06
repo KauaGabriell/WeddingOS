@@ -7,6 +7,7 @@ import {
   PrismaGiftRepository,
   PrismaGiftReservationRepository,
   PrismaGiftReservationTransactionRunner,
+  GiftReservationConflictError,
 } from "../../modules/gift-registry/index.js";
 import { runNamedTests } from "../test-helpers.js";
 
@@ -159,6 +160,45 @@ async function testPrismaGiftReservationRepository(): Promise<void> {
   });
 }
 
+async function testPrismaGiftReservationRepositoryMapsUniqueConstraintToConflict(): Promise<void> {
+  const delegate = {
+    async findUnique() {
+      throw new Error("not used");
+    },
+    async findFirst() {
+      throw new Error("not used");
+    },
+    async findMany() {
+      throw new Error("not used");
+    },
+    async upsert() {
+      throw new Error("not used");
+    },
+    async create() {
+      throw { code: "P2002" };
+    },
+  };
+
+  const repository = new PrismaGiftReservationRepository(
+    delegate as unknown as ConstructorParameters<typeof PrismaGiftReservationRepository>[0],
+  );
+
+  await assert.rejects(
+    () =>
+      repository.createActiveReservation({
+        giftId: "gift-1",
+        guestId: "guest-1",
+        purchaseNotes: "pago no pix",
+      }),
+    (error) => {
+      assert.ok(error instanceof GiftReservationConflictError);
+      assert.equal(error.giftId, "gift-1");
+      assert.equal(error.statusCode, 409);
+      return true;
+    },
+  );
+}
+
 async function testPrismaGiftReservationTransactionRunner(): Promise<void> {
   const reservationRecord: PrismaGiftReservationRecord = {
     id: "reservation-1",
@@ -246,6 +286,10 @@ export async function runGiftRegistryInfrastructureTests(): Promise<void> {
     {
       name: "prisma gift reservation repository",
       run: testPrismaGiftReservationRepository,
+    },
+    {
+      name: "prisma gift reservation repository maps unique constraint to conflict",
+      run: testPrismaGiftReservationRepositoryMapsUniqueConstraintToConflict,
     },
     {
       name: "prisma gift reservation transaction runner",

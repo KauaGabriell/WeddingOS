@@ -6,6 +6,7 @@ import type {
   GiftReservation,
   GiftReservationStatus,
 } from "../domain/entities/gift-reservation.js";
+import { GiftReservationConflictError } from "../domain/reservation-conflict.js";
 import type { GiftReservation as PrismaGiftReservation } from "../../../generated/prisma/client.js";
 import { GiftReservationStatus as PrismaGiftReservationStatus } from "../../../generated/prisma/enums.js";
 
@@ -57,6 +58,10 @@ interface CreateActiveGiftReservationPersistenceData {
   purchaseNotes: string | null;
 }
 
+interface PrismaKnownRequestErrorLike {
+  readonly code?: string;
+}
+
 function mapStatusToDomain(
   status: keyof typeof PrismaGiftReservationStatus,
 ): GiftReservationStatus {
@@ -72,6 +77,10 @@ function mapStatusToPersistence(
 function normalizePurchaseNotes(notes?: string | null): string | null {
   const normalized = notes?.trim();
   return normalized && normalized.length > 0 ? normalized : null;
+}
+
+function isUniqueConstraintViolation(error: unknown): error is PrismaKnownRequestErrorLike {
+  return typeof error === "object" && error !== null && "code" in error;
 }
 
 function mapRecord(record: PrismaGiftReservation): GiftReservation {
@@ -174,14 +183,24 @@ export class PrismaGiftReservationRepository implements GiftReservationRepositor
     readonly guestId: string;
     readonly purchaseNotes?: string;
   }): Promise<GiftReservation> {
-    const record = await this.reservations.create({
-      data: {
-        giftId: input.giftId,
-        guestId: input.guestId,
-        reservationStatus: PrismaGiftReservationStatus.ACTIVE,
-        purchaseNotes: normalizePurchaseNotes(input.purchaseNotes),
-      },
-    });
+    let record: PrismaGiftReservation;
+
+    try {
+      record = await this.reservations.create({
+        data: {
+          giftId: input.giftId,
+          guestId: input.guestId,
+          reservationStatus: PrismaGiftReservationStatus.ACTIVE,
+          purchaseNotes: normalizePurchaseNotes(input.purchaseNotes),
+        },
+      });
+    } catch (error) {
+      if (isUniqueConstraintViolation(error) && error.code === "P2002") {
+        throw new GiftReservationConflictError(input.giftId);
+      }
+
+      throw error;
+    }
 
     return mapRecord(record);
   }
