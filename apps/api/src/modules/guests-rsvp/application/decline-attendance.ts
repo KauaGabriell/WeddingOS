@@ -5,6 +5,7 @@ export interface DeclineAttendanceInput {
   readonly eventId: string;
   readonly guestId: string;
   readonly message?: string;
+  readonly requestId?: string;
 }
 
 export type DeclineAttendanceResult = ConfirmAttendanceResult;
@@ -27,6 +28,7 @@ export function createDeclineAttendanceUseCase(
         responseStatus: "no",
         companionsConfirmed: 0,
         message: input.message,
+        requestId: input.requestId,
       });
     },
   };

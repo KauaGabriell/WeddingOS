@@ -250,6 +250,7 @@ async function testConfirmAndDeclineAttendanceUseCases(): Promise<void> {
   };
 
   let currentResponse: RsvpResponse | null = null;
+  const auditWrites: Array<Record<string, unknown>> = [];
   const sharedDependencies = {
     guestRepository: {
       async findById(guestId: string) {
@@ -317,6 +318,31 @@ async function testConfirmAndDeclineAttendanceUseCases(): Promise<void> {
         });
       },
     },
+    auditLogWriter: {
+      async write(input: {
+        entityType: string;
+        entityId: string;
+        actionType: string;
+        actorType: "admin" | "guest" | "system";
+        actorGuestId?: string;
+        requestId?: string;
+        metadata?: Record<string, unknown>;
+      }) {
+        auditWrites.push(input as Record<string, unknown>);
+        return {
+          id: `audit-${auditWrites.length}`,
+          entityType: input.entityType,
+          entityId: input.entityId,
+          actionType: input.actionType,
+          actorAdminUserId: null,
+          actorGuestId: input.actorGuestId ?? null,
+          actorType: input.actorType,
+          requestId: input.requestId ?? null,
+          metadata: input.metadata ?? null,
+          createdAt: new Date("2026-05-10T10:01:00.000Z"),
+        };
+      },
+    },
   };
 
   const confirmUseCase = createConfirmAttendanceUseCase(sharedDependencies);
@@ -333,6 +359,20 @@ async function testConfirmAndDeclineAttendanceUseCases(): Promise<void> {
     ).outcome,
     "created",
   );
+  assert.deepEqual(auditWrites[0], {
+    entityType: "rsvp_response",
+    entityId: "rsvp-created",
+    actionType: "RSVP_SUBMITTED",
+    actorType: "guest",
+    actorGuestId: "guest-1",
+    requestId: undefined,
+    metadata: {
+      eventId: "event-1",
+      responseStatus: "yes",
+      companionsConfirmed: 1,
+      outcome: "created",
+    },
+  });
 
   currentResponse = existingResponse;
   assert.equal(
@@ -347,6 +387,7 @@ async function testConfirmAndDeclineAttendanceUseCases(): Promise<void> {
     ).outcome,
     "replayed",
   );
+  assert.equal(auditWrites[1]?.entityId, "rsvp-1");
 
   await assert.rejects(
     () =>
@@ -359,6 +400,7 @@ async function testConfirmAndDeclineAttendanceUseCases(): Promise<void> {
     (error: unknown) =>
       error instanceof GuestsRsvpApplicationError && error.reason === "companions_limit_exceeded",
   );
+  assert.equal(auditWrites.length, 2);
 
   const declineUseCase = createDeclineAttendanceUseCase(sharedDependencies);
   currentResponse = null;
@@ -366,9 +408,24 @@ async function testConfirmAndDeclineAttendanceUseCases(): Promise<void> {
     eventId: "event-1",
     guestId: "guest-1",
     message: "Nao vou conseguir",
+    requestId: "req-rsvp-1",
   });
   assert.equal(declined.persistedResponse.responseStatus, "no");
   assert.equal(declined.persistedResponse.companionsConfirmed, 0);
+  assert.deepEqual(auditWrites[2], {
+    entityType: "rsvp_response",
+    entityId: "rsvp-created",
+    actionType: "RSVP_SUBMITTED",
+    actorType: "guest",
+    actorGuestId: "guest-1",
+    requestId: "req-rsvp-1",
+    metadata: {
+      eventId: "event-1",
+      responseStatus: "no",
+      companionsConfirmed: 0,
+      outcome: "created",
+    },
+  });
 }
 
 export async function runGuestsRsvpApplicationTests(): Promise<void> {

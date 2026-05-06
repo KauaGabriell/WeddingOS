@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Gift, GiftStatus } from "../domain/entities/gift.js";
 import type { GiftRepository } from "../domain/repositories/gift-repository.js";
+import type { AuditLogWriter } from "../../admin-backoffice/application/audit-log-writer.js";
 
 const DEFAULT_PAGE = 1;
 const DEFAULT_PAGE_SIZE = 20;
@@ -49,10 +50,15 @@ export interface UpsertAdminGiftInput {
   readonly isActive: boolean;
 }
 
-export interface CreateGiftInput extends UpsertAdminGiftInput {}
-
 export interface UpdateGiftInput extends UpsertAdminGiftInput {
   readonly giftId: string;
+  readonly actorAdminUserId?: string;
+  readonly requestId?: string;
+}
+
+export interface CreateGiftInput extends UpsertAdminGiftInput {
+  readonly requestId?: string;
+  readonly actorAdminUserId?: string;
 }
 
 export interface ListAdminGiftsUseCase {
@@ -69,6 +75,7 @@ export interface UpdateGiftUseCase {
 
 export interface AdminGiftManagementDependencies {
   readonly giftRepository: Pick<GiftRepository, "findById" | "findMany" | "save">;
+  readonly auditLogWriter: AuditLogWriter;
 }
 
 function normalizePagination(input: ListAdminGiftsInput): {
@@ -167,12 +174,30 @@ export function createCreateGiftUseCase(
     async execute(input) {
       const now = new Date();
 
-      return dependencies.giftRepository.save({
+      const createdGift = await dependencies.giftRepository.save({
         id: randomUUID(),
         ...mapGiftData(input),
         createdAt: now,
         updatedAt: now,
       });
+
+      if (input.actorAdminUserId) {
+        await dependencies.auditLogWriter.write({
+          entityType: "gift",
+          entityId: createdGift.id,
+          actionType: "GIFT_CREATED",
+          actorType: "admin",
+          actorAdminUserId: input.actorAdminUserId,
+          requestId: input.requestId,
+          metadata: {
+            status: createdGift.status,
+            isActive: createdGift.isActive,
+            displayOrder: createdGift.displayOrder,
+          },
+        });
+      }
+
+      return createdGift;
     },
   };
 }
@@ -188,12 +213,30 @@ export function createUpdateGiftUseCase(
         throw new AdminGiftManagementError("gift_not_found");
       }
 
-      return dependencies.giftRepository.save({
+      const updatedGift = await dependencies.giftRepository.save({
         id: existingGift.id,
         ...mapGiftData(input),
         createdAt: existingGift.createdAt,
         updatedAt: new Date(),
       });
+
+      if (input.actorAdminUserId) {
+        await dependencies.auditLogWriter.write({
+          entityType: "gift",
+          entityId: updatedGift.id,
+          actionType: "GIFT_UPDATED",
+          actorType: "admin",
+          actorAdminUserId: input.actorAdminUserId,
+          requestId: input.requestId,
+          metadata: {
+            status: updatedGift.status,
+            isActive: updatedGift.isActive,
+            displayOrder: updatedGift.displayOrder,
+          },
+        });
+      }
+
+      return updatedGift;
     },
   };
 }

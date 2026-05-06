@@ -4,6 +4,9 @@ import {
   ADMIN_BACKOFFICE_INFRASTRUCTURE_PORTS,
   ADMIN_BACKOFFICE_MODULE_USE_CASES,
   ADMIN_BACKOFFICE_ROUTE_ACCESS,
+  AuditLogWriterError,
+  PrismaAuditLogRepository,
+  createAuditLogWriter,
 } from "../modules/admin-backoffice/index.js";
 import type { AuditLog } from "../modules/admin-backoffice/index.js";
 import {
@@ -252,6 +255,7 @@ function testModuleLayerContractsAreExported(): void {
   assert.equal(PHOTO_WALL_MODULE_USE_CASES.photoSubmission, "implemented");
   assert.equal(PHOTO_WALL_MODULE_USE_CASES.galleryListing, "implemented");
   assert.equal(PHOTO_WALL_MODULE_USE_CASES.moderationReview, "implemented");
+  assert.equal(ADMIN_BACKOFFICE_MODULE_USE_CASES.auditLogging, "implemented");
   assert.equal(typeof createCreatePhotoPostUseCase, "function");
   assert.equal(typeof createListApprovedPhotoPostsUseCase, "function");
   assert.equal(typeof createListModerationPhotoPostsUseCase, "function");
@@ -260,6 +264,9 @@ function testModuleLayerContractsAreExported(): void {
   assert.equal(typeof PhotoWallModerationError, "function");
   assert.equal(typeof PrismaPhotoPostRepository, "function");
   assert.equal(typeof StorageBackedPhotoStorageProvider, "function");
+  assert.equal(typeof createAuditLogWriter, "function");
+  assert.equal(typeof AuditLogWriterError, "function");
+  assert.equal(typeof PrismaAuditLogRepository, "function");
   assert.equal(ADMIN_BACKOFFICE_MODULE_USE_CASES.auditTrailQuery, "planned");
   assert.equal(IDENTITY_ACCESS_INFRASTRUCTURE_PORTS.repositories.includes("invite-token-repository"), true);
   assert.equal(GUESTS_RSVP_INFRASTRUCTURE_PORTS.repositories.includes("rsvp-response-repository"), true);
@@ -323,6 +330,13 @@ function testAdminGiftManagementError(): void {
   assert.equal(error.statusCode, 400);
 }
 
+function testAuditLogWriterError(): void {
+  const error = new AuditLogWriterError("guest_actor_id_required");
+  assert.equal(error.name, "AuditLogWriterError");
+  assert.equal(error.reason, "guest_actor_id_required");
+  assert.equal(error.statusCode, 400);
+}
+
 function testPhotoWallModerationError(): void {
   const error = new PhotoWallModerationError("photo_post_already_removed");
   assert.equal(error.name, "PhotoWallModerationError");
@@ -371,6 +385,7 @@ export async function runModuleContractTests(): Promise<void> {
     { name: "keeps gift registry application error contract", run: testGiftRegistryApplicationError },
     { name: "keeps gift reservation management error contract", run: testGiftReservationManagementError },
     { name: "keeps admin gift management error contract", run: testAdminGiftManagementError },
+    { name: "keeps audit log writer error contract", run: testAuditLogWriterError },
     { name: "keeps photo wall moderation error contract", run: testPhotoWallModerationError },
     {
       name: "matches gift catalog item response shape with application contract",

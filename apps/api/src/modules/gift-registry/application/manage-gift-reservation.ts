@@ -2,6 +2,7 @@ import type { GiftReservation } from "../domain/entities/gift-reservation.js";
 import { GiftReservationConflictError } from "../domain/index.js";
 import type { GiftReservationRepository } from "../domain/index.js";
 import type { GiftReservationTransactionRunner } from "../infrastructure/index.js";
+import type { AuditLogWriter } from "../../admin-backoffice/application/audit-log-writer.js";
 
 export type GiftReservationManagementFailureReason =
   | "reservation_not_found"
@@ -40,6 +41,7 @@ export interface ManageGiftReservationInput {
   readonly releasedByAdminUserId: string;
   readonly reason?: string;
   readonly reassignToGuestId?: string;
+  readonly requestId?: string;
 }
 
 export interface ManageGiftReservationResult {
@@ -69,6 +71,7 @@ export interface ManageGiftReservationDependencies {
     findById(id: string): Promise<ReservingGuest | null>;
   };
   readonly giftReservationTransactionRunner: GiftReservationTransactionRunner;
+  readonly auditLogWriter: AuditLogWriter;
 }
 
 function normalizeGuestId(guestId?: string): string | undefined {
@@ -116,7 +119,7 @@ export function createManageGiftReservationUseCase(
         }
       }
 
-      return dependencies.giftReservationTransactionRunner.run(async (context) => {
+      const result = await dependencies.giftReservationTransactionRunner.run(async (context) => {
         const currentReservation = await context.findReservationById(reservation.id);
 
         if (currentReservation === null) {
@@ -157,6 +160,28 @@ export function createManageGiftReservationUseCase(
           throw error;
         }
       });
+
+      await dependencies.auditLogWriter.write({
+        entityType: "gift_reservation",
+        entityId: result.newActiveReservation?.id ?? result.releasedReservation.id,
+        actionType:
+          result.newActiveReservation === null
+            ? "GIFT_RESERVATION_RELEASED"
+            : "GIFT_RESERVATION_REASSIGNED",
+        actorType: "admin",
+        actorAdminUserId: adminUser.id,
+        requestId: input.requestId,
+        metadata: {
+          releasedReservationId: result.releasedReservation.id,
+          newActiveReservationId: result.newActiveReservation?.id ?? null,
+          giftId: result.releasedReservation.giftId,
+          previousGuestId: result.releasedReservation.guestId,
+          newGuestId: result.newActiveReservation?.guestId ?? null,
+          reason: input.reason?.trim() || null,
+        },
+      });
+
+      return result;
     },
   };
 }

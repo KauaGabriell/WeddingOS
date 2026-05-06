@@ -30,6 +30,42 @@ const inactiveAdmin = {
   status: "inactive" as const,
 };
 
+function createAuditLogWriterStub(
+  auditWrites?: Array<Record<string, unknown>>,
+  message = "should not audit",
+) {
+  return {
+    async write(input: {
+      entityType: string;
+      entityId: string;
+      actionType: string;
+      actorType: "admin" | "guest" | "system";
+      actorAdminUserId?: string;
+      actorGuestId?: string;
+      requestId?: string;
+      metadata?: Record<string, unknown>;
+    }) {
+      if (!auditWrites) {
+        throw new Error(message);
+      }
+
+      auditWrites.push(input as Record<string, unknown>);
+      return {
+        id: `audit-${auditWrites.length}`,
+        entityType: input.entityType,
+        entityId: input.entityId,
+        actionType: input.actionType,
+        actorAdminUserId: input.actorAdminUserId ?? null,
+        actorGuestId: input.actorGuestId ?? null,
+        actorType: input.actorType,
+        requestId: input.requestId ?? null,
+        metadata: input.metadata ?? null,
+        createdAt: new Date("2026-01-03T00:10:00.000Z"),
+      };
+    },
+  };
+}
+
 function createValidCreatePhotoPostInput(
   overrides: Partial<Parameters<ReturnType<typeof createCreatePhotoPostUseCase>["execute"]>[0]> = {},
 ) {
@@ -47,6 +83,7 @@ function createValidCreatePhotoPostInput(
 
 async function testCreatePhotoPostCreatesPendingPost(): Promise<void> {
   const fileBody = Buffer.from("photo-bytes");
+  const auditWrites: Array<Record<string, unknown>> = [];
   const useCase = createCreatePhotoPostUseCase({
     guestRepository: {
       async findById(guestId: string) {
@@ -91,6 +128,7 @@ async function testCreatePhotoPostCreatesPendingPost(): Promise<void> {
         return entity;
       },
     },
+    auditLogWriter: createAuditLogWriterStub(auditWrites),
   });
 
   const result = await useCase.execute({
@@ -103,6 +141,7 @@ async function testCreatePhotoPostCreatesPendingPost(): Promise<void> {
     mediaSizeBytes: 2048,
     mediaWidth: 1080,
     mediaHeight: 720,
+    requestId: "req-photo-1",
   });
 
   assert.equal(result.photoPost.guestId, "guest-1");
@@ -111,6 +150,19 @@ async function testCreatePhotoPostCreatesPendingPost(): Promise<void> {
   assert.equal(result.photoPost.mediaUrl, null);
   assert.equal(result.photoPost.moderationStatus, "pending");
   assert.equal(result.mediaUrl, "https://signed.example.com/photos/casamento.jpg");
+  assert.deepEqual(auditWrites[0], {
+    entityType: "photo_post",
+    entityId: result.photoPost.id,
+    actionType: "PHOTO_POST_SUBMITTED",
+    actorType: "guest",
+    actorGuestId: "guest-1",
+    requestId: "req-photo-1",
+    metadata: {
+      mediaMimeType: "image/jpeg",
+      mediaSizeBytes: 2048,
+      moderationStatus: "pending",
+    },
+  });
 }
 
 async function testCreatePhotoPostAcceptsJpegExtension(): Promise<void> {
@@ -135,6 +187,7 @@ async function testCreatePhotoPostAcceptsJpegExtension(): Promise<void> {
         return entity;
       },
     },
+    auditLogWriter: createAuditLogWriterStub([]),
   });
 
   const result = await useCase.execute(
@@ -170,6 +223,7 @@ async function testCreatePhotoPostAcceptsPngExtension(): Promise<void> {
         return entity;
       },
     },
+    auditLogWriter: createAuditLogWriterStub([]),
   });
 
   const result = await useCase.execute(
@@ -202,6 +256,7 @@ async function testCreatePhotoPostRejectsUnknownGuest(): Promise<void> {
         throw new Error("should not save");
       },
     },
+    auditLogWriter: createAuditLogWriterStub(),
   });
 
   await assert.rejects(
@@ -244,6 +299,7 @@ async function testCreatePhotoPostRejectsInactiveGuest(): Promise<void> {
         throw new Error("should not save");
       },
     },
+    auditLogWriter: createAuditLogWriterStub(),
   });
 
   await assert.rejects(
@@ -286,6 +342,7 @@ async function testCreatePhotoPostRejectsUnsupportedMediaType(): Promise<void> {
         throw new Error("should not save");
       },
     },
+    auditLogWriter: createAuditLogWriterStub(),
   });
 
   await assert.rejects(
@@ -325,6 +382,7 @@ async function testCreatePhotoPostRejectsUnsupportedFileExtension(): Promise<voi
         throw new Error("should not save");
       },
     },
+    auditLogWriter: createAuditLogWriterStub(),
   });
 
   await assert.rejects(
@@ -364,6 +422,7 @@ async function testCreatePhotoPostRejectsMediaTypeExtensionMismatch(): Promise<v
         throw new Error("should not save");
       },
     },
+    auditLogWriter: createAuditLogWriterStub(),
   });
 
   await assert.rejects(
@@ -403,6 +462,7 @@ async function testCreatePhotoPostRejectsFileTooLarge(): Promise<void> {
         throw new Error("should not save");
       },
     },
+    auditLogWriter: createAuditLogWriterStub(),
   });
 
   await assert.rejects(
@@ -439,6 +499,7 @@ async function testCreatePhotoPostPropagatesUploadError(): Promise<void> {
         throw new Error("should not save");
       },
     },
+    auditLogWriter: createAuditLogWriterStub(),
   });
 
   await assert.rejects(
@@ -476,6 +537,7 @@ async function testCreatePhotoPostPropagatesSaveError(): Promise<void> {
         throw new Error("save failed");
       },
     },
+    auditLogWriter: createAuditLogWriterStub(),
   });
 
   await assert.rejects(
@@ -684,6 +746,7 @@ async function testListModerationPhotoPostsUsesDefaultPaginationWithoutFilter():
         throw new Error("not used");
       },
     },
+    auditLogWriter: createAuditLogWriterStub(),
   });
 
   const result = await useCase.execute({});
@@ -718,6 +781,7 @@ async function testListModerationPhotoPostsUsesCustomPaginationAndFilter(): Prom
         throw new Error("not used");
       },
     },
+    auditLogWriter: createAuditLogWriterStub(),
   });
 
   const result = await useCase.execute({
@@ -735,6 +799,7 @@ async function testListModerationPhotoPostsUsesCustomPaginationAndFilter(): Prom
 
 async function testModeratePhotoPostApprovesPendingPost(): Promise<void> {
   const pendingPost = createPhotoPostFixture();
+  const auditWrites: Array<Record<string, unknown>> = [];
   const useCase = createModeratePhotoPostUseCase({
     photoPostRepository: {
       async findById(photoPostId: string) {
@@ -759,17 +824,30 @@ async function testModeratePhotoPostApprovesPendingPost(): Promise<void> {
         return activeAdmin;
       },
     },
+    auditLogWriter: createAuditLogWriterStub(auditWrites),
   });
 
   const result = await useCase.execute({
     photoPostId: "post-1",
     moderationStatus: "approved",
     moderatedByAdminUserId: "admin-1",
+    requestId: "req-photo-moderation-1",
   });
 
   assert.equal(result.moderationStatus, "approved");
   assert.equal(result.hiddenAt, null);
   assert.equal(result.moderatedByAdminUserId, "admin-1");
+  assert.deepEqual(auditWrites[0], {
+    entityType: "photo_post",
+    entityId: "post-1",
+    actionType: "PHOTO_POST_MODERATED",
+    actorType: "admin",
+    actorAdminUserId: "admin-1",
+    requestId: "req-photo-moderation-1",
+    metadata: {
+      moderationStatus: "approved",
+    },
+  });
 }
 
 async function testModeratePhotoPostHidesPendingPost(): Promise<void> {
@@ -794,6 +872,7 @@ async function testModeratePhotoPostHidesPendingPost(): Promise<void> {
         return activeAdmin;
       },
     },
+    auditLogWriter: createAuditLogWriterStub([]),
   });
 
   const result = await useCase.execute({
@@ -828,6 +907,7 @@ async function testModeratePhotoPostRemovesPendingPost(): Promise<void> {
         return activeAdmin;
       },
     },
+    auditLogWriter: createAuditLogWriterStub([]),
   });
 
   const result = await useCase.execute({
@@ -868,6 +948,7 @@ async function testModeratePhotoPostHidesApprovedPostPreservingApprovedAt(): Pro
         return activeAdmin;
       },
     },
+    auditLogWriter: createAuditLogWriterStub([]),
   });
 
   const result = await useCase.execute({
@@ -898,6 +979,7 @@ async function testModeratePhotoPostRejectsUnknownPost(): Promise<void> {
         throw new Error("not used");
       },
     },
+    auditLogWriter: createAuditLogWriterStub(),
   });
 
   await assert.rejects(
@@ -934,6 +1016,7 @@ async function testModeratePhotoPostRejectsUnknownAdmin(): Promise<void> {
         return null;
       },
     },
+    auditLogWriter: createAuditLogWriterStub(),
   });
 
   await assert.rejects(
@@ -970,6 +1053,7 @@ async function testModeratePhotoPostRejectsInactiveAdmin(): Promise<void> {
         return inactiveAdmin;
       },
     },
+    auditLogWriter: createAuditLogWriterStub(),
   });
 
   await assert.rejects(
@@ -1009,6 +1093,7 @@ async function testModeratePhotoPostRejectsAlreadyRemovedPost(): Promise<void> {
         return activeAdmin;
       },
     },
+    auditLogWriter: createAuditLogWriterStub(),
   });
 
   await assert.rejects(
@@ -1048,6 +1133,7 @@ async function testModeratePhotoPostRejectsNoOpStatusChange(): Promise<void> {
         return activeAdmin;
       },
     },
+    auditLogWriter: createAuditLogWriterStub(),
   });
 
   await assert.rejects(

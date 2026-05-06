@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { PhotoPost } from "../domain/entities/photo-post.js";
 import type { PhotoPostRepository } from "../domain/repositories/photo-post-repository.js";
 import type { PhotoStorageProvider } from "../infrastructure/photo-storage-provider.js";
+import type { AuditLogWriter } from "../../admin-backoffice/application/audit-log-writer.js";
 import { PhotoWallApplicationError } from "./photo-wall-errors.js";
 
 export interface CreatePhotoPostInput {
@@ -14,6 +15,7 @@ export interface CreatePhotoPostInput {
   readonly mediaSizeBytes: number;
   readonly mediaWidth?: number;
   readonly mediaHeight?: number;
+  readonly requestId?: string;
 }
 
 export interface CreatePhotoPostResult {
@@ -36,6 +38,7 @@ export interface CreatePhotoPostDependencies {
   };
   readonly photoStorageProvider: Pick<PhotoStorageProvider, "uploadPhoto">;
   readonly photoPostRepository: Pick<PhotoPostRepository, "save">;
+  readonly auditLogWriter: AuditLogWriter;
 }
 
 const PHOTO_WALL_MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024;
@@ -122,6 +125,20 @@ export function createCreatePhotoPostUseCase(
         moderatedByAdminUserId: null,
         createdAt: now,
         updatedAt: now,
+      });
+
+      await dependencies.auditLogWriter.write({
+        entityType: "photo_post",
+        entityId: photoPost.id,
+        actionType: "PHOTO_POST_SUBMITTED",
+        actorType: "guest",
+        actorGuestId: guest.id,
+        requestId: input.requestId,
+        metadata: {
+          mediaMimeType: photoPost.mediaMimeType,
+          mediaSizeBytes: photoPost.mediaSizeBytes,
+          moderationStatus: photoPost.moderationStatus,
+        },
       });
 
       return {

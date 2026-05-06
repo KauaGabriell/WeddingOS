@@ -1,5 +1,6 @@
 import type { PhotoPost, PhotoPostModerationStatus } from "../domain/entities/photo-post.js";
 import type { PhotoPostRepository } from "../domain/repositories/photo-post-repository.js";
+import type { AuditLogWriter } from "../../admin-backoffice/application/audit-log-writer.js";
 import { PhotoWallModerationError } from "./photo-wall-errors.js";
 
 const DEFAULT_PAGE = 1;
@@ -23,6 +24,7 @@ export interface ModeratePhotoPostInput {
   readonly photoPostId: string;
   readonly moderationStatus: ModerationDecision;
   readonly moderatedByAdminUserId: string;
+  readonly requestId?: string;
 }
 
 export interface ListModerationPhotoPostsUseCase {
@@ -43,6 +45,7 @@ export interface PhotoWallModerationDependencies {
   readonly adminUserRepository: {
     findById(id: string): Promise<ModerationAdminUser | null>;
   };
+  readonly auditLogWriter: AuditLogWriter;
 }
 
 function normalizePagination(input: ListModerationPhotoPostsInput): {
@@ -142,7 +145,7 @@ export function createModeratePhotoPostUseCase(
         throw new PhotoWallModerationError("photo_post_already_in_target_status");
       }
 
-      return dependencies.photoPostRepository.save(
+      const moderatedPost = await dependencies.photoPostRepository.save(
         applyModerationDecision(
           photoPost,
           input.moderationStatus,
@@ -150,6 +153,20 @@ export function createModeratePhotoPostUseCase(
           new Date(),
         ),
       );
+
+      await dependencies.auditLogWriter.write({
+        entityType: "photo_post",
+        entityId: moderatedPost.id,
+        actionType: "PHOTO_POST_MODERATED",
+        actorType: "admin",
+        actorAdminUserId: adminUser.id,
+        requestId: input.requestId,
+        metadata: {
+          moderationStatus: moderatedPost.moderationStatus,
+        },
+      });
+
+      return moderatedPost;
     },
   };
 }

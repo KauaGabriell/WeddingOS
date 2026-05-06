@@ -9,9 +9,12 @@ import type {
   SubmitRsvpResponseInput,
 } from "../domain/index.js";
 import type { RsvpResponseTransactionRunner } from "../infrastructure/index.js";
+import type { AuditLogWriter } from "../../admin-backoffice/application/audit-log-writer.js";
 import { GuestsRsvpApplicationError } from "./guests-rsvp-errors.js";
 
-export type ConfirmAttendanceInput = SubmitRsvpResponseInput;
+export interface ConfirmAttendanceInput extends SubmitRsvpResponseInput {
+  readonly requestId?: string;
+}
 export type ConfirmAttendanceResult = IdempotentRsvpSubmissionResult;
 
 export interface ConfirmAttendanceDependencies {
@@ -23,6 +26,7 @@ export interface ConfirmAttendanceDependencies {
     "findByEventIdAndGuestId"
   >;
   readonly rsvpResponseTransactionRunner: RsvpResponseTransactionRunner;
+  readonly auditLogWriter: AuditLogWriter;
 }
 
 export interface ConfirmAttendanceUseCase {
@@ -109,7 +113,7 @@ export function createConfirmAttendanceUseCase(
 
       const normalizedInput = normalizeInput(input);
 
-      return dependencies.rsvpResponseTransactionRunner.runIdempotentSubmission(async (context) => {
+      const result = await dependencies.rsvpResponseTransactionRunner.runIdempotentSubmission(async (context) => {
         const existingResponse = await context.findResponseByEventAndGuest(event.id, guest.id);
 
         if (existingResponse === null) {
@@ -131,6 +135,23 @@ export function createConfirmAttendanceUseCase(
           outcome: "updated",
         };
       });
+
+      await dependencies.auditLogWriter.write({
+        entityType: "rsvp_response",
+        entityId: result.persistedResponse.id,
+        actionType: "RSVP_SUBMITTED",
+        actorType: "guest",
+        actorGuestId: guest.id,
+        requestId: input.requestId,
+        metadata: {
+          eventId: event.id,
+          responseStatus: result.persistedResponse.responseStatus,
+          companionsConfirmed: result.persistedResponse.companionsConfirmed,
+          outcome: result.outcome,
+        },
+      });
+
+      return result;
     },
   };
 }

@@ -1,4 +1,6 @@
 import { runAdminRouteTests } from "./admin-routes.test.js";
+import { runAdminBackofficeApplicationTests } from "./admin-backoffice/application.test.js";
+import { runAdminBackofficeInfrastructureTests } from "./admin-backoffice/infrastructure.test.js";
 import { runBootstrapTests } from "./bootstrap.test.js";
 import { runGiftRegistryApplicationTests } from "./gift-registry/application.test.js";
 import { runGiftRegistryInfrastructureTests } from "./gift-registry/infrastructure.test.js";
@@ -16,6 +18,8 @@ async function run(): Promise<void> {
   await runBootstrapTests();
   await runModuleContractTests();
   await runSharedHttpAuthTests();
+  await runAdminBackofficeApplicationTests();
+  await runAdminBackofficeInfrastructureTests();
   await runIdentityAccessApplicationTests();
   await runIdentityAccessInfrastructureTests();
   await runGiftRegistryApplicationTests();

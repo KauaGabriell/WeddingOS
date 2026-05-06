@@ -220,6 +220,33 @@ async function testLoginGuestWithInviteTokenUseCase(): Promise<void> {
     createdAt: new Date("2026-04-20T10:00:00.000Z"),
     updatedAt: new Date("2026-04-20T10:00:00.000Z"),
   };
+  const auditWrites: Array<Record<string, unknown>> = [];
+  const auditLogWriter = {
+    async write(input: {
+      entityType: string;
+      entityId: string;
+      actionType: string;
+      actorType: "admin" | "guest" | "system";
+      actorAdminUserId?: string;
+      actorGuestId?: string;
+      requestId?: string;
+      metadata?: Record<string, unknown>;
+    }) {
+      auditWrites.push(input as Record<string, unknown>);
+      return {
+        id: `audit-${auditWrites.length}`,
+        entityType: input.entityType,
+        entityId: input.entityId,
+        actionType: input.actionType,
+        actorAdminUserId: input.actorAdminUserId ?? null,
+        actorGuestId: input.actorGuestId ?? null,
+        actorType: input.actorType,
+        requestId: input.requestId ?? null,
+        metadata: input.metadata ?? null,
+        createdAt: new Date("2026-04-30T12:00:06.000Z"),
+      };
+    },
+  };
   const baseInviteToken = buildBaseInviteToken();
   let markCalls = 0;
 
@@ -334,6 +361,7 @@ async function testLoginGuestWithInviteTokenUseCase(): Promise<void> {
     inviteTokenRepository,
     guestRepository,
     inviteTokenConsumptionTransactionRunner: transactionRunner,
+    auditLogWriter,
     now: () => authMoments.shift() ?? new Date("2026-04-30T12:00:05.000Z"),
   });
 
@@ -348,6 +376,7 @@ async function testLoginGuestWithInviteTokenUseCase(): Promise<void> {
     inviteTokenRepository,
     guestRepository,
     inviteTokenConsumptionTransactionRunner: transactionRunner,
+    auditLogWriter,
     now: () => new Date("2026-04-30T13:00:00.000Z"),
   });
   assert.equal((await byGroupToken.execute({ token: "group-token" })).guestId, "guest-1");
@@ -357,6 +386,11 @@ async function testLoginGuestWithInviteTokenUseCase(): Promise<void> {
     inviteTokenRepository,
     guestRepository,
     inviteTokenConsumptionTransactionRunner: transactionRunner,
+    auditLogWriter: {
+      async write() {
+        throw new Error("should not audit failed login");
+      },
+    },
     now: () => new Date("2026-04-30T12:00:00.000Z"),
   });
   for (const token of [
@@ -377,6 +411,7 @@ async function testLoginGuestWithInviteTokenUseCase(): Promise<void> {
     inviteTokenRepository,
     guestRepository,
     inviteTokenConsumptionTransactionRunner: transactionRunner,
+    auditLogWriter,
     now: () => new Date("2026-04-30T15:00:00.000Z"),
   });
 
@@ -388,6 +423,19 @@ async function testLoginGuestWithInviteTokenUseCase(): Promise<void> {
   });
   assert.equal((await byShortCode.execute({ code: "GROUP01" })).guestId, "guest-1");
   assert.equal(markCalls, 2);
+  assert.equal(auditWrites.length, 4);
+  assert.deepEqual(auditWrites[0], {
+    entityType: "guest",
+    entityId: "guest-1",
+    actionType: "GUEST_LOGGED_IN",
+    actorType: "guest",
+    actorGuestId: "guest-1",
+    requestId: "req-1",
+    metadata: {
+      guestGroupId: "group-1",
+      inviteTokenId: "invite-1",
+    },
+  });
 }
 
 async function testRequestAdminMagicLinkUseCase(): Promise<void> {

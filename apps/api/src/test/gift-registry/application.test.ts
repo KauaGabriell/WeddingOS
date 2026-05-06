@@ -50,6 +50,42 @@ const availableGift: Gift = {
   updatedAt: new Date("2026-01-02T00:00:00.000Z"),
 };
 
+function createAuditLogWriterStub(
+  auditWrites?: Array<Record<string, unknown>>,
+  message = "should not audit",
+) {
+  return {
+    async write(input: {
+      entityType: string;
+      entityId: string;
+      actionType: string;
+      actorType: "admin" | "guest" | "system";
+      actorAdminUserId?: string;
+      actorGuestId?: string;
+      requestId?: string;
+      metadata?: Record<string, unknown>;
+    }) {
+      if (!auditWrites) {
+        throw new Error(message);
+      }
+
+      auditWrites.push(input as Record<string, unknown>);
+      return {
+        id: `audit-${auditWrites.length}`,
+        entityType: input.entityType,
+        entityId: input.entityId,
+        actionType: input.actionType,
+        actorAdminUserId: input.actorAdminUserId ?? null,
+        actorGuestId: input.actorGuestId ?? null,
+        actorType: input.actorType,
+        requestId: input.requestId ?? null,
+        metadata: input.metadata ?? null,
+        createdAt: new Date("2026-01-04T00:00:00.000Z"),
+      };
+    },
+  };
+}
+
 async function testListPublicGiftCatalogAttachesActiveReservation(): Promise<void> {
   const useCase = createListPublicGiftCatalogUseCase({
     giftRepository: {
@@ -106,6 +142,7 @@ async function testListAdminGiftsAppliesFiltersAndPagination(): Promise<void> {
         throw new Error("not used");
       },
     },
+    auditLogWriter: createAuditLogWriterStub(),
   });
 
   const result = await useCase.execute({
@@ -136,6 +173,7 @@ async function testListAdminGiftsRejectsInvalidValueRange(): Promise<void> {
         throw new Error("not used");
       },
     },
+    auditLogWriter: createAuditLogWriterStub(),
   });
 
   await assert.rejects(
@@ -154,6 +192,7 @@ async function testListAdminGiftsRejectsInvalidValueRange(): Promise<void> {
 }
 
 async function testCreateGiftPersistsNewGift(): Promise<void> {
+  const auditWrites: Array<Record<string, unknown>> = [];
   const useCase = createCreateGiftUseCase({
     giftRepository: {
       async save(entity) {
@@ -175,6 +214,7 @@ async function testCreateGiftPersistsNewGift(): Promise<void> {
         throw new Error("not used");
       },
     },
+    auditLogWriter: createAuditLogWriterStub(auditWrites),
   });
 
   const created = await useCase.execute({
@@ -186,10 +226,25 @@ async function testCreateGiftPersistsNewGift(): Promise<void> {
     displayOrder: 3,
     status: "available",
     isActive: true,
+    actorAdminUserId: "admin-1",
+    requestId: "req-gift-create-1",
   });
 
   assert.equal(created.name, "Jogo de panelas");
   assert.equal(created.description, "inox");
+  assert.deepEqual(auditWrites[0], {
+    entityType: "gift",
+    entityId: created.id,
+    actionType: "GIFT_CREATED",
+    actorType: "admin",
+    actorAdminUserId: "admin-1",
+    requestId: "req-gift-create-1",
+    metadata: {
+      status: "available",
+      isActive: true,
+      displayOrder: 3,
+    },
+  });
 }
 
 async function testCreateGiftRejectsArchivedGiftMarkedActive(): Promise<void> {
@@ -205,6 +260,7 @@ async function testCreateGiftRejectsArchivedGiftMarkedActive(): Promise<void> {
         throw new Error("not used");
       },
     },
+    auditLogWriter: createAuditLogWriterStub(),
   });
 
   await assert.rejects(
@@ -226,6 +282,7 @@ async function testCreateGiftRejectsArchivedGiftMarkedActive(): Promise<void> {
 }
 
 async function testUpdateGiftPersistsChangesAndReorder(): Promise<void> {
+  const auditWrites: Array<Record<string, unknown>> = [];
   const useCase = createUpdateGiftUseCase({
     giftRepository: {
       async findById(id) {
@@ -244,6 +301,7 @@ async function testUpdateGiftPersistsChangesAndReorder(): Promise<void> {
         throw new Error("not used");
       },
     },
+    auditLogWriter: createAuditLogWriterStub(auditWrites),
   });
 
   const updated = await useCase.execute({
@@ -256,11 +314,26 @@ async function testUpdateGiftPersistsChangesAndReorder(): Promise<void> {
     displayOrder: 7,
     status: "archived",
     isActive: false,
+    actorAdminUserId: "admin-1",
+    requestId: "req-gift-update-1",
   });
 
   assert.equal(updated.displayOrder, 7);
   assert.equal(updated.status, "archived");
   assert.equal(updated.isActive, false);
+  assert.deepEqual(auditWrites[0], {
+    entityType: "gift",
+    entityId: "gift-1",
+    actionType: "GIFT_UPDATED",
+    actorType: "admin",
+    actorAdminUserId: "admin-1",
+    requestId: "req-gift-update-1",
+    metadata: {
+      status: "archived",
+      isActive: false,
+      displayOrder: 7,
+    },
+  });
 }
 
 async function testUpdateGiftFailsWhenGiftNotFound(): Promise<void> {
@@ -276,6 +349,7 @@ async function testUpdateGiftFailsWhenGiftNotFound(): Promise<void> {
         throw new Error("not used");
       },
     },
+    auditLogWriter: createAuditLogWriterStub(),
   });
 
   await assert.rejects(
@@ -310,6 +384,7 @@ async function testUpdateGiftRejectsArchivedGiftMarkedActive(): Promise<void> {
         throw new Error("not used");
       },
     },
+    auditLogWriter: createAuditLogWriterStub(),
   });
 
   await assert.rejects(
@@ -332,6 +407,7 @@ async function testUpdateGiftRejectsArchivedGiftMarkedActive(): Promise<void> {
 }
 
 async function testManageGiftReservationReleasesReservation(): Promise<void> {
+  const auditWrites: Array<Record<string, unknown>> = [];
   const useCase = createManageGiftReservationUseCase({
     giftReservationRepository: {
       async findById(id: string) {
@@ -379,20 +455,39 @@ async function testManageGiftReservationReleasesReservation(): Promise<void> {
         });
       },
     },
+    auditLogWriter: createAuditLogWriterStub(auditWrites),
   });
 
   const result = await useCase.execute({
     reservationId: "reservation-1",
     releasedByAdminUserId: "admin-1",
     reason: "manual fix",
+    requestId: "req-reservation-release-1",
   });
 
   assert.equal(result.releasedReservation.reservationStatus, "released");
   assert.equal(result.releasedReservation.releasedByAdminUserId, "admin-1");
   assert.equal(result.newActiveReservation, null);
+  assert.deepEqual(auditWrites[0], {
+    entityType: "gift_reservation",
+    entityId: "reservation-1",
+    actionType: "GIFT_RESERVATION_RELEASED",
+    actorType: "admin",
+    actorAdminUserId: "admin-1",
+    requestId: "req-reservation-release-1",
+    metadata: {
+      releasedReservationId: "reservation-1",
+      newActiveReservationId: null,
+      giftId: "gift-1",
+      previousGuestId: "guest-1",
+      newGuestId: null,
+      reason: "manual fix",
+    },
+  });
 }
 
 async function testManageGiftReservationReassignsReservation(): Promise<void> {
+  const auditWrites: Array<Record<string, unknown>> = [];
   const useCase = createManageGiftReservationUseCase({
     giftReservationRepository: {
       async findById() {
@@ -441,17 +536,35 @@ async function testManageGiftReservationReassignsReservation(): Promise<void> {
         });
       },
     },
+    auditLogWriter: createAuditLogWriterStub(auditWrites),
   });
 
   const result = await useCase.execute({
     reservationId: "reservation-1",
     releasedByAdminUserId: "admin-1",
     reassignToGuestId: "guest-2",
+    requestId: "req-reservation-reassign-1",
   });
 
   assert.equal(result.releasedReservation.reservationStatus, "released");
   assert.equal(result.newActiveReservation?.id, "reservation-2");
   assert.equal(result.newActiveReservation?.guestId, "guest-2");
+  assert.deepEqual(auditWrites[0], {
+    entityType: "gift_reservation",
+    entityId: "reservation-2",
+    actionType: "GIFT_RESERVATION_REASSIGNED",
+    actorType: "admin",
+    actorAdminUserId: "admin-1",
+    requestId: "req-reservation-reassign-1",
+    metadata: {
+      releasedReservationId: "reservation-1",
+      newActiveReservationId: "reservation-2",
+      giftId: "gift-1",
+      previousGuestId: "guest-1",
+      newGuestId: "guest-2",
+      reason: null,
+    },
+  });
 }
 
 async function testManageGiftReservationFailsWhenReservationNotFound(): Promise<void> {
@@ -460,6 +573,7 @@ async function testManageGiftReservationFailsWhenReservationNotFound(): Promise<
     adminUserRepository: { async findById() { throw new Error("should not load admin"); } },
     guestRepository: { async findById() { throw new Error("should not load guest"); } },
     giftReservationTransactionRunner: { async run() { throw new Error("should not start transaction"); } },
+    auditLogWriter: createAuditLogWriterStub(),
   });
 
   await assert.rejects(
@@ -483,6 +597,7 @@ async function testManageGiftReservationFailsWhenReservationNotActive(): Promise
     adminUserRepository: { async findById() { throw new Error("should not load admin"); } },
     guestRepository: { async findById() { throw new Error("should not load guest"); } },
     giftReservationTransactionRunner: { async run() { throw new Error("should not start transaction"); } },
+    auditLogWriter: createAuditLogWriterStub(),
   });
 
   await assert.rejects(
@@ -502,6 +617,7 @@ async function testManageGiftReservationFailsWhenAdminMissing(): Promise<void> {
     adminUserRepository: { async findById() { return null; } },
     guestRepository: { async findById() { throw new Error("should not load guest"); } },
     giftReservationTransactionRunner: { async run() { throw new Error("should not start transaction"); } },
+    auditLogWriter: createAuditLogWriterStub(),
   });
 
   await assert.rejects(
@@ -521,6 +637,7 @@ async function testManageGiftReservationFailsWhenTargetGuestMissing(): Promise<v
     adminUserRepository: { async findById() { return activeAdmin; } },
     guestRepository: { async findById() { return null; } },
     giftReservationTransactionRunner: { async run() { throw new Error("should not start transaction"); } },
+    auditLogWriter: createAuditLogWriterStub(),
   });
 
   await assert.rejects(
@@ -545,6 +662,7 @@ async function testManageGiftReservationFailsWhenTargetGuestInactive(): Promise<
     adminUserRepository: { async findById() { return activeAdmin; } },
     guestRepository: { async findById() { return { id: "guest-2", status: "inactive" as const }; } },
     giftReservationTransactionRunner: { async run() { throw new Error("should not start transaction"); } },
+    auditLogWriter: createAuditLogWriterStub(),
   });
 
   await assert.rejects(
@@ -569,6 +687,7 @@ async function testManageGiftReservationFailsWhenTargetGuestSameAsCurrent(): Pro
     adminUserRepository: { async findById() { return activeAdmin; } },
     guestRepository: { async findById() { throw new Error("should not load guest"); } },
     giftReservationTransactionRunner: { async run() { throw new Error("should not start transaction"); } },
+    auditLogWriter: createAuditLogWriterStub(),
   });
 
   await assert.rejects(
@@ -615,6 +734,7 @@ async function testManageGiftReservationPropagatesReservationConflict(): Promise
         });
       },
     },
+    auditLogWriter: createAuditLogWriterStub(),
   });
 
   await assert.rejects(
@@ -718,6 +838,7 @@ async function testListPublicGiftCatalogPaginatesAfterReservationFiltering(): Pr
 }
 
 async function testReserveGiftCreatesActiveReservation(): Promise<void> {
+  const auditWrites: Array<Record<string, unknown>> = [];
   const useCase = createReserveGiftUseCase({
     guestRepository: {
       async findById(id: string) {
@@ -766,16 +887,30 @@ async function testReserveGiftCreatesActiveReservation(): Promise<void> {
         });
       },
     },
+    auditLogWriter: createAuditLogWriterStub(auditWrites),
   });
 
   const result = await useCase.execute({
     giftId: "gift-1",
     guestId: "guest-1",
     purchaseNotes: "  pago no pix  ",
+    requestId: "req-gift-reserve-1",
   });
 
   assert.equal(result.id, "reservation-1");
   assert.equal(result.purchaseNotes, "pago no pix");
+  assert.deepEqual(auditWrites[0], {
+    entityType: "gift_reservation",
+    entityId: "reservation-1",
+    actionType: "GIFT_RESERVED",
+    actorType: "guest",
+    actorGuestId: "guest-1",
+    requestId: "req-gift-reserve-1",
+    metadata: {
+      giftId: "gift-1",
+      purchaseNotes: "pago no pix",
+    },
+  });
 }
 
 async function testReserveGiftFailsWhenGuestNotFound(): Promise<void> {
@@ -783,6 +918,7 @@ async function testReserveGiftFailsWhenGuestNotFound(): Promise<void> {
     guestRepository: { async findById() { return null; } },
     giftRepository: { async findById() { throw new Error("should not load gift"); } },
     giftReservationTransactionRunner: { async run() { throw new Error("should not start transaction"); } },
+    auditLogWriter: createAuditLogWriterStub(),
   });
 
   await assert.rejects(() => useCase.execute({ giftId: "gift-1", guestId: "guest-1" }), (error) => {
@@ -798,6 +934,7 @@ async function testReserveGiftFailsWhenGuestInactive(): Promise<void> {
     guestRepository: { async findById() { return { ...activeGuest, status: "inactive" as const }; } },
     giftRepository: { async findById() { throw new Error("should not load gift"); } },
     giftReservationTransactionRunner: { async run() { throw new Error("should not start transaction"); } },
+    auditLogWriter: createAuditLogWriterStub(),
   });
 
   await assert.rejects(() => useCase.execute({ giftId: "gift-1", guestId: "guest-1" }), (error) => {
@@ -813,6 +950,7 @@ async function testReserveGiftFailsWhenGiftNotFound(): Promise<void> {
     guestRepository: { async findById() { return activeGuest; } },
     giftRepository: { async findById() { return null; } },
     giftReservationTransactionRunner: { async run() { throw new Error("should not start transaction"); } },
+    auditLogWriter: createAuditLogWriterStub(),
   });
 
   await assert.rejects(() => useCase.execute({ giftId: "gift-1", guestId: "guest-1" }), (error) => {
@@ -834,6 +972,7 @@ async function testReserveGiftFailsWhenGiftInactive(): Promise<void> {
         throw new Error("should not start transaction");
       },
     },
+    auditLogWriter: createAuditLogWriterStub(),
   });
 
   await assert.rejects(() => useCase.execute({ giftId: "gift-1", guestId: "guest-1" }), (error) => {
@@ -856,6 +995,7 @@ async function testReserveGiftFailsWhenGiftUnavailableBeforeTransaction(): Promi
         throw new Error("should not start transaction");
       },
     },
+    auditLogWriter: createAuditLogWriterStub(),
   });
 
   await assert.rejects(() => useCase.execute({ giftId: "gift-1", guestId: "guest-1" }), (error) => {
@@ -900,6 +1040,7 @@ async function testReserveGiftPropagatesReservationConflict(): Promise<void> {
         });
       },
     },
+    auditLogWriter: createAuditLogWriterStub(),
   });
 
   await assert.rejects(() => useCase.execute({ giftId: "gift-1", guestId: "guest-1" }), (error) => {

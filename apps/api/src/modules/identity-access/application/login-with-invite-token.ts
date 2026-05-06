@@ -1,5 +1,6 @@
 import type { GuestRepository, InviteTokenRepository } from "../domain/index.js";
 import type { InviteTokenConsumptionTransactionRunner } from "../infrastructure/index.js";
+import type { AuditLogWriter } from "../../admin-backoffice/application/audit-log-writer.js";
 import {
   authenticateGuestWithInviteToken,
   GuestInviteTokenAuthenticationError,
@@ -19,6 +20,7 @@ export interface LoginGuestWithInviteTokenDependencies {
   readonly inviteTokenRepository: InviteTokenRepository;
   readonly guestRepository: GuestRepository;
   readonly inviteTokenConsumptionTransactionRunner: InviteTokenConsumptionTransactionRunner;
+  readonly auditLogWriter: AuditLogWriter;
   readonly now?: () => Date;
 }
 
@@ -31,10 +33,25 @@ export function createLoginGuestWithInviteTokenUseCase(
 ): LoginGuestWithInviteTokenUseCase {
   return {
     async execute(input) {
-      return authenticateGuestWithInviteToken(
+      const result = await authenticateGuestWithInviteToken(
         () => dependencies.inviteTokenRepository.findByTokenHash(input.token),
         dependencies,
       );
+
+      await dependencies.auditLogWriter.write({
+        entityType: "guest",
+        entityId: result.guestId,
+        actionType: "GUEST_LOGGED_IN",
+        actorType: "guest",
+        actorGuestId: result.guestId,
+        requestId: input.requestId,
+        metadata: {
+          guestGroupId: result.guestGroupId,
+          inviteTokenId: result.inviteTokenId,
+        },
+      });
+
+      return result;
     },
   };
 }

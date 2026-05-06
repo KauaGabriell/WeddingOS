@@ -5,12 +5,14 @@ import type {
 } from "../domain/index.js";
 import { GiftReservationConflictError } from "../domain/index.js";
 import type { GiftReservationTransactionRunner } from "../infrastructure/index.js";
+import type { AuditLogWriter } from "../../admin-backoffice/application/audit-log-writer.js";
 import { GiftRegistryApplicationError } from "./gift-registry-errors.js";
 
 export interface ReserveGiftInput {
   readonly giftId: string;
   readonly guestId: string;
   readonly purchaseNotes?: string;
+  readonly requestId?: string;
 }
 
 export interface ReserveGiftUseCase {
@@ -28,6 +30,7 @@ export interface ReserveGiftDependencies {
   };
   readonly giftRepository: Pick<GiftRepository, "findById">;
   readonly giftReservationTransactionRunner: GiftReservationTransactionRunner;
+  readonly auditLogWriter: AuditLogWriter;
 }
 
 function assertReservableGift(gift: Gift | null): Gift {
@@ -69,7 +72,7 @@ export function createReserveGiftUseCase(
       const gift = assertReservableGift(await dependencies.giftRepository.findById(input.giftId));
       const purchaseNotes = normalizePurchaseNotes(input.purchaseNotes);
 
-      return dependencies.giftReservationTransactionRunner.run(async (context) => {
+      const reservation = await dependencies.giftReservationTransactionRunner.run(async (context) => {
         const activeReservation = await context.findActiveReservationByGiftId(gift.id);
 
         if (activeReservation !== null) {
@@ -82,6 +85,21 @@ export function createReserveGiftUseCase(
           purchaseNotes,
         });
       });
+
+      await dependencies.auditLogWriter.write({
+        entityType: "gift_reservation",
+        entityId: reservation.id,
+        actionType: "GIFT_RESERVED",
+        actorType: "guest",
+        actorGuestId: guest.id,
+        requestId: input.requestId,
+        metadata: {
+          giftId: gift.id,
+          purchaseNotes: reservation.purchaseNotes,
+        },
+      });
+
+      return reservation;
     },
   };
 }
