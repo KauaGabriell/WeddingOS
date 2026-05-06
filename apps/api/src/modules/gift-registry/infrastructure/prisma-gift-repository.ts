@@ -7,6 +7,10 @@ interface GiftWhereInput {
   category?: string;
   status?: keyof typeof PrismaGiftStatus;
   isActive?: boolean;
+  estimatedValue?: {
+    gte?: number;
+    lte?: number;
+  };
   OR?: Array<{
     name?: { contains: string; mode: "insensitive" };
     category?: { contains: string; mode: "insensitive" };
@@ -107,6 +111,13 @@ function mapFilters(filter: GiftRepositoryFilters): {
       category: filter.category,
       status: filter.status ? mapStatusToPersistence(filter.status) : undefined,
       isActive: filter.isActive,
+      estimatedValue:
+        filter.minEstimatedValue !== undefined || filter.maxEstimatedValue !== undefined
+          ? {
+              gte: filter.minEstimatedValue,
+              lte: filter.maxEstimatedValue,
+            }
+          : undefined,
       OR:
         search && search.length > 0
           ? [

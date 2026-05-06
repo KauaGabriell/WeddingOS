@@ -1,3 +1,4 @@
+export * from "./admin-gifts.js";
 export * from "./gift-catalog-contract.js";
 export * from "./gift-registry-errors.js";
 export * from "./gift-registry-use-cases.js";

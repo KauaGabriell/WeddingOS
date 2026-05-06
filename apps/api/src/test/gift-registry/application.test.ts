@@ -1,12 +1,16 @@
 import assert from "node:assert/strict";
 import type { Gift, GiftReservation } from "../../modules/gift-registry/index.js";
 import {
+  AdminGiftManagementError,
   GiftRegistryApplicationError,
   GiftReservationManagementError,
   GiftReservationConflictError,
+  createCreateGiftUseCase,
   createListPublicGiftCatalogUseCase,
+  createListAdminGiftsUseCase,
   createManageGiftReservationUseCase,
   createReserveGiftUseCase,
+  createUpdateGiftUseCase,
 } from "../../modules/gift-registry/index.js";
 import { runNamedTests } from "../test-helpers.js";
 
@@ -78,6 +82,253 @@ async function testListPublicGiftCatalogAttachesActiveReservation(): Promise<voi
   assert.equal(result.items[0]?.activeReservation?.id, "reservation-1");
   assert.equal(result.page, 1);
   assert.equal(result.pageSize, 20);
+}
+
+async function testListAdminGiftsAppliesFiltersAndPagination(): Promise<void> {
+  const useCase = createListAdminGiftsUseCase({
+    giftRepository: {
+      async findMany(filter) {
+        assert.deepEqual(filter, {
+          category: "casa",
+          status: "available",
+          isActive: true,
+          minEstimatedValue: 100,
+          maxEstimatedValue: 400,
+          page: 2,
+          pageSize: 5,
+        });
+        return [availableGift];
+      },
+      async findById() {
+        throw new Error("not used");
+      },
+      async save() {
+        throw new Error("not used");
+      },
+    },
+  });
+
+  const result = await useCase.execute({
+    category: "casa",
+    status: "available",
+    isActive: true,
+    minEstimatedValue: 100,
+    maxEstimatedValue: 400,
+    page: 2,
+    pageSize: 5,
+  });
+
+  assert.equal(result.items[0]?.id, "gift-1");
+  assert.equal(result.page, 2);
+  assert.equal(result.pageSize, 5);
+}
+
+async function testListAdminGiftsRejectsInvalidValueRange(): Promise<void> {
+  const useCase = createListAdminGiftsUseCase({
+    giftRepository: {
+      async findMany() {
+        throw new Error("should not query repository");
+      },
+      async findById() {
+        throw new Error("not used");
+      },
+      async save() {
+        throw new Error("not used");
+      },
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      useCase.execute({
+        minEstimatedValue: 500,
+        maxEstimatedValue: 100,
+      }),
+    (error) => {
+      assert.ok(error instanceof AdminGiftManagementError);
+      assert.equal(error.reason, "invalid_value_range");
+      assert.equal(error.statusCode, 400);
+      return true;
+    },
+  );
+}
+
+async function testCreateGiftPersistsNewGift(): Promise<void> {
+  const useCase = createCreateGiftUseCase({
+    giftRepository: {
+      async save(entity) {
+        assert.equal(entity.name, "Jogo de panelas");
+        assert.equal(entity.category, "cozinha");
+        assert.equal(entity.description, "inox");
+        assert.equal(entity.estimatedValue, 299.9);
+        assert.equal(entity.imageUrl, "https://example.com/panelas.jpg");
+        assert.equal(entity.displayOrder, 3);
+        assert.equal(entity.status, "available");
+        assert.equal(entity.isActive, true);
+        assert.match(entity.id, /^[0-9a-f-]{36}$/);
+        return entity;
+      },
+      async findById() {
+        throw new Error("not used");
+      },
+      async findMany() {
+        throw new Error("not used");
+      },
+    },
+  });
+
+  const created = await useCase.execute({
+    name: "Jogo de panelas",
+    category: "cozinha",
+    description: "  inox  ",
+    estimatedValue: 299.9,
+    imageUrl: "https://example.com/panelas.jpg",
+    displayOrder: 3,
+    status: "available",
+    isActive: true,
+  });
+
+  assert.equal(created.name, "Jogo de panelas");
+  assert.equal(created.description, "inox");
+}
+
+async function testCreateGiftRejectsArchivedGiftMarkedActive(): Promise<void> {
+  const useCase = createCreateGiftUseCase({
+    giftRepository: {
+      async save() {
+        throw new Error("should not persist");
+      },
+      async findById() {
+        throw new Error("not used");
+      },
+      async findMany() {
+        throw new Error("not used");
+      },
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      useCase.execute({
+        name: "Vaso",
+        category: "decor",
+        displayOrder: 1,
+        status: "archived",
+        isActive: true,
+      }),
+    (error) => {
+      assert.ok(error instanceof AdminGiftManagementError);
+      assert.equal(error.reason, "archived_gift_must_be_inactive");
+      assert.equal(error.statusCode, 400);
+      return true;
+    },
+  );
+}
+
+async function testUpdateGiftPersistsChangesAndReorder(): Promise<void> {
+  const useCase = createUpdateGiftUseCase({
+    giftRepository: {
+      async findById(id) {
+        assert.equal(id, "gift-1");
+        return availableGift;
+      },
+      async save(entity) {
+        assert.equal(entity.id, "gift-1");
+        assert.equal(entity.displayOrder, 7);
+        assert.equal(entity.status, "archived");
+        assert.equal(entity.isActive, false);
+        assert.equal(entity.createdAt.toISOString(), availableGift.createdAt.toISOString());
+        return entity;
+      },
+      async findMany() {
+        throw new Error("not used");
+      },
+    },
+  });
+
+  const updated = await useCase.execute({
+    giftId: "gift-1",
+    name: "Jogo de pratos premium",
+    category: "casa",
+    description: "  novo  ",
+    estimatedValue: 499.9,
+    imageUrl: "https://example.com/pratos.jpg",
+    displayOrder: 7,
+    status: "archived",
+    isActive: false,
+  });
+
+  assert.equal(updated.displayOrder, 7);
+  assert.equal(updated.status, "archived");
+  assert.equal(updated.isActive, false);
+}
+
+async function testUpdateGiftFailsWhenGiftNotFound(): Promise<void> {
+  const useCase = createUpdateGiftUseCase({
+    giftRepository: {
+      async findById() {
+        return null;
+      },
+      async save() {
+        throw new Error("should not persist");
+      },
+      async findMany() {
+        throw new Error("not used");
+      },
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      useCase.execute({
+        giftId: "gift-missing",
+        name: "Item",
+        category: "casa",
+        displayOrder: 1,
+        status: "available",
+        isActive: true,
+      }),
+    (error) => {
+      assert.ok(error instanceof AdminGiftManagementError);
+      assert.equal(error.reason, "gift_not_found");
+      assert.equal(error.statusCode, 404);
+      return true;
+    },
+  );
+}
+
+async function testUpdateGiftRejectsArchivedGiftMarkedActive(): Promise<void> {
+  const useCase = createUpdateGiftUseCase({
+    giftRepository: {
+      async findById() {
+        return availableGift;
+      },
+      async save() {
+        throw new Error("should not persist");
+      },
+      async findMany() {
+        throw new Error("not used");
+      },
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      useCase.execute({
+        giftId: "gift-1",
+        name: "Item",
+        category: "casa",
+        displayOrder: 1,
+        status: "archived",
+        isActive: true,
+      }),
+    (error) => {
+      assert.ok(error instanceof AdminGiftManagementError);
+      assert.equal(error.reason, "archived_gift_must_be_inactive");
+      assert.equal(error.statusCode, 400);
+      return true;
+    },
+  );
 }
 
 async function testManageGiftReservationReleasesReservation(): Promise<void> {
@@ -664,6 +915,34 @@ export async function runGiftRegistryApplicationTests(): Promise<void> {
     {
       name: "list public gift catalog attaches active reservation",
       run: testListPublicGiftCatalogAttachesActiveReservation,
+    },
+    {
+      name: "list admin gifts applies filters and pagination",
+      run: testListAdminGiftsAppliesFiltersAndPagination,
+    },
+    {
+      name: "list admin gifts rejects invalid value range",
+      run: testListAdminGiftsRejectsInvalidValueRange,
+    },
+    {
+      name: "create gift persists new gift",
+      run: testCreateGiftPersistsNewGift,
+    },
+    {
+      name: "create gift rejects archived gift marked active",
+      run: testCreateGiftRejectsArchivedGiftMarkedActive,
+    },
+    {
+      name: "update gift persists changes and reorder",
+      run: testUpdateGiftPersistsChangesAndReorder,
+    },
+    {
+      name: "update gift fails when gift not found",
+      run: testUpdateGiftFailsWhenGiftNotFound,
+    },
+    {
+      name: "update gift rejects archived gift marked active",
+      run: testUpdateGiftRejectsArchivedGiftMarkedActive,
     },
     {
       name: "list public gift catalog filters available gifts",

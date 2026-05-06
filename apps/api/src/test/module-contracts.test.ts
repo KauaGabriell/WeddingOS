@@ -7,6 +7,7 @@ import {
 } from "../modules/admin-backoffice/index.js";
 import type { AuditLog } from "../modules/admin-backoffice/index.js";
 import {
+  AdminGiftManagementError,
   GIFT_REGISTRY_HTTP_CONTRACT,
   GIFT_REGISTRY_HTTP_SCHEMAS,
   GIFT_REGISTRY_INFRASTRUCTURE_PORTS,
@@ -17,8 +18,11 @@ import {
   GiftReservationManagementError,
   PrismaGiftReservationTransactionRunner,
   GiftReservationConflictError,
+  createCreateGiftUseCase,
+  createListAdminGiftsUseCase,
   createManageGiftReservationUseCase,
   createReserveGiftUseCase,
+  createUpdateGiftUseCase,
 } from "../modules/gift-registry/index.js";
 import type { Gift, GiftReservation } from "../modules/gift-registry/index.js";
 import type {
@@ -236,6 +240,7 @@ function testModuleLayerContractsAreExported(): void {
   assert.equal(GIFT_REGISTRY_MODULE_USE_CASES.giftCatalogListing, "implemented");
   assert.equal(GIFT_REGISTRY_MODULE_USE_CASES.giftReservationLifecycle, "implemented");
   assert.equal(GIFT_REGISTRY_MODULE_USE_CASES.adminGiftRelease, "implemented");
+  assert.equal(GIFT_REGISTRY_MODULE_USE_CASES.adminGiftManagement, "implemented");
   assert.equal(PHOTO_WALL_MODULE_USE_CASES.photoSubmission, "planned");
   assert.equal(ADMIN_BACKOFFICE_MODULE_USE_CASES.auditTrailQuery, "planned");
   assert.equal(IDENTITY_ACCESS_INFRASTRUCTURE_PORTS.repositories.includes("invite-token-repository"), true);
@@ -257,6 +262,9 @@ function testModuleLayerContractsAreExported(): void {
   assert.equal(PHOTO_WALL_ROUTE_ACCESS.createPhotoPost.config.access, "guest");
   assert.equal(ADMIN_BACKOFFICE_ROUTE_ACCESS.dashboard.config.access, "admin");
   assert.equal(GIFT_REGISTRY_TRANSACTIONAL_CONTRACTS.reserveAvailableGift, "transactional");
+  assert.equal(typeof createListAdminGiftsUseCase, "function");
+  assert.equal(typeof createCreateGiftUseCase, "function");
+  assert.equal(typeof createUpdateGiftUseCase, "function");
   assert.equal(typeof createManageGiftReservationUseCase, "function");
   assert.equal(typeof createReserveGiftUseCase, "function");
   assert.equal(typeof PrismaGiftReservationTransactionRunner, "function");
@@ -288,6 +296,13 @@ function testGiftReservationManagementError(): void {
   assert.equal(error.name, "GiftReservationManagementError");
   assert.equal(error.reason, "reservation_not_active");
   assert.equal(error.statusCode, 409);
+}
+
+function testAdminGiftManagementError(): void {
+  const error = new AdminGiftManagementError("invalid_value_range");
+  assert.equal(error.name, "AdminGiftManagementError");
+  assert.equal(error.reason, "invalid_value_range");
+  assert.equal(error.statusCode, 400);
 }
 
 function testGiftCatalogItemResponseContractMatchesApplicationShape(): void {
@@ -330,6 +345,7 @@ export async function runModuleContractTests(): Promise<void> {
     { name: "keeps gift reservation conflict error contract", run: testGiftReservationConflictError },
     { name: "keeps gift registry application error contract", run: testGiftRegistryApplicationError },
     { name: "keeps gift reservation management error contract", run: testGiftReservationManagementError },
+    { name: "keeps admin gift management error contract", run: testAdminGiftManagementError },
     {
       name: "matches gift catalog item response shape with application contract",
       run: testGiftCatalogItemResponseContractMatchesApplicationShape,

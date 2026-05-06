@@ -51,6 +51,8 @@ async function testPrismaGiftRepository(): Promise<void> {
     category: "casa",
     status: "available",
     isActive: true,
+    minEstimatedValue: 100,
+    maxEstimatedValue: 500,
     search: "prato",
     page: 2,
     pageSize: 10,
@@ -64,6 +66,10 @@ async function testPrismaGiftRepository(): Promise<void> {
         category: "casa",
         status: "AVAILABLE",
         isActive: true,
+        estimatedValue: {
+          gte: 100,
+          lte: 500,
+        },
         OR: [
           { name: { contains: "prato", mode: "insensitive" } },
           { category: { contains: "prato", mode: "insensitive" } },

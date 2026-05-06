@@ -9,6 +9,8 @@ export interface GiftRepositoryFilters extends PaginationQuery {
   readonly category?: string;
   readonly status?: GiftStatus;
   readonly isActive?: boolean;
+  readonly minEstimatedValue?: number;
+  readonly maxEstimatedValue?: number;
   readonly search?: string;
 }
 
