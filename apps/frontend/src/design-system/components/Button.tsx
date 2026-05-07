@@ -1,13 +1,14 @@
 import { colors, radius, spacing } from "../tokens";
 
-type ButtonProps = {
+type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
   children: React.ReactNode;
 };
 
-export function Button({ children }: ButtonProps) {
+export function Button({ children, ...props }: ButtonProps) {
   return (
     <button
       type="button"
+      {...props}
       style={{
         padding: spacing.md,
         borderRadius: radius.md,
@@ -15,6 +16,8 @@ export function Button({ children }: ButtonProps) {
         background: colors.primary,
         color: "white",
         width: "100%",
+        cursor: "pointer",
+        ...props.style,
       }}
     >
       {children}
