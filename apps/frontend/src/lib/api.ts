@@ -24,4 +24,9 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ token }),
     }),
+  loginWithCode: (code: string) =>
+    apiFetch("/auth/guest/login/code", {
+      method: "POST",
+      body: JSON.stringify({ code }),
+    }),
 };
