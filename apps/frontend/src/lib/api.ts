@@ -183,6 +183,23 @@ export interface GiftReservationResultDto {
   updatedAt: string;
 }
 
+export interface PhotoGalleryItemDto {
+  id: string;
+  authorName: string;
+  message: string;
+  mediaUrl: string;
+  mediaMimeType: string;
+  mediaWidth: number | null;
+  mediaHeight: number | null;
+  submittedAt: string;
+}
+
+export interface PhotoGalleryListDto {
+  items: PhotoGalleryItemDto[];
+  page: number;
+  pageSize: number;
+}
+
 export interface AuthSessionDto {
   actorType: "guest" | "admin";
   actorId: string;
@@ -224,6 +241,11 @@ type ListGiftsParams = {
   reservationStatus?: GiftStatus;
   minEstimatedValue?: number;
   maxEstimatedValue?: number;
+  page?: number;
+  pageSize?: number;
+};
+
+type ListPhotoWallParams = {
   page?: number;
   pageSize?: number;
 };
@@ -311,6 +333,14 @@ export const guestApi = {
       method: "POST",
       body: JSON.stringify(input ?? {}),
     }),
+  listPhotoWall: ({ page = 1, pageSize = 20 }: ListPhotoWallParams = {}) => {
+    const query = new URLSearchParams({
+      page: String(page),
+      pageSize: String(pageSize),
+    });
+
+    return apiFetch<PhotoGalleryListDto>(`/photo-wall?${query.toString()}`);
+  },
 };
 
 type ListAdminGuestsParams = {
