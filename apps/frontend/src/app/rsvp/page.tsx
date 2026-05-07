@@ -14,6 +14,7 @@ import styles from "./page.module.css";
 
 type LoadState = "loading" | "ready" | "error";
 type SubmitState = "idle" | "submitting" | "success" | "error";
+type SubmitOutcome = "created" | "updated" | "replayed" | null;
 
 const navItems = [
   { label: "Inicio", href: "/guest/home", icon: "/guest-home/nav-home.svg" },
@@ -27,6 +28,7 @@ export default function GuestRsvpPage() {
   const [events, setEvents] = useState<EventDto[]>(fallbackEvents);
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [submitState, setSubmitState] = useState<SubmitState>("idle");
+  const [submitOutcome, setSubmitOutcome] = useState<SubmitOutcome>(null);
   const [submitMessage, setSubmitMessage] = useState("Confirme sua presenca para cada evento.");
 
   const [selectedEventId, setSelectedEventId] = useState<string>("");
@@ -106,6 +108,7 @@ export default function GuestRsvpPage() {
     }
 
     setSubmitState("submitting");
+    setSubmitOutcome(null);
     setSubmitMessage("Enviando sua confirmacao...");
 
     try {
@@ -116,7 +119,24 @@ export default function GuestRsvpPage() {
         message: message.trim() ? message.trim() : undefined,
       });
 
+      setHome((current) => {
+        if (!current) {
+          return current;
+        }
+
+        const nextResponses = current.responses.filter(
+          (response) => response.eventId !== result.persistedResponse.eventId,
+        );
+        nextResponses.push(result.persistedResponse);
+
+        return {
+          ...current,
+          responses: nextResponses,
+        };
+      });
+
       setSubmitState("success");
+      setSubmitOutcome(result.outcome);
       setSubmitMessage(
         result.outcome === "replayed"
           ? "Resposta ja registrada. Nada foi duplicado."
@@ -126,6 +146,7 @@ export default function GuestRsvpPage() {
       );
     } catch {
       setSubmitState("error");
+      setSubmitOutcome(null);
       setSubmitMessage("Nao foi possivel enviar agora. Tente novamente em instantes.");
     }
   }
@@ -247,7 +268,11 @@ export default function GuestRsvpPage() {
               {submitState === "submitting" ? "ENVIANDO..." : "CONFIRMAR PRESENCA"}
             </button>
 
-            <p className={styles.feedback} data-state={submitState}>
+            <p
+              className={styles.feedback}
+              data-state={submitState}
+              data-outcome={submitOutcome ?? undefined}
+            >
               {submitMessage}
             </p>
           </form>

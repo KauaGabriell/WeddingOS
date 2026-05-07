@@ -276,6 +276,18 @@
   color: #b9ffc4;
 }
 
+.feedback[data-state="success"][data-outcome="created"] {
+  color: #b9ffc4;
+}
+
+.feedback[data-state="success"][data-outcome="updated"] {
+  color: #c8f0ff;
+}
+
+.feedback[data-state="success"][data-outcome="replayed"] {
+  color: #f8d7ff;
+}
+
 .feedback[data-state="error"] {
   color: #ffb6b6;
 }
