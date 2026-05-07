@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { GuestBottomNav } from "../../components/guest-bottom-nav/guest-bottom-nav";
 import { type EventDto, type GuestHomeDto, type RsvpResponseStatus, guestApi } from "../../lib/api";
 import {
   fallbackEvents,
@@ -15,13 +16,6 @@ import styles from "./page.module.css";
 type LoadState = "loading" | "ready" | "error";
 type SubmitState = "idle" | "submitting" | "success" | "error";
 type SubmitOutcome = "created" | "updated" | "replayed" | null;
-
-const navItems = [
-  { label: "Inicio", href: "/guest/home", icon: "/guest-home/nav-home.svg" },
-  { label: "RSVP", href: "/rsvp", icon: "/guest-home/nav-rsvp.svg", active: true },
-  { label: "Presentes", href: "/gifts", icon: "/guest-home/nav-gifts.svg" },
-  { label: "Mural", href: "/photo-wall", icon: "/guest-home/nav-wall.svg" },
-];
 
 export default function GuestRsvpPage() {
   const [home, setHome] = useState<GuestHomeDto | null>(null);
@@ -293,19 +287,7 @@ export default function GuestRsvpPage() {
         </section>
       </main>
 
-      <nav className={styles.bottomNav} aria-label="Navegacao inferior do convidado">
-        {navItems.map((item) => (
-          <a
-            className={`${styles.navItem} ${item.active ? styles.navItemActive : ""}`}
-            href={item.href}
-            key={item.href}
-            aria-current={item.active ? "page" : undefined}
-          >
-            <img src={item.icon} alt="" aria-hidden="true" />
-            <span>{item.label}</span>
-          </a>
-        ))}
-      </nav>
+      <GuestBottomNav activeTab="rsvp" />
     </div>
   );
 }

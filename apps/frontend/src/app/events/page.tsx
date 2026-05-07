@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { GuestBottomNav } from "../../components/guest-bottom-nav/guest-bottom-nav";
 import { type EventDto, guestApi } from "../../lib/api";
 import {
   fallbackEvents,
@@ -16,13 +17,6 @@ import {
   sortEventsByStart,
 } from "../../lib/guest-events";
 import styles from "./page.module.css";
-
-const navItems = [
-  { label: "Inicio", href: "/guest/home", icon: "/guest-home/nav-home.svg" },
-  { label: "RSVP", href: "/rsvp", icon: "/guest-home/nav-rsvp.svg" },
-  { label: "Presentes", href: "/gifts", icon: "/guest-home/nav-gifts.svg" },
-  { label: "Mural", href: "/photo-wall", icon: "/guest-home/nav-wall.svg" },
-];
 
 type LoadState = "loading" | "ready" | "error";
 const skeletonKeys = ["skeleton-1", "skeleton-2"] as const;
@@ -117,14 +111,7 @@ export default function GuestEventsPage() {
         </section>
       </main>
 
-      <nav className={styles.bottomNav} aria-label="Navegacao inferior do convidado">
-        {navItems.map((item) => (
-          <a className={styles.navItem} href={item.href} key={item.href}>
-            <img src={item.icon} alt="" aria-hidden="true" />
-            <span>{item.label}</span>
-          </a>
-        ))}
-      </nav>
+      <GuestBottomNav activeTab="home" />
     </div>
   );
 }
