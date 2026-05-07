@@ -165,11 +165,13 @@ function EventCard({ event, index }: EventCardProps) {
       <div className={styles.infoGrid}>
         <InfoItem
           icon="/guest-home/date-icon.svg"
+          iconVariant="date"
           label="Horario"
           value={`${formatEventTime(event.startsAt)}h`}
         />
         <InfoItem
           icon="/guest-home/rsvp-icon.svg"
+          iconVariant="location"
           label="Local"
           value={formatLocation(event)}
           detail={formatLocationMeta(event)}
@@ -203,14 +205,17 @@ function EventCard({ event, index }: EventCardProps) {
 type InfoItemProps = {
   detail?: string;
   icon: string;
+  iconVariant: "date" | "location";
   label: string;
   value: string;
 };
 
-function InfoItem({ detail, icon, label, value }: InfoItemProps) {
+function InfoItem({ detail, icon, iconVariant, label, value }: InfoItemProps) {
   return (
     <div className={styles.infoItem}>
-      <span className={styles.infoIcon}>
+      <span
+        className={`${styles.infoIcon} ${iconVariant === "date" ? styles.infoIconDate : styles.infoIconLocation}`}
+      >
         <img src={icon} alt="" aria-hidden="true" />
       </span>
       <div>

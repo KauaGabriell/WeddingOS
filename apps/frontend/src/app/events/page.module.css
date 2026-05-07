@@ -14,9 +14,19 @@
   --events-serif: "Noto Serif", Georgia, "Times New Roman", serif;
   --events-sans: Manrope, Inter, Arial, sans-serif;
 
-  background: radial-gradient(circle at 20% 0%, rgba(255, 171, 243, 0.13), transparent 30%),
-    radial-gradient(circle at 85% 10%, rgba(237, 187, 172, 0.1), transparent 26%),
-    linear-gradient(180deg, rgba(255, 171, 243, 0.03), transparent 28%), var(--events-bg);
+  background:
+    radial-gradient(
+      circle at 20% 0%,
+      rgba(255, 171, 243, 0.13),
+      transparent 30%
+    ),
+    radial-gradient(
+      circle at 85% 10%,
+      rgba(237, 187, 172, 0.1),
+      transparent 26%
+    ),
+    linear-gradient(180deg, rgba(255, 171, 243, 0.03), transparent 28%),
+    var(--events-bg);
   color: var(--events-text);
   font-family: var(--events-sans);
   margin: 0 auto;
@@ -36,7 +46,8 @@
 }
 
 .shell::before {
-  background: linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
   background-size: 36px 36px;
   content: "";
@@ -192,7 +203,11 @@
 }
 
 .noticeCard {
-  background: linear-gradient(135deg, rgba(255, 171, 243, 0.12), rgba(237, 187, 172, 0.08));
+  background: linear-gradient(
+    135deg,
+    rgba(255, 171, 243, 0.12),
+    rgba(237, 187, 172, 0.08)
+  );
   border: 1px solid rgba(255, 171, 243, 0.18);
   border-radius: 12px;
   display: flex;
@@ -391,14 +406,30 @@
   background: rgba(255, 171, 243, 0.08);
   border-radius: 999px;
   display: flex;
+  position: relative;
   height: 40px;
   justify-content: center;
+  line-height: 0;
+  overflow: hidden;
   width: 40px;
 }
 
 .infoIcon img {
+  display: block;
+  position: absolute;
+  top: 12px;
+  left: 11px;
   height: 18px;
+  object-fit: contain;
   width: 18px;
+}
+
+.infoIconDate img {
+  transform: translate(0, -0.5px);
+}
+
+.infoIconLocation img {
+  transform: translate(0.5px, -0.5px);
 }
 
 .infoItem p,
@@ -461,7 +492,11 @@
 }
 
 .primaryAction {
-  background: linear-gradient(90deg, var(--events-accent), var(--events-accent-strong));
+  background: linear-gradient(
+    90deg,
+    var(--events-accent),
+    var(--events-accent-strong)
+  );
   color: #380038;
 }
 

@@ -109,6 +109,11 @@ export interface EventListDto {
   pageSize: number;
 }
 
+export interface SubmitRsvpResultDto {
+  persistedResponse: RsvpResponseDto;
+  outcome: "created" | "updated" | "replayed";
+}
+
 export interface AuthSessionDto {
   actorType: "guest" | "admin";
   actorId: string;
@@ -182,6 +187,16 @@ export const guestApi = {
 
     return apiFetch<EventListDto>(`/events?${query.toString()}`);
   },
+  submitRsvp: (input: {
+    eventId: string;
+    responseStatus: RsvpResponseStatus;
+    companionsConfirmed: number;
+    message?: string;
+  }) =>
+    apiFetch<SubmitRsvpResultDto>("/rsvp/respond", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
 };
 
 type ListAdminGuestsParams = {
