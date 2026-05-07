@@ -8,9 +8,11 @@ import {
   createIssueGuestSessionUseCase,
   createLoginGuestWithInviteTokenUseCase,
   createLoginGuestWithShortCodeUseCase,
+  createRegisterOpenGuestAccessUseCase,
   createRequestAdminMagicLinkUseCase,
   createRevokeInviteTokenUseCase,
   GuestInviteTokenAuthenticationError,
+  OpenGuestAccessRegistrationError,
   type AdminMagicLinkIssueInput,
   type AdminMagicLinkIssueResult,
   InvalidInviteTokenConsumptionError,
@@ -19,8 +21,10 @@ import {
   resolveInviteTokenLifecycleStatus,
   revokeInviteToken,
   SignedGuestSessionService,
+  type OpenGuestAccessRegistrationTransactionContext,
   validateInviteToken,
 } from "../../modules/identity-access/index.js";
+import type { WriteAuditLogInput } from "../../modules/admin-backoffice/index.js";
 import { runNamedTests } from "../test-helpers.js";
 
 function buildBaseInviteToken(): InviteToken {
@@ -329,6 +333,9 @@ async function testLoginGuestWithInviteTokenUseCase(): Promise<void> {
     async findPrimaryByGroupId(guestGroupId: string) {
       return guestGroupId === "group-1" ? baseGuest : null;
     },
+    async findPrimaryByPhone(phone: string) {
+      return phone === "5511999999999" ? baseGuest : null;
+    },
   };
 
   const transactionRunner = {
@@ -422,7 +429,7 @@ async function testLoginGuestWithInviteTokenUseCase(): Promise<void> {
     authenticatedAt: new Date("2026-04-30T15:00:00.000Z"),
   });
   assert.equal((await byShortCode.execute({ code: "GROUP01" })).guestId, "guest-1");
-  assert.equal(markCalls, 2);
+  assert.equal(markCalls, 0);
   assert.equal(auditWrites.length, 4);
   assert.deepEqual(auditWrites[0], {
     entityType: "guest",
@@ -436,6 +443,162 @@ async function testLoginGuestWithInviteTokenUseCase(): Promise<void> {
       inviteTokenId: "invite-1",
     },
   });
+}
+
+async function testRegisterOpenGuestAccessUseCase(): Promise<void> {
+  const savedGuestGroups: Array<Record<string, unknown>> = [];
+  const savedGuests: Array<Record<string, unknown>> = [];
+  const savedInviteTokens: Array<Record<string, unknown>> = [];
+  const savedEligibilities: Array<Record<string, unknown>> = [];
+  const auditWrites: Array<Record<string, unknown>> = [];
+  const now = new Date("2026-05-07T12:00:00.000Z");
+
+  const useCase = createRegisterOpenGuestAccessUseCase({
+    guestRepository: {
+      async findPrimaryByPhone(phone: string) {
+        return phone === "5511888888888"
+          ? {
+              id: "guest-existing",
+              guestGroupId: "group-existing",
+              fullName: "Maria Souza",
+              phone,
+              email: null,
+              isPrimary: true,
+              status: "active",
+              lastAccessAt: null,
+              createdAt: now,
+              updatedAt: now,
+            }
+          : null;
+      },
+    },
+    guestGroupRepository: {
+      async findByGroupCode() {
+        return null;
+      },
+    },
+    inviteTokenRepository: {
+      async findByShortCode() {
+        return null;
+      },
+    },
+    eventRepository: {
+      async findMany() {
+        return [
+          {
+            id: "event-1",
+            slug: "casamento",
+            name: "Casamento",
+            eventType: "wedding" as const,
+            startsAt: now,
+            location: {
+              venueName: "Igreja",
+              addressLine: "Rua A",
+              addressNumber: null,
+              neighborhood: null,
+              city: "Goiania",
+              state: "GO",
+              postalCode: null,
+              latitude: null,
+              longitude: null,
+              mapUrl: null,
+            },
+            notes: null,
+            isActive: true,
+            createdAt: now,
+            updatedAt: now,
+          },
+        ] as const;
+      },
+    },
+    registrationTransactionRunner: {
+      async run<T>(operation: (context: OpenGuestAccessRegistrationTransactionContext) => Promise<T>) {
+        return operation({
+          async saveGuestGroup(entity) {
+            savedGuestGroups.push(entity as unknown as Record<string, unknown>);
+            return entity;
+          },
+          async saveGuest(entity) {
+            savedGuests.push(entity as unknown as Record<string, unknown>);
+            return entity;
+          },
+          async saveInviteToken(entity) {
+            savedInviteTokens.push(entity as unknown as Record<string, unknown>);
+            return entity;
+          },
+          async saveEventGuestEligibility(entity) {
+            savedEligibilities.push(entity as unknown as Record<string, unknown>);
+            return entity;
+          },
+        });
+      },
+    },
+    auditLogWriter: {
+      async write(input: WriteAuditLogInput) {
+        auditWrites.push(input as unknown as Record<string, unknown>);
+        return {
+          id: `audit-${auditWrites.length}`,
+          entityType: input.entityType,
+          entityId: input.entityId,
+          actionType: input.actionType,
+          actorAdminUserId: input.actorAdminUserId ?? null,
+          actorGuestId: input.actorGuestId ?? null,
+          actorType: input.actorType,
+          requestId: input.requestId ?? null,
+          metadata: input.metadata ?? null,
+          createdAt: now,
+        };
+      },
+    },
+    now: () => now,
+  });
+
+  const result = await useCase.execute({
+    fullName: "Carlos Azevedo",
+    phone: "(62) 99999-1111",
+    companionsCount: 2,
+    companionNames: ["Helena Azevedo", "Bruno Azevedo"],
+    requestId: "req-open-access",
+  });
+
+  assert.equal(result.guest.fullName, "Carlos Azevedo");
+  assert.equal(result.guest.phone, "62999991111");
+  assert.equal(result.guest.isPrimary, true);
+  assert.equal(result.guestGroup.allowedCompanions, 2);
+  assert.equal(result.companions.length, 2);
+  assert.equal(result.shortCode.length, 8);
+  assert.equal(savedGuestGroups.length, 1);
+  assert.equal(savedGuests.length, 3);
+  assert.equal(savedInviteTokens.length, 1);
+  assert.equal(savedEligibilities.length, 3);
+  assert.equal(auditWrites.length, 2);
+
+  await assert.rejects(
+    () =>
+      useCase.execute({
+        fullName: "Maria Souza",
+        phone: "(55) 11 88888-8888",
+        companionsCount: 0,
+        companionNames: [],
+      }),
+    (error: unknown) =>
+      error instanceof OpenGuestAccessRegistrationError &&
+      error.reason === "phone_already_registered" &&
+      error.statusCode === 409,
+  );
+
+  await assert.rejects(
+    () =>
+      useCase.execute({
+        fullName: "Carlos Azevedo",
+        phone: "(62) 99999-1111",
+        companionsCount: 2,
+        companionNames: ["Helena Azevedo"],
+      }),
+    (error: unknown) =>
+      error instanceof OpenGuestAccessRegistrationError &&
+      error.reason === "invalid_companions_payload",
+  );
 }
 
 async function testRequestAdminMagicLinkUseCase(): Promise<void> {
@@ -581,6 +744,7 @@ export async function runIdentityAccessApplicationTests(): Promise<void> {
     { name: "invite token validation service", run: testInviteTokenValidationService },
     { name: "revoke invite token use case", run: testRevokeInviteTokenUseCase },
     { name: "login guest with invite token and short code", run: testLoginGuestWithInviteTokenUseCase },
+    { name: "register open guest access use case", run: testRegisterOpenGuestAccessUseCase },
     { name: "request admin magic link use case", run: testRequestAdminMagicLinkUseCase },
     { name: "guest session cookie attributes", run: testGuestSessionCookieAttributes },
     { name: "issue guest session use case", run: testIssueGuestSessionUseCase },

@@ -52,6 +52,8 @@ import {
   IDENTITY_ACCESS_INVITE_TOKEN_LIFECYCLE_CONTRACTS,
   IDENTITY_ACCESS_MODULE_USE_CASES,
   IDENTITY_ACCESS_ROUTE_ACCESS,
+  PrismaOpenGuestAccessRegistrationTransactionRunner,
+  createRegisterOpenGuestAccessUseCase,
 } from "../modules/identity-access/index.js";
 import type {
   AdminUser,
@@ -245,6 +247,7 @@ function testModuleLayerContractsAreExported(): void {
   assert.equal(PHOTO_WALL_HTTP_CONTRACT.routePrefix, "/photo-wall");
   assert.equal(ADMIN_BACKOFFICE_HTTP_CONTRACT.routePrefix, "/admin");
   assert.equal(IDENTITY_ACCESS_MODULE_USE_CASES.guestAuthentication, "implemented");
+  assert.equal(IDENTITY_ACCESS_MODULE_USE_CASES.guestOpenRegistration, "implemented");
   assert.equal(IDENTITY_ACCESS_MODULE_USE_CASES.adminAuthentication, "implemented");
   assert.equal(IDENTITY_ACCESS_MODULE_USE_CASES.inviteTokenLifecycle, "implemented");
   assert.equal(GUESTS_RSVP_MODULE_USE_CASES.guestLookup, "implemented");
@@ -277,8 +280,13 @@ function testModuleLayerContractsAreExported(): void {
   assert.equal(PHOTO_WALL_INFRASTRUCTURE_PORTS.providers.includes("photo-storage-provider"), true);
   assert.equal(ADMIN_BACKOFFICE_INFRASTRUCTURE_PORTS.repositories.includes("audit-log-repository"), true);
   assert.equal(IDENTITY_ACCESS_ROUTE_ACCESS.loginWithInviteToken.config.access, "public");
-  assert.equal(IDENTITY_ACCESS_INVITE_TOKEN_LIFECYCLE_CONTRACTS.usagePolicy, "single-use");
+  assert.equal(IDENTITY_ACCESS_ROUTE_ACCESS.registerOpenGuestAccess.config.access, "public");
+  assert.equal(
+    IDENTITY_ACCESS_INVITE_TOKEN_LIFECYCLE_CONTRACTS.usagePolicy,
+    "token-single-use_code-reusable",
+  );
   assert.equal(typeof createListGuestEventsUseCase, "function");
+  assert.equal(typeof createRegisterOpenGuestAccessUseCase, "function");
   assert.equal(GUESTS_RSVP_ROUTE_ACCESS.guestHome.config.access, "guest");
   assert.equal(GUESTS_RSVP_ROUTE_ACCESS.listAdminGuests.config.access, "admin");
   assert.equal(GUESTS_RSVP_ROUTE_ACCESS.listAdminRsvps.config.access, "admin");
@@ -308,7 +316,9 @@ function testModuleLayerContractsAreExported(): void {
   assert.equal(typeof createUpdateGiftUseCase, "function");
   assert.equal(typeof createManageGiftReservationUseCase, "function");
   assert.equal(typeof createReserveGiftUseCase, "function");
+  assert.equal(typeof PrismaOpenGuestAccessRegistrationTransactionRunner, "function");
   assert.equal(typeof PrismaGiftReservationTransactionRunner, "function");
+  assert.ok(IDENTITY_ACCESS_HTTP_SCHEMAS.responses.openGuestAccessRegistration.shape.shortCode);
   assert.equal(
     IDENTITY_ACCESS_HTTP_SCHEMAS.bodies.adminLogin.parse({
       email: "admin@example.com",

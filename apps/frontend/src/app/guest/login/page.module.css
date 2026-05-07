@@ -1,6 +1,6 @@
 .shell {
   --login-bg: #131313;
-  --login-surface: #2a2a2a;
+  --login-surface: rgba(32, 31, 31, 0.92);
   --login-surface-soft: rgba(53, 53, 52, 0.42);
   --login-text: #e5e2e1;
   --login-muted: #dcbed4;
@@ -107,7 +107,10 @@
 }
 
 .eyebrow,
-.statusLabel {
+.statusLabel,
+.inputLabel,
+.sectionTitle span,
+.codeBlock span {
   color: var(--login-warm);
   font-size: 12px;
   font-weight: 700;
@@ -132,21 +135,19 @@
 .hero p:not(.eyebrow) {
   color: var(--login-muted);
   font-size: 14px;
-  letter-spacing: 0;
   line-height: 23px;
   margin: 0;
-  max-width: 316px;
+  max-width: 320px;
 }
 
 .statusCard {
-  background: var(--login-surface-soft);
+  background: var(--login-surface);
   border: 1px solid var(--login-border);
   border-radius: 12px;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.32);
   display: flex;
   flex-direction: column;
   gap: 24px;
-  min-height: 378px;
   overflow: hidden;
   padding: 32px;
   position: relative;
@@ -193,7 +194,6 @@
 }
 
 .successMark,
-.errorMark,
 .inviteMark {
   display: block;
   height: 34px;
@@ -211,26 +211,6 @@
   top: 3px;
   transform: rotate(45deg);
   width: 12px;
-}
-
-.errorMark::before,
-.errorMark::after {
-  background: var(--login-danger);
-  border-radius: 999px;
-  content: "";
-  height: 34px;
-  left: 15px;
-  position: absolute;
-  top: 0;
-  width: 3px;
-}
-
-.errorMark::before {
-  transform: rotate(45deg);
-}
-
-.errorMark::after {
-  transform: rotate(-45deg);
 }
 
 .inviteMark {
@@ -265,18 +245,96 @@
   margin: 0;
 }
 
-.statusBody p {
+.statusBody p,
+.successMeta p {
   color: var(--login-subtle);
   font-size: 14px;
   line-height: 23px;
   margin: 0;
 }
 
-.actionGroup {
+.form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin-top: auto;
+  gap: 16px;
+}
+
+.fieldGroup,
+.companionsSection {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.companionsSection {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  margin-top: 4px;
+  padding-top: 16px;
+}
+
+.textInput {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 171, 243, 0.18);
+  border-radius: 8px;
+  color: var(--login-text);
+  font-family: var(--login-sans);
+  font-size: 16px;
+  height: 56px;
+  line-height: 22px;
+  outline: none;
+  padding: 0 16px;
+  width: 100%;
+}
+
+.textInput::placeholder {
+  color: rgba(220, 190, 212, 0.35);
+}
+
+.textInput:focus {
+  border-color: var(--login-accent);
+  box-shadow: 0 0 0 3px rgba(255, 171, 243, 0.13);
+}
+
+.textInput:disabled {
+  opacity: 0.6;
+}
+
+.fieldError {
+  color: #ffb4ab;
+  font-size: 13px;
+  line-height: 20px;
+  margin: 0;
+}
+
+.successPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.codeBlock {
+  background: rgba(255, 171, 243, 0.08);
+  border: 1px solid rgba(255, 171, 243, 0.18);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+}
+
+.codeBlock strong {
+  color: var(--login-text);
+  font-family: var(--login-serif);
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: 6px;
+  line-height: 40px;
+}
+
+.successMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .primaryButton,
@@ -297,8 +355,11 @@
 
 .primaryButton {
   background: linear-gradient(90deg, var(--login-accent), var(--login-accent-strong));
+  border: 0;
   box-shadow: 0 10px 15px -3px rgba(255, 171, 243, 0.2), 0 4px 6px -4px rgba(255, 171, 243, 0.2);
   color: var(--login-accent-dark);
+  cursor: pointer;
+  width: 100%;
 }
 
 .secondaryButton {
@@ -307,10 +368,9 @@
   color: var(--login-text);
 }
 
-.primaryButton:active,
-.secondaryButton:active {
-  opacity: 0.86;
-  transform: scale(0.98);
+.primaryButton:disabled {
+  cursor: wait;
+  opacity: 0.7;
 }
 
 .quoteCard {
@@ -342,11 +402,11 @@
 }
 
 .quoteCard cite {
-  color: var(--login-warm);
+  color: rgba(237, 187, 172, 0.74);
   font-size: 12px;
   font-style: normal;
-  letter-spacing: 3px;
-  line-height: 16px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
   text-transform: uppercase;
 }
 
@@ -357,47 +417,20 @@
   gap: 16px;
   justify-content: center;
   min-height: 100svh;
-  padding: 24px;
 }
 
 .fallback p {
   color: var(--login-muted);
   font-size: 14px;
-  line-height: 20px;
   margin: 0;
 }
 
 @keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
   to {
     transform: rotate(360deg);
-  }
-}
-
-@media (min-width: 431px) {
-  .shell {
-    box-shadow: 0 0 80px rgba(0, 0, 0, 0.35);
-  }
-}
-
-@media (max-width: 359px) {
-  .topBar,
-  .main {
-    padding-left: 18px;
-    padding-right: 18px;
-  }
-
-  .statusCard {
-    padding: 26px;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .spinner {
-    animation-duration: 1.8s;
-  }
-
-  .primaryButton,
-  .secondaryButton {
-    transition: none;
   }
 }

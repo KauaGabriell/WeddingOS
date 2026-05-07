@@ -12,6 +12,7 @@ import {
   INVITE_TOKEN_CHANNELS,
   INVITE_TOKEN_STATUSES,
 } from "../domain/entities/invite-token.js";
+import { GUEST_STATUSES } from "../../guests-rsvp/domain/entities/guest.js";
 
 const adminUserResponseSchema = z.object({
   id: uuidSchema,
@@ -50,6 +51,41 @@ const authSessionResponseSchema = z.object({
   expiresAt: isoDateTimeSchema,
 });
 
+const openAccessGuestResponseSchema = z.object({
+  id: uuidSchema,
+  guestGroupId: uuidSchema,
+  fullName: z.string().min(1),
+  phone: z.string().min(1).nullable(),
+  email: z.string().email().nullable(),
+  isPrimary: z.boolean(),
+  status: z.enum(GUEST_STATUSES),
+  lastAccessAt: isoDateTimeSchema.nullable(),
+  createdAt: isoDateTimeSchema,
+  updatedAt: isoDateTimeSchema,
+});
+
+const openAccessGuestGroupResponseSchema = z.object({
+  id: uuidSchema,
+  displayName: z.string().min(1),
+  groupCode: z.string().min(1),
+  allowedCompanions: z.number().int().min(0),
+  primaryContactName: z.string().min(1).nullable(),
+  primaryContactPhone: z.string().min(1).nullable(),
+  primaryContactEmail: z.string().email().nullable(),
+  notes: z.string().min(1).nullable(),
+  createdAt: isoDateTimeSchema,
+  updatedAt: isoDateTimeSchema,
+});
+
+const openGuestAccessRegistrationResponseSchema = z.object({
+  authSession: authSessionResponseSchema,
+  guest: openAccessGuestResponseSchema,
+  guestGroup: openAccessGuestGroupResponseSchema,
+  companions: z.array(openAccessGuestResponseSchema),
+  shortCode: z.string().min(4).max(32),
+  message: z.string().min(1),
+});
+
 const requestAcceptedResponseSchema = z.object({
   accepted: z.literal(true),
 });
@@ -68,6 +104,12 @@ export const IDENTITY_ACCESS_HTTP_SCHEMAS = defineHttpSchemaCatalog({
     guestCodeLogin: z.object({
       code: z.string().trim().min(4).max(32),
     }),
+    registerOpenGuestAccess: z.object({
+      fullName: z.string().trim().min(3).max(120),
+      phone: z.string().trim().min(10).max(32),
+      companionsCount: z.number().int().min(0).max(12),
+      companionNames: z.array(z.string().trim().min(3).max(120)).max(12),
+    }),
     adminLogin: z.object({
       email: z.string().trim().email(),
     }),
@@ -79,6 +121,9 @@ export const IDENTITY_ACCESS_HTTP_SCHEMAS = defineHttpSchemaCatalog({
     adminUser: adminUserResponseSchema,
     inviteToken: inviteTokenResponseSchema,
     authSession: authSessionResponseSchema,
+    openAccessGuest: openAccessGuestResponseSchema,
+    openAccessGuestGroup: openAccessGuestGroupResponseSchema,
+    openGuestAccessRegistration: openGuestAccessRegistrationResponseSchema,
     requestAccepted: requestAcceptedResponseSchema,
   },
 });
@@ -92,6 +137,9 @@ export type IdentityAccessInviteTokenResponseDto = z.infer<
 export type IdentityAccessAuthSessionResponseDto = z.infer<
   typeof IDENTITY_ACCESS_HTTP_SCHEMAS.responses.authSession
 >;
+export type IdentityAccessOpenGuestAccessRegistrationResponseDto = z.infer<
+  typeof IDENTITY_ACCESS_HTTP_SCHEMAS.responses.openGuestAccessRegistration
+>;
 export type IdentityAccessRequestAcceptedResponseDto = z.infer<
   typeof IDENTITY_ACCESS_HTTP_SCHEMAS.responses.requestAccepted
 >;
@@ -100,6 +148,9 @@ export type IdentityAccessGuestTokenLoginRequestDto = z.infer<
 >;
 export type IdentityAccessGuestCodeLoginRequestDto = z.infer<
   typeof IDENTITY_ACCESS_HTTP_SCHEMAS.bodies.guestCodeLogin
+>;
+export type IdentityAccessRegisterOpenGuestAccessRequestDto = z.infer<
+  typeof IDENTITY_ACCESS_HTTP_SCHEMAS.bodies.registerOpenGuestAccess
 >;
 export type IdentityAccessAdminLoginRequestDto = z.infer<
   typeof IDENTITY_ACCESS_HTTP_SCHEMAS.bodies.adminLogin

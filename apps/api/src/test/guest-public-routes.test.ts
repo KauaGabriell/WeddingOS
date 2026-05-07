@@ -322,6 +322,8 @@ function createPrismaStub() {
   ];
   let photoPostSequence = 0;
   let giftReservationSequence = 0;
+  const guests = [guest];
+  const guestGroups = [guestGroup];
   const responseTimestamps = [
     new Date("2026-05-11T12:00:00.000Z"),
     new Date("2026-05-12T12:00:00.000Z"),
@@ -346,10 +348,20 @@ function createPrismaStub() {
       async findFirst(args: { where: { shortCode: string } }) {
         return [...inviteTokens.values()].find((token) => token.shortCode === args.where.shortCode) ?? null;
       },
-      async findMany() {
-        return [];
+      async findMany(args?: { where?: { guestId?: string; status?: string } }) {
+        return [...inviteTokens.values()].filter((token) => {
+          if (args?.where?.guestId && token.guestId !== args.where.guestId) return false;
+          if (args?.where?.status && token.status !== args.where.status) return false;
+          return true;
+        });
       },
       async upsert(args: { create: any }) {
+        const existing = [...inviteTokens.values()].find((entry) => entry.id === args.create.id);
+        if (existing) {
+          Object.assign(existing, args.create);
+          return existing;
+        }
+        inviteTokens.set(args.create.tokenHash, args.create);
         return args.create;
       },
       async update(args: { where: { id: string }; data: any }) {
@@ -363,26 +375,55 @@ function createPrismaStub() {
     },
     guest: {
       async findUnique(args: { where: { id: string } }) {
-        return args.where.id === GUEST_ID ? guest : null;
+        return guests.find((entry) => entry.id === args.where.id) ?? null;
       },
-      async findFirst(args: { where: { guestGroupId: string; isPrimary?: boolean } }) {
-        return args.where.guestGroupId === GROUP_ID ? guest : null;
+      async findFirst(args: { where: { guestGroupId?: string; phone?: string; isPrimary?: boolean } }) {
+        return (
+          guests.find((entry) => {
+            if (args.where.guestGroupId && entry.guestGroupId !== args.where.guestGroupId) return false;
+            if (args.where.phone && entry.phone !== args.where.phone) return false;
+            if (args.where.isPrimary !== undefined && entry.isPrimary !== args.where.isPrimary) return false;
+            return true;
+          }) ?? null
+        );
       },
-      async findMany(args: { where: { guestGroupId?: string } }) {
-        return args.where.guestGroupId === GROUP_ID ? [guest] : [];
+      async findMany(args: { where: { guestGroupId?: string; status?: string } }) {
+        return guests.filter((entry) => {
+          if (args.where.guestGroupId && entry.guestGroupId !== args.where.guestGroupId) return false;
+          if (args.where.status && entry.status !== args.where.status) return false;
+          return true;
+        });
       },
       async upsert(args: { create: any }) {
+        const existing = guests.find((entry) => entry.id === args.create.id);
+        if (existing) {
+          Object.assign(existing, args.create);
+          return existing;
+        }
+        guests.push(args.create);
         return args.create;
       },
     },
     guestGroup: {
-      async findUnique(args: { where: { id: string } }) {
-        return args.where.id === GROUP_ID ? guestGroup : null;
+      async findUnique(args: { where: { id?: string; groupCode?: string } }) {
+        return (
+          guestGroups.find((entry) => {
+            if (args.where.id && entry.id === args.where.id) return true;
+            if (args.where.groupCode && entry.groupCode === args.where.groupCode) return true;
+            return false;
+          }) ?? null
+        );
       },
       async findMany() {
-        return [guestGroup];
+        return guestGroups;
       },
       async upsert(args: { create: any }) {
+        const existing = guestGroups.find((entry) => entry.id === args.create.id);
+        if (existing) {
+          Object.assign(existing, args.create);
+          return existing;
+        }
+        guestGroups.push(args.create);
         return args.create;
       },
     },
@@ -393,10 +434,14 @@ function createPrismaStub() {
         }
         return [...events.values()].find((event) => event.slug === args.where.slug) ?? null;
       },
-      async findMany() {
-        return [...events.values()];
+      async findMany(args?: { where?: { isActive?: boolean } }) {
+        return [...events.values()].filter((event) => {
+          if (args?.where?.isActive !== undefined && event.isActive !== args.where.isActive) return false;
+          return true;
+        });
       },
       async upsert(args: { create: any }) {
+        eligibility.push(args.create);
         return args.create;
       },
     },
@@ -658,6 +703,9 @@ function createPrismaStub() {
     async $transaction<T>(operation: (tx: any) => Promise<T>) {
       return operation({
         inviteToken: this.inviteToken,
+        guest: this.guest,
+        guestGroup: this.guestGroup,
+        eventGuestEligibility: this.eventGuestEligibility,
         rsvpResponse: this.rsvpResponse,
         giftReservation: this.giftReservation,
       });
@@ -692,6 +740,25 @@ async function testGuestLoginRoutesAndProtectedGuestPages(): Promise<void> {
   });
 
   try {
+    const openAccessRegistration = await app.inject({
+      method: "POST",
+      url: "/auth/guest/register-open-access",
+      headers: {
+        [REQUEST_ID_HEADER]: "req-open-access-1",
+      },
+      payload: {
+        fullName: "Carlos Azevedo",
+        phone: "(62) 99999-1111",
+        companionsCount: 2,
+        companionNames: ["Helena Azevedo", "Bruno Azevedo"],
+      },
+    });
+    assert.equal(openAccessRegistration.statusCode, 200);
+    assert.equal(openAccessRegistration.json().guest.isPrimary, true);
+    assert.equal(openAccessRegistration.json().companions.length, 2);
+    assert.match(openAccessRegistration.json().shortCode, /^[A-Z0-9]{8}$/);
+    assert.match(String(openAccessRegistration.headers["set-cookie"]), /weddingos_guest_session=/);
+
     const tokenLogin = await app.inject({
       method: "POST",
       url: "/auth/guest/login/token",
@@ -755,6 +822,7 @@ async function testGuestLoginRoutesAndProtectedGuestPages(): Promise<void> {
     assert.equal(guestHome.statusCode, 200);
     assert.equal(guestHome.json().guestGroup.id, GROUP_ID);
     assert.equal(guestHome.json().events.length, 3);
+    assert.equal(guestHome.json().accessCode, "CODE123");
 
     const submitYes = await app.inject({
       method: "POST",

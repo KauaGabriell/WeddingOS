@@ -1,5 +1,5 @@
 export interface IdentityAccessInviteTokenLifecycleContracts {
-  readonly usagePolicy: "single-use";
+  readonly usagePolicy: "token-single-use_code-reusable";
   readonly expirationModel: "derived-from-expiresAt";
   readonly revocationModel: "persisted-status-and-timestamp";
   readonly persistenceTransitions: readonly ["mark-as-used", "revoke"];
@@ -7,7 +7,7 @@ export interface IdentityAccessInviteTokenLifecycleContracts {
 
 export const IDENTITY_ACCESS_INVITE_TOKEN_LIFECYCLE_CONTRACTS: IdentityAccessInviteTokenLifecycleContracts =
   {
-    usagePolicy: "single-use",
+    usagePolicy: "token-single-use_code-reusable",
     expirationModel: "derived-from-expiresAt",
     revocationModel: "persisted-status-and-timestamp",
     persistenceTransitions: ["mark-as-used", "revoke"],

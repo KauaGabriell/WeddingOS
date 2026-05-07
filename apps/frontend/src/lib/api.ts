@@ -1,4 +1,5 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3001";
+export const GUEST_ACCESS_CODE_STORAGE_KEY = "weddingos_guest_access_code";
 
 export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
@@ -99,6 +100,7 @@ export interface GuestHomeDto {
   events: EventDto[];
   eligibility: EventGuestEligibilityDto[];
   responses: RsvpResponseDto[];
+  accessCode: string | null;
 }
 
 export interface EventListDto {
@@ -106,6 +108,42 @@ export interface EventListDto {
   page: number;
   pageSize: number;
 }
+
+export interface AuthSessionDto {
+  actorType: "guest" | "admin";
+  actorId: string;
+  accessToken: string;
+  refreshToken: string | null;
+  expiresAt: string;
+}
+
+export interface OpenGuestAccessRegistrationDto {
+  authSession: AuthSessionDto;
+  guest: GuestDto;
+  guestGroup: GuestGroupDto;
+  companions: GuestDto[];
+  shortCode: string;
+  message: string;
+}
+
+export interface AdminGuestRowDto {
+  guestGroup: GuestGroupDto;
+  guest: GuestDto;
+  eligibility: EventGuestEligibilityDto[];
+  responses: RsvpResponseDto[];
+}
+
+export interface AdminGuestListDto {
+  items: AdminGuestRowDto[];
+  page: number;
+  pageSize: number;
+}
+
+type ListEventsParams = {
+  eventType?: EventType;
+  page?: number;
+  pageSize?: number;
+};
 
 export const authApi = {
   loginWithToken: (token: string) =>
@@ -118,9 +156,56 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ code }),
     }),
+  registerOpenAccess: (input: {
+    fullName: string;
+    phone: string;
+    companionsCount: number;
+    companionNames: string[];
+  }) =>
+    apiFetch<OpenGuestAccessRegistrationDto>("/auth/guest/register-open-access", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
 };
 
 export const guestApi = {
   getHome: () => apiFetch<GuestHomeDto>("/guest/home"),
-  listEvents: () => apiFetch<EventListDto>("/events?page=1&pageSize=10"),
+  listEvents: ({ eventType, page = 1, pageSize = 10 }: ListEventsParams = {}) => {
+    const query = new URLSearchParams({
+      page: String(page),
+      pageSize: String(pageSize),
+    });
+
+    if (eventType) {
+      query.set("eventType", eventType);
+    }
+
+    return apiFetch<EventListDto>(`/events?${query.toString()}`);
+  },
+};
+
+type ListAdminGuestsParams = {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  status?: "active" | "inactive";
+};
+
+export const adminApi = {
+  listGuests: ({ page = 1, pageSize = 20, search, status }: ListAdminGuestsParams = {}) => {
+    const query = new URLSearchParams({
+      page: String(page),
+      pageSize: String(pageSize),
+    });
+
+    if (search) {
+      query.set("search", search);
+    }
+
+    if (status) {
+      query.set("status", status);
+    }
+
+    return apiFetch<AdminGuestListDto>(`/admin/guests?${query.toString()}`);
+  },
 };

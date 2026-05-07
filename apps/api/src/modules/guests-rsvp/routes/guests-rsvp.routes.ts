@@ -28,6 +28,7 @@ import {
   PrismaRsvpResponseRepository,
   PrismaRsvpResponseTransactionRunner,
 } from "../index.js";
+import { PrismaInviteTokenRepository } from "../../identity-access/index.js";
 
 export const GUESTS_RSVP_ROUTE_ACCESS = {
   guestHome: guestRoute(),
@@ -135,6 +136,9 @@ export const registerGuestsRsvpRoutes: FastifyPluginAsync<RegisterGuestsRsvpRout
     const rsvpResponseRepository = new PrismaRsvpResponseRepository(
       app.prisma.rsvpResponse as unknown as ConstructorParameters<typeof PrismaRsvpResponseRepository>[0],
     );
+    const inviteTokenRepository = new PrismaInviteTokenRepository(
+      app.prisma.inviteToken as unknown as ConstructorParameters<typeof PrismaInviteTokenRepository>[0],
+    );
     const rsvpResponseTransactionRunner = new PrismaRsvpResponseTransactionRunner(app.prisma);
     const auditLogRepository = new PrismaAuditLogRepository(
       app.prisma.auditLog as unknown as ConstructorParameters<typeof PrismaAuditLogRepository>[0],
@@ -149,6 +153,7 @@ export const registerGuestsRsvpRoutes: FastifyPluginAsync<RegisterGuestsRsvpRout
       eventRepository,
       eventGuestEligibilityRepository,
       rsvpResponseRepository,
+      inviteTokenRepository,
     });
     const listGuestEvents = createListGuestEventsUseCase({
       guestRepository,
@@ -218,6 +223,7 @@ export const registerGuestsRsvpRoutes: FastifyPluginAsync<RegisterGuestsRsvpRout
               events: overview.events.map(serializeEvent),
               eligibility: overview.eligibility.map(serializeEligibility),
               responses: overview.responses.map(serializeRsvpResponse),
+              accessCode: overview.accessCode,
             });
           } catch (error) {
             if (error instanceof GuestsRsvpApplicationError) {

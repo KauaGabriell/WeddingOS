@@ -6,12 +6,13 @@ import { GuestStatus as PrismaGuestStatus } from "../../../generated/prisma/enum
 interface GuestWhereInput {
   guestGroupId?: string;
   status?: keyof typeof PrismaGuestStatus;
+  phone?: string;
 }
 
 interface GuestModelDelegate {
   findUnique(args: { where: { id: string } }): Promise<PrismaGuest | null>;
   findFirst(args: {
-    where: { guestGroupId: string; isPrimary?: boolean };
+    where: { guestGroupId?: string; phone?: string; isPrimary?: boolean };
     orderBy: { createdAt: "asc" | "desc" };
   }): Promise<PrismaGuest | null>;
   findMany(args: {
@@ -127,6 +128,15 @@ export class PrismaGuestRepository implements GuestRepository {
   async findPrimaryByGroupId(guestGroupId: string): Promise<Guest | null> {
     const record = await this.guests.findFirst({
       where: { guestGroupId, isPrimary: true },
+      orderBy: { createdAt: "asc" },
+    });
+
+    return record ? mapGuestRecord(record) : null;
+  }
+
+  async findPrimaryByPhone(phone: string): Promise<Guest | null> {
+    const record = await this.guests.findFirst({
+      where: { phone, isPrimary: true },
       orderBy: { createdAt: "asc" },
     });
 

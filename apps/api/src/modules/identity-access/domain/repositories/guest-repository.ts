@@ -15,4 +15,5 @@ export interface GuestRepository
   extends EntityRepository<Guest>,
     ListableRepository<Guest, GuestRepositoryFilters> {
   findPrimaryByGroupId(guestGroupId: string): Promise<Guest | null>;
+  findPrimaryByPhone(phone: string): Promise<Guest | null>;
 }

@@ -10,6 +10,7 @@ import type {
   RsvpResponse,
   RsvpResponseRepository,
 } from "../domain/index.js";
+import type { InviteTokenRepository } from "../../identity-access/index.js";
 import { GuestsRsvpApplicationError } from "./guests-rsvp-errors.js";
 
 const GROUP_QUERY_PAGE_SIZE = 100;
@@ -26,6 +27,7 @@ export interface GetGuestInvitationOverviewResult {
   readonly events: readonly Event[];
   readonly eligibility: readonly EventGuestEligibility[];
   readonly responses: readonly RsvpResponse[];
+  readonly accessCode: string | null;
 }
 
 export interface GetGuestInvitationOverviewDependencies {
@@ -34,6 +36,7 @@ export interface GetGuestInvitationOverviewDependencies {
   readonly eventRepository: Pick<EventRepository, "findById">;
   readonly eventGuestEligibilityRepository: Pick<EventGuestEligibilityRepository, "findMany">;
   readonly rsvpResponseRepository: Pick<RsvpResponseRepository, "findMany">;
+  readonly inviteTokenRepository: Pick<InviteTokenRepository, "findMany">;
 }
 
 export interface GetGuestInvitationOverviewUseCase {
@@ -118,6 +121,15 @@ export function createGetGuestInvitationOverviewUseCase(
       )
         .flat()
         .filter((response) => uniqueEventIds.includes(response.eventId));
+      const accessCode =
+        (
+          await dependencies.inviteTokenRepository.findMany({
+            page: 1,
+            pageSize: 10,
+            guestId: guest.id,
+            status: "issued",
+          })
+        ).find((token) => token.shortCode !== null)?.shortCode ?? null;
 
       return {
         guestGroup,
@@ -125,6 +137,7 @@ export function createGetGuestInvitationOverviewUseCase(
         events,
         eligibility,
         responses,
+        accessCode,
       };
     },
   };

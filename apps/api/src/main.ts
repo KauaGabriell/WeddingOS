@@ -1,4 +1,5 @@
-import { pathToFileURL } from "node:url";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import cors from "@fastify/cors";
 import Fastify from "fastify";
 import {
@@ -7,6 +8,7 @@ import {
   validatorCompiler,
 } from "fastify-type-provider-zod";
 import type { DestinationStream } from "pino";
+import { config as loadDotenv } from "dotenv";
 import { z } from "zod";
 import { PrismaClient } from "./generated/prisma/client.js";
 import { MODULE_REGISTRATIONS } from "./modules/index.js";
@@ -23,6 +25,9 @@ import {
 import { createApiLogger } from "./modules/shared/platform/logging/create-api-logger.js";
 import { createStorageClient } from "./modules/shared/platform/storage/create-storage-client.js";
 import type { StorageClient } from "./modules/shared/platform/storage/storage-client.js";
+
+const currentDir = dirname(fileURLToPath(import.meta.url));
+loadDotenv({ path: resolve(currentDir, "../.env") });
 
 const booleanFromEnv = z.preprocess((value) => {
   if (typeof value === "boolean") {
@@ -67,6 +72,27 @@ type BuildAppOptions = {
   adminMagicLinkService?: SignedAdminMagicLinkService;
   adminSessionVerifier?: SignedAdminSessionService;
 };
+
+async function createDefaultPrismaClient(env: AppEnv) {
+  try {
+    const [{ PrismaPg }, { Pool }] = await Promise.all([
+      import("@prisma/adapter-pg"),
+      import("pg"),
+    ]);
+    const pool = new Pool({
+      connectionString: env.DATABASE_URL,
+    });
+
+    return new PrismaClient({
+      adapter: new PrismaPg(pool),
+    });
+  } catch (error) {
+    throw new Error(
+      "Prisma PostgreSQL adapter not configured. Install `@prisma/adapter-pg` and `pg` to run the API in development/production.",
+      { cause: error },
+    );
+  }
+}
 
 function createNoopPrismaClient(): PrismaClient {
   const noopDelegate = {
@@ -126,13 +152,7 @@ export async function buildApp(env: AppEnv, options: BuildAppOptions = {}) {
   const storageClient = options.storageClient ?? createStorageClient(env);
   const prisma =
     options.prisma ??
-    (env.NODE_ENV === "test"
-      ? createNoopPrismaClient()
-      : (() => {
-          throw new Error(
-            "Prisma adapter not configured. Provide a PrismaClient instance to buildApp or install and wire a Prisma driver adapter for non-test environments.",
-          );
-        })());
+    (env.NODE_ENV === "test" ? createNoopPrismaClient() : await createDefaultPrismaClient(env));
   const guestSessionService =
     options.guestSessionService ?? new SignedGuestSessionService(env.JWT_SECRET);
   const adminMagicLinkService =

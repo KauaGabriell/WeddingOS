@@ -80,9 +80,11 @@ export default function GuestCodeLoginPage() {
 
       <main className={styles.main}>
         <section className={styles.hero} aria-labelledby="guest-code-login-title">
-          <p className={styles.eyebrow}>Acesso manual</p>
-          <h1 id="guest-code-login-title">Entre com o codigo do convite</h1>
-          <p>Use o codigo curto enviado pelos noivos para acessar sua area de convidado.</p>
+          <p className={styles.eyebrow}>Reentrada</p>
+          <h1 id="guest-code-login-title">Ja fez seu cadastro?</h1>
+          <p>
+            Use o codigo salvo no primeiro acesso para entrar novamente na sua area de convidado.
+          </p>
         </section>
 
         <section
@@ -125,7 +127,7 @@ export default function GuestCodeLoginPage() {
                   ? "Redirecionando para o inicio do convidado."
                   : isError
                     ? "Confira o codigo no convite. Por seguranca, nao exibimos detalhes sobre a falha."
-                    : "O codigo fica no convite digital e pode conter letras e numeros."}
+                    : "O codigo foi exibido quando o cadastro principal da familia foi concluido."}
             </p>
           </div>
 
@@ -163,7 +165,7 @@ export default function GuestCodeLoginPage() {
               </p>
             ) : (
               <p className={styles.inputHint} id="guest-code-hint">
-                Minimo 4 caracteres. Use exatamente como aparece no convite.
+                Minimo 4 caracteres. Use exatamente como voce salvou no primeiro acesso.
               </p>
             )}
 

@@ -88,6 +88,7 @@ const guestHomeResponseSchema = z.object({
   events: z.array(eventResponseSchema),
   eligibility: z.array(eventGuestEligibilityResponseSchema),
   responses: z.array(rsvpResponseSchema),
+  accessCode: z.string().min(1).nullable(),
 });
 
 const submitRsvpResponseSchema = z.object({

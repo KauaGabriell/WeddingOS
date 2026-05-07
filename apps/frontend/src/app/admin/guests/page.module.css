@@ -1,0 +1,367 @@
+.shell {
+  --admin-bg: #131313;
+  --admin-surface: #201f1f;
+  --admin-surface-soft: #1c1b1b;
+  --admin-text: #e5e2e1;
+  --admin-muted: #dcbed4;
+  --admin-subtle: #a4899d;
+  --admin-accent: #ffabf3;
+  --admin-warm: #edbbac;
+  --admin-danger: #ffb4ab;
+  --admin-border: rgba(255, 255, 255, 0.05);
+  --admin-serif: "Noto Serif", Georgia, "Times New Roman", serif;
+  --admin-sans: Manrope, Inter, Arial, sans-serif;
+
+  background: #131313;
+  color: var(--admin-text);
+  font-family: var(--admin-sans);
+  min-height: 100svh;
+  overflow-x: hidden;
+  position: relative;
+  width: min(100vw, 430px);
+  margin: 0 auto;
+}
+
+.shell,
+.shell * {
+  box-sizing: border-box;
+}
+
+.shell a {
+  text-decoration: none;
+}
+
+.topBar {
+  align-items: center;
+  backdrop-filter: blur(12px);
+  background: rgba(0, 0, 0, 0.6);
+  border-bottom: 1px solid var(--admin-border);
+  display: flex;
+  height: 64px;
+  justify-content: space-between;
+  left: 50%;
+  padding: 0 24px;
+  position: fixed;
+  top: 0;
+  transform: translateX(-50%);
+  width: min(100%, 430px);
+  z-index: 30;
+}
+
+.brandGroup {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+}
+
+.menuButton {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  display: flex;
+  height: 32px;
+  justify-content: center;
+  padding: 0;
+  width: 18px;
+}
+
+.menuButton img {
+  height: 12px;
+  width: 18px;
+}
+
+.brand {
+  color: var(--admin-text);
+  font-family: var(--admin-serif);
+  font-size: 20px;
+  font-style: italic;
+  letter-spacing: 2px;
+  line-height: 28px;
+}
+
+.avatarLink {
+  border: 1px solid rgba(255, 171, 243, 0.3);
+  border-radius: 999px;
+  display: block;
+  height: 40px;
+  overflow: hidden;
+  padding: 1px;
+  width: 40px;
+}
+
+.avatarLink img {
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 96px 24px 128px;
+}
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.eyebrow {
+  color: var(--admin-warm);
+  font-size: 10px;
+  letter-spacing: 2px;
+  line-height: 15px;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.hero h1 {
+  color: var(--admin-text);
+  font-family: var(--admin-serif);
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -0.9px;
+  line-height: 45px;
+  margin: 0;
+}
+
+.controlsSection {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.searchField {
+  align-items: center;
+  background: var(--admin-surface-soft);
+  border-radius: 8px;
+  display: flex;
+  gap: 14px;
+  height: 56px;
+  padding: 0 16px;
+}
+
+.searchIcon {
+  background: var(--admin-subtle);
+  border-radius: 999px;
+  display: block;
+  height: 18px;
+  position: relative;
+  width: 18px;
+}
+
+.searchIcon::after {
+  border: 2px solid var(--admin-bg);
+  border-radius: 999px;
+  content: "";
+  height: 7px;
+  left: 4px;
+  position: absolute;
+  top: 4px;
+  width: 7px;
+}
+
+.searchField input {
+  background: transparent;
+  border: 0;
+  color: var(--admin-text);
+  flex: 1;
+  font-family: inherit;
+  font-size: 16px;
+  outline: none;
+}
+
+.searchField input::placeholder {
+  color: rgba(164, 137, 157, 0.5);
+}
+
+.filterPanel {
+  background: #0e0e0e;
+  border-radius: 12px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 12px;
+}
+
+.filterButton {
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  color: var(--admin-muted);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  height: 32px;
+}
+
+.filterButtonActive {
+  background: #353534;
+  color: var(--admin-accent);
+  font-weight: 700;
+}
+
+.listSection {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.guestCard {
+  background: var(--admin-surface);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 20px;
+}
+
+.cardHeader {
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.cardHeading {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cardHeading h2 {
+  color: var(--admin-text);
+  font-family: var(--admin-serif);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 28px;
+  margin: 0;
+}
+
+.cardHeading p {
+  color: var(--admin-muted);
+  font-size: 14px;
+  line-height: 20px;
+  margin: 0;
+}
+
+.badge {
+  align-items: center;
+  background: rgba(255, 171, 243, 0.1);
+  border-radius: 9999px;
+  color: var(--admin-accent);
+  display: inline-flex;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  line-height: 15px;
+  padding: 4px 12px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.cardActions {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.warmAction,
+.outlineAction,
+.iconAction {
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 12px;
+  height: 34px;
+}
+
+.warmAction {
+  background: rgba(237, 187, 172, 0.1);
+  border: 0;
+  color: var(--admin-warm);
+  min-width: 74px;
+}
+
+.outlineAction {
+  background: transparent;
+  border: 1px solid rgba(164, 137, 157, 0.2);
+  color: var(--admin-subtle);
+  min-width: 84px;
+}
+
+.iconAction {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  display: inline-flex;
+  justify-content: center;
+  margin-left: auto;
+  width: 34px;
+}
+
+.iconAction span {
+  background: var(--admin-danger);
+  border-radius: 999px;
+  display: block;
+  height: 12px;
+  position: relative;
+  width: 2px;
+}
+
+.iconAction span::before {
+  background: var(--admin-danger);
+  content: "";
+  height: 2px;
+  left: -5px;
+  position: absolute;
+  top: 5px;
+  width: 12px;
+}
+
+.modeNotice {
+  color: var(--admin-subtle);
+  font-size: 12px;
+  line-height: 18px;
+  margin: 0;
+  text-align: center;
+}
+
+.bottomNav {
+  align-items: center;
+  backdrop-filter: blur(18px);
+  background: rgba(10, 10, 10, 0.88);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  bottom: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  height: 80px;
+  left: 50%;
+  padding: 12px 16px 16px;
+  position: fixed;
+  transform: translateX(-50%);
+  width: min(100%, 430px);
+  z-index: 30;
+}
+
+.navItem {
+  align-items: center;
+  color: #737373;
+  display: flex;
+  flex-direction: column;
+  font-size: 10px;
+  gap: 6px;
+  justify-content: center;
+  min-height: 44px;
+}
+
+.navItem img {
+  height: 20px;
+  width: 20px;
+}
+
+.navItemActive {
+  color: var(--admin-accent);
+}

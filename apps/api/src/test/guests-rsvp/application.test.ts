@@ -157,6 +157,11 @@ async function testGetGuestInvitationOverviewUseCase(): Promise<void> {
         return responses.filter((entry) => entry.guestId === filter.guestId);
       },
     },
+    inviteTokenRepository: {
+      async findMany() {
+        return [];
+      },
+    },
   });
 
   const overview = await useCase.execute({ guestId: "guest-1" });
@@ -176,6 +181,7 @@ async function testGetGuestInvitationOverviewUseCase(): Promise<void> {
     eventRepository: { async findById() { return null; } },
     eventGuestEligibilityRepository: { async findMany() { return []; } },
     rsvpResponseRepository: { async findMany() { return []; } },
+    inviteTokenRepository: { async findMany() { return []; } },
   });
 
   await assert.rejects(() => missingGroupUseCase.execute({ guestId: "guest-1" }), (error: unknown) => {

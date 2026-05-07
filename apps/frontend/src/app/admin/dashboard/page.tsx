@@ -45,8 +45,8 @@ const shortcuts = [
 
 const activities = [
   {
-    title: "Novo presente recebido!",
-    body: 'Mariana e Jorge enviaram "Jogo de Jantar".',
+    title: "Nova familia cadastrada",
+    body: "A familia Vasconcelos concluiu o cadastro aberto.",
     time: "Há 15 minutos",
     tone: "pink",
   },

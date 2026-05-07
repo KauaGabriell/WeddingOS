@@ -1,18 +1,27 @@
 import type { FastifyPluginAsync } from "fastify";
 import { createAuditLogWriter, PrismaAuditLogRepository } from "../../admin-backoffice/index.js";
+import {
+  PrismaEventGuestEligibilityRepository,
+  PrismaEventRepository,
+  PrismaGuestGroupRepository,
+} from "../../guests-rsvp/index.js";
 import { errorResponseSchema, publicRoute } from "../../shared/index.js";
 import {
   createRequestAdminMagicLinkUseCase,
   createIssueGuestSessionUseCase,
   createLoginGuestWithInviteTokenUseCase,
   createLoginGuestWithShortCodeUseCase,
+  createRegisterOpenGuestAccessUseCase,
   GuestInviteTokenAuthenticationError,
   IDENTITY_ACCESS_HTTP_CONTRACT,
   IDENTITY_ACCESS_HTTP_SCHEMAS,
   LoggerAdminMagicLinkDispatcher,
+  OpenGuestAccessRegistrationError,
+  PrismaOpenGuestAccessRegistrationTransactionRunner,
   PrismaAdminUserRepository,
   type IdentityAccessGuestCodeLoginRequestDto,
   type IdentityAccessAdminLoginRequestDto,
+  type IdentityAccessRegisterOpenGuestAccessRequestDto,
   type IdentityAccessGuestTokenLoginRequestDto,
   PrismaGuestRepository,
   PrismaInviteTokenConsumptionTransactionRunner,
@@ -21,6 +30,7 @@ import {
 
 export const IDENTITY_ACCESS_ROUTE_ACCESS = {
   requestGuestAccess: publicRoute(),
+  registerOpenGuestAccess: publicRoute(),
   loginWithInviteToken: publicRoute(),
   loginWithShortCode: publicRoute(),
   adminLogin: publicRoute(),
@@ -62,6 +72,45 @@ function sendUnauthorized(reply: any) {
   });
 }
 
+function serializeGuest(guest: {
+  id: string;
+  guestGroupId: string;
+  fullName: string;
+  phone: string | null;
+  email: string | null;
+  isPrimary: boolean;
+  status: string;
+  lastAccessAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  return {
+    ...guest,
+    lastAccessAt: guest.lastAccessAt?.toISOString() ?? null,
+    createdAt: guest.createdAt.toISOString(),
+    updatedAt: guest.updatedAt.toISOString(),
+  };
+}
+
+function serializeGuestGroup(guestGroup: {
+  id: string;
+  displayName: string;
+  groupCode: string;
+  allowedCompanions: number;
+  primaryContactName: string | null;
+  primaryContactPhone: string | null;
+  primaryContactEmail: string | null;
+  notes: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  return {
+    ...guestGroup,
+    createdAt: guestGroup.createdAt.toISOString(),
+    updatedAt: guestGroup.updatedAt.toISOString(),
+  };
+}
+
 export const registerIdentityAccessRoutes: FastifyPluginAsync = async (app) => {
   const inviteTokenRepository = new PrismaInviteTokenRepository(
     app.prisma.inviteToken as unknown as ConstructorParameters<typeof PrismaInviteTokenRepository>[0],
@@ -72,8 +121,21 @@ export const registerIdentityAccessRoutes: FastifyPluginAsync = async (app) => {
   const guestRepository = new PrismaGuestRepository(
     app.prisma.guest as unknown as ConstructorParameters<typeof PrismaGuestRepository>[0],
   );
+  const guestGroupRepository = new PrismaGuestGroupRepository(
+    app.prisma.guestGroup as unknown as ConstructorParameters<typeof PrismaGuestGroupRepository>[0],
+  );
+  const eventRepository = new PrismaEventRepository(
+    app.prisma.event as unknown as ConstructorParameters<typeof PrismaEventRepository>[0],
+  );
+  const eventGuestEligibilityRepository = new PrismaEventGuestEligibilityRepository(
+    app.prisma.eventGuestEligibility as unknown as ConstructorParameters<
+      typeof PrismaEventGuestEligibilityRepository
+    >[0],
+  );
   const inviteTokenConsumptionTransactionRunner =
     new PrismaInviteTokenConsumptionTransactionRunner(app.prisma);
+  const openGuestAccessRegistrationTransactionRunner =
+    new PrismaOpenGuestAccessRegistrationTransactionRunner(app.prisma);
   const auditLogWriter = createAuditLogWriter({
     auditLogRepository: new PrismaAuditLogRepository(
       app.prisma.auditLog as unknown as ConstructorParameters<typeof PrismaAuditLogRepository>[0],
@@ -92,6 +154,14 @@ export const registerIdentityAccessRoutes: FastifyPluginAsync = async (app) => {
     inviteTokenConsumptionTransactionRunner,
     auditLogWriter,
   });
+  const registerOpenGuestAccess = createRegisterOpenGuestAccessUseCase({
+    guestRepository,
+    guestGroupRepository,
+    inviteTokenRepository,
+    eventRepository,
+    registrationTransactionRunner: openGuestAccessRegistrationTransactionRunner,
+    auditLogWriter,
+  });
   const requestAdminMagicLink = createRequestAdminMagicLinkUseCase({
     adminUserRepository,
     adminMagicLinkIssuer: app.adminMagicLinkService,
@@ -105,6 +175,74 @@ export const registerIdentityAccessRoutes: FastifyPluginAsync = async (app) => {
   });
 
   await app.register(async (protectedRoutes) => {
+    protectedRoutes.post("/guest/register-open-access", {
+      ...IDENTITY_ACCESS_ROUTE_ACCESS.registerOpenGuestAccess,
+      schema: {
+        tags: [...IDENTITY_ACCESS_HTTP_CONTRACT.tags],
+        body: IDENTITY_ACCESS_HTTP_SCHEMAS.bodies.registerOpenGuestAccess,
+        response: {
+          200: IDENTITY_ACCESS_HTTP_SCHEMAS.responses.openGuestAccessRegistration,
+          400: errorResponseSchema,
+          409: errorResponseSchema,
+        },
+      },
+      handler: async (request, reply) => {
+        const body = request.body as IdentityAccessRegisterOpenGuestAccessRequestDto;
+
+        try {
+          const registrationResult = await registerOpenGuestAccess.execute({
+            fullName: body.fullName,
+            phone: body.phone,
+            companionsCount: body.companionsCount,
+            companionNames: body.companionNames,
+            requestId: request.correlationId,
+          });
+          const session = await issueGuestSession.execute({
+            authenticationResult: registrationResult.authenticationResult,
+          });
+
+          reply.header(
+            "set-cookie",
+            buildSetCookieHeader({
+              ...session.cookie,
+              value: session.accessToken,
+            }),
+          );
+
+          return reply.code(200).send({
+            authSession: {
+              actorType: session.actorType,
+              actorId: session.actorId,
+              accessToken: session.accessToken,
+              refreshToken: null,
+              expiresAt: session.expiresAt.toISOString(),
+            },
+            guest: serializeGuest(registrationResult.guest),
+            guestGroup: serializeGuestGroup(registrationResult.guestGroup),
+            companions: registrationResult.companions.map(serializeGuest),
+            shortCode: registrationResult.shortCode,
+            message: registrationResult.message,
+          });
+        } catch (error) {
+          if (error instanceof OpenGuestAccessRegistrationError) {
+            const codeByReason: Record<OpenGuestAccessRegistrationError["reason"], string> = {
+              phone_already_registered: "PHONE_ALREADY_REGISTERED",
+              invalid_companions_payload: "INVALID_COMPANIONS_PAYLOAD",
+              invalid_phone: "INVALID_PHONE",
+              invalid_full_name: "INVALID_FULL_NAME",
+            };
+
+            return reply.code(error.statusCode).send({
+              code: codeByReason[error.reason],
+              message: "Request could not be completed",
+            });
+          }
+
+          throw error;
+        }
+      },
+    });
+
     protectedRoutes.post("/guest/login/token", {
       ...IDENTITY_ACCESS_ROUTE_ACCESS.loginWithInviteToken,
       schema: {

@@ -33,6 +33,7 @@ export function createLoginGuestWithShortCodeUseCase(
       const result = await authenticateGuestWithInviteToken(
         () => dependencies.inviteTokenRepository.findByShortCode(input.code),
         dependencies,
+        { consumeInviteToken: false },
       );
 
       await dependencies.auditLogWriter.write({

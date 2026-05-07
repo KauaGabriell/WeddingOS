@@ -228,6 +228,7 @@ async function testPrismaGuestRepository(): Promise<void> {
 
   assert.equal((await repository.findById("guest-1"))?.status, "active");
   assert.equal((await repository.findPrimaryByGroupId("group-1"))?.isPrimary, true);
+  assert.equal((await repository.findPrimaryByPhone("62999991111"))?.isPrimary, true);
   assert.equal((await repository.findMany({ page: 1, pageSize: 20, guestGroupId: "group-1", status: "active" })).length, 1);
 }
 

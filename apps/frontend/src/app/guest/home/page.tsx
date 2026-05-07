@@ -1,7 +1,23 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { type EventDto, type GuestHomeDto, type RsvpResponseDto, guestApi } from "../../../lib/api";
+import {
+  type EventDto,
+  GUEST_ACCESS_CODE_STORAGE_KEY,
+  type GuestHomeDto,
+  type RsvpResponseDto,
+  guestApi,
+} from "../../../lib/api";
+import {
+  fallbackEvents,
+  formatEventDay,
+  formatEventMonth,
+  formatEventTime,
+  formatFullDate,
+  formatLocation,
+  getEventTypeLabel,
+  sortEventsByStart,
+} from "../../../lib/guest-events";
 import styles from "./page.module.css";
 
 const navItems = [
@@ -11,61 +27,13 @@ const navItems = [
   { label: "Mural", href: "/photo-wall", icon: "/guest-home/nav-wall.svg" },
 ];
 
-const fallbackEvents: EventDto[] = [
-  {
-    id: "fallback-bridal-shower",
-    slug: "cha-de-panela",
-    name: "Cha de Panela",
-    eventType: "bridal_shower",
-    startsAt: "2026-06-06T18:30:00-03:00",
-    location: {
-      venueName: "Espaco Kaun",
-      addressLine: "Rua 2 Parque dos Pirineus",
-      addressNumber: null,
-      neighborhood: null,
-      city: "Anapolis",
-      state: "GO",
-      postalCode: null,
-      latitude: null,
-      longitude: null,
-      mapUrl: null,
-    },
-    notes: null,
-    isActive: true,
-    createdAt: "2026-05-07T00:00:00.000Z",
-    updatedAt: "2026-05-07T00:00:00.000Z",
-  },
-  {
-    id: "fallback-wedding",
-    slug: "casamento",
-    name: "Casamento",
-    eventType: "wedding",
-    startsAt: "2026-09-05T16:00:00-03:00",
-    location: {
-      venueName: "Local a confirmar",
-      addressLine: "Endereco a confirmar",
-      addressNumber: null,
-      neighborhood: null,
-      city: "A confirmar",
-      state: "GO",
-      postalCode: null,
-      latitude: null,
-      longitude: null,
-      mapUrl: null,
-    },
-    notes: "Local a confirmar",
-    isActive: true,
-    createdAt: "2026-05-07T00:00:00.000Z",
-    updatedAt: "2026-05-07T00:00:00.000Z",
-  },
-];
-
 type LoadState = "loading" | "ready" | "error";
 
 export default function GuestHomePage() {
   const [home, setHome] = useState<GuestHomeDto | null>(null);
   const [events, setEvents] = useState<EventDto[]>([]);
   const [loadState, setLoadState] = useState<LoadState>("loading");
+  const [storedAccessCode, setStoredAccessCode] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -91,6 +59,12 @@ export default function GuestHomePage() {
         }
 
         setHome(homeResponse.value);
+        if (homeResponse.value.accessCode) {
+          window.localStorage.setItem(GUEST_ACCESS_CODE_STORAGE_KEY, homeResponse.value.accessCode);
+          setStoredAccessCode(homeResponse.value.accessCode);
+        } else {
+          setStoredAccessCode(window.localStorage.getItem(GUEST_ACCESS_CODE_STORAGE_KEY));
+        }
         setEvents(eventItems.length > 0 ? eventItems : fallbackEvents);
         setLoadState("ready");
       } catch {
@@ -98,6 +72,7 @@ export default function GuestHomePage() {
           return;
         }
 
+        setStoredAccessCode(window.localStorage.getItem(GUEST_ACCESS_CODE_STORAGE_KEY));
         setEvents(fallbackEvents);
         setLoadState("error");
       }
@@ -113,20 +88,13 @@ export default function GuestHomePage() {
   const primaryGuest = home?.guests.find((guest) => guest.isPrimary) ?? home?.guests[0] ?? null;
   const weddingEvent =
     events.find((event) => event.eventType === "wedding") ?? events[events.length - 1];
-  const nextEvents = useMemo(
-    () =>
-      [...events]
-        .sort(
-          (left, right) => new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime(),
-        )
-        .slice(0, 2),
-    [events],
-  );
+  const nextEvents = useMemo(() => sortEventsByStart(events).slice(0, 2), [events]);
   const countdown = useMemo(() => buildCountdown(weddingEvent?.startsAt), [weddingEvent?.startsAt]);
   const responses = home?.responses ?? [];
   const rsvpSummary = buildRsvpSummary(nextEvents, responses);
   const heroName = home?.guestGroup.displayName ?? primaryGuest?.fullName ?? "Igor & Amanda";
   const invitationStatus = loadState === "ready" ? "Convite conectado" : "Modo visual";
+  const accessCode = home?.accessCode ?? storedAccessCode;
 
   return (
     <div className={styles.shell}>
@@ -212,10 +180,34 @@ export default function GuestHomePage() {
             </a>
           </article>
 
+          <article className={`${styles.card} ${styles.accessCodeCard}`}>
+            <div className={styles.sectionHeader}>
+              <div>
+                <p className={styles.eyebrow}>Reentrada</p>
+                <h2>Codigo de acesso</h2>
+              </div>
+              <a className={styles.sectionLink} href="/guest/login/code">
+                Usar codigo
+              </a>
+            </div>
+            <div className={styles.accessCodeValue}>
+              <strong>{accessCode ?? "--------"}</strong>
+            </div>
+            <p className={styles.accessCodeCopy}>
+              Guarde este codigo. Ele sera usado se voce entrar novamente em outro aparelho ou se a
+              sessao expirar.
+            </p>
+          </article>
+
           <section className={styles.eventsCard} aria-label="Proximos eventos">
             <div className={styles.sectionHeader}>
-              <p className={styles.eyebrow}>Agenda do convite</p>
-              <h2>Proximos eventos</h2>
+              <div>
+                <p className={styles.eyebrow}>Agenda do convite</p>
+                <h2>Proximos eventos</h2>
+              </div>
+              <a className={styles.sectionLink} href="/events">
+                Ver agenda
+              </a>
             </div>
             <div className={styles.eventList}>
               {loadState === "loading" ? (
@@ -225,23 +217,25 @@ export default function GuestHomePage() {
                 </>
               ) : (
                 nextEvents.map((event) => (
-                  <article className={styles.eventItem} key={event.id}>
-                    <div className={styles.eventDate}>
-                      <strong>{formatEventDay(event.startsAt)}</strong>
-                      <span>{formatEventMonth(event.startsAt)}</span>
-                    </div>
-                    <div className={styles.eventContent}>
-                      <div>
-                        <h3>{event.name}</h3>
-                        <p>
-                          {formatEventTime(event.startsAt)} - {formatLocation(event)}
-                        </p>
+                  <a className={styles.eventItemLink} href="/events" key={event.id}>
+                    <article className={styles.eventItem}>
+                      <div className={styles.eventDate}>
+                        <strong>{formatEventDay(event.startsAt)}</strong>
+                        <span>{formatEventMonth(event.startsAt)}</span>
                       </div>
-                      <span className={styles.eventType}>
-                        {event.eventType === "wedding" ? "Casamento" : "Cha"}
-                      </span>
-                    </div>
-                  </article>
+                      <div className={styles.eventContent}>
+                        <div>
+                          <h3>{event.name}</h3>
+                          <p>
+                            {formatEventTime(event.startsAt)} - {formatLocation(event)}
+                          </p>
+                        </div>
+                        <span className={styles.eventType}>
+                          {getEventTypeLabel(event.eventType)}
+                        </span>
+                      </div>
+                    </article>
+                  </a>
                 ))
               )}
             </div>
@@ -389,47 +383,4 @@ function buildRsvpSummary(events: EventDto[], responses: RsvpResponseDto[]) {
 
 function formatEventLine(event: EventDto) {
   return `${formatFullDate(event.startsAt)} - ${event.location.venueName}`;
-}
-
-function formatEventDay(dateInput: string) {
-  return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    timeZone: "America/Sao_Paulo",
-  }).format(new Date(dateInput));
-}
-
-function formatEventMonth(dateInput: string) {
-  return new Intl.DateTimeFormat("pt-BR", {
-    month: "short",
-    timeZone: "America/Sao_Paulo",
-  })
-    .format(new Date(dateInput))
-    .replace(".", "");
-}
-
-function formatEventTime(dateInput: string) {
-  return new Intl.DateTimeFormat("pt-BR", {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "America/Sao_Paulo",
-  }).format(new Date(dateInput));
-}
-
-function formatFullDate(dateInput: string) {
-  return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-    timeZone: "America/Sao_Paulo",
-  }).format(new Date(dateInput));
-}
-
-function formatLocation(event: EventDto) {
-  const location = event.location;
-
-  if (location.venueName.toLowerCase().includes("confirmar")) {
-    return "Local a confirmar";
-  }
-
-  return [location.venueName, location.addressLine].filter(Boolean).join(", ");
 }

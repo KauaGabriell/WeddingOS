@@ -59,8 +59,10 @@ function assertGuestEligible(guest: Guest | null): Guest {
 export async function authenticateGuestWithInviteToken(
   resolveInviteToken: InviteTokenResolver,
   dependencies: AuthenticateGuestWithInviteTokenDependencies,
+  options: { readonly consumeInviteToken?: boolean } = {},
 ): Promise<GuestAuthenticationResult> {
   const now = dependencies.now?.() ?? new Date();
+  const shouldConsumeInviteToken = options.consumeInviteToken ?? true;
   let inviteToken: InviteToken;
 
   try {
@@ -79,17 +81,22 @@ export async function authenticateGuestWithInviteToken(
     );
     let authenticatedAt = now;
 
-    await dependencies.inviteTokenConsumptionTransactionRunner.run(async (context) => {
-      const storedInviteToken = context.findInviteTokenById(inviteToken.id);
-      inviteToken = assertInviteTokenIsUsable(await storedInviteToken, dependencies.now?.() ?? new Date());
-      authenticatedAt = dependencies.now?.() ?? new Date();
-      inviteToken = assertInviteTokenIsUsable(inviteToken, authenticatedAt);
+    if (shouldConsumeInviteToken) {
+      await dependencies.inviteTokenConsumptionTransactionRunner.run(async (context) => {
+        const storedInviteToken = context.findInviteTokenById(inviteToken.id);
+        inviteToken = assertInviteTokenIsUsable(
+          await storedInviteToken,
+          dependencies.now?.() ?? new Date(),
+        );
+        authenticatedAt = dependencies.now?.() ?? new Date();
+        inviteToken = assertInviteTokenIsUsable(inviteToken, authenticatedAt);
 
-      await context.markInviteTokenAsUsed({
-        inviteTokenId: inviteToken.id,
-        usedAt: authenticatedAt,
+        await context.markInviteTokenAsUsed({
+          inviteTokenId: inviteToken.id,
+          usedAt: authenticatedAt,
+        });
       });
-    });
+    }
 
     return {
       guestId: guest.id,
