@@ -113,6 +113,10 @@ export const IDENTITY_ACCESS_HTTP_SCHEMAS = defineHttpSchemaCatalog({
     adminLogin: z.object({
       email: z.string().trim().email(),
     }),
+    adminLoginVerify: z.object({
+      email: z.string().trim().email(),
+      code: z.string().trim().length(8),
+    }),
     revokeInviteToken: z.object({
       reason: z.string().trim().min(3).max(255),
     }),
@@ -154,4 +158,7 @@ export type IdentityAccessRegisterOpenGuestAccessRequestDto = z.infer<
 >;
 export type IdentityAccessAdminLoginRequestDto = z.infer<
   typeof IDENTITY_ACCESS_HTTP_SCHEMAS.bodies.adminLogin
+>;
+export type IdentityAccessAdminLoginVerifyRequestDto = z.infer<
+  typeof IDENTITY_ACCESS_HTTP_SCHEMAS.bodies.adminLoginVerify
 >;

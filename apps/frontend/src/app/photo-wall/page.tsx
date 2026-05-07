@@ -101,10 +101,10 @@ export default function PhotoWallPage() {
         </section>
 
         <section className={styles.actions}>
-          <button type="button" className={styles.uploadButton} disabled>
+          <a className={styles.uploadButton} href="/photo-wall/new">
             <img src="/guest-home/nav-wall.svg" alt="" aria-hidden="true" />
             <span>Enviar Foto</span>
-          </button>
+          </a>
         </section>
 
         {loadState === "error" ? (

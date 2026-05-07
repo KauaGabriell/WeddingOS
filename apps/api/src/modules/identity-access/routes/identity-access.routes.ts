@@ -21,6 +21,7 @@ import {
   PrismaAdminUserRepository,
   type IdentityAccessGuestCodeLoginRequestDto,
   type IdentityAccessAdminLoginRequestDto,
+  type IdentityAccessAdminLoginVerifyRequestDto,
   type IdentityAccessRegisterOpenGuestAccessRequestDto,
   type IdentityAccessGuestTokenLoginRequestDto,
   PrismaGuestRepository,
@@ -34,7 +35,10 @@ export const IDENTITY_ACCESS_ROUTE_ACCESS = {
   loginWithInviteToken: publicRoute(),
   loginWithShortCode: publicRoute(),
   adminLogin: publicRoute(),
+  adminLoginVerify: publicRoute(),
 };
+
+const FIXED_ADMIN_ACCESS_CODE = "11031105";
 
 function buildSetCookieHeader(input: {
   name: string;
@@ -69,6 +73,13 @@ function sendUnauthorized(reply: any) {
   return reply.code(401).send({
     code: "GUEST_AUTHENTICATION_FAILED",
     message: "Invalid guest credentials",
+  });
+}
+
+function sendAdminUnauthorized(reply: any) {
+  return reply.code(401).send({
+    code: "ADMIN_AUTHENTICATION_FAILED",
+    message: "Invalid admin credentials",
   });
 }
 
@@ -342,9 +353,7 @@ export const registerIdentityAccessRoutes: FastifyPluginAsync = async (app) => {
       schema: {
         tags: [...IDENTITY_ACCESS_HTTP_CONTRACT.tags],
         body: IDENTITY_ACCESS_HTTP_SCHEMAS.bodies.adminLogin,
-        response: {
-          200: IDENTITY_ACCESS_HTTP_SCHEMAS.responses.requestAccepted,
-        },
+        response: { 200: IDENTITY_ACCESS_HTTP_SCHEMAS.responses.requestAccepted },
       },
       handler: async (request, reply) => {
         const body = request.body as IdentityAccessAdminLoginRequestDto;
@@ -352,8 +361,46 @@ export const registerIdentityAccessRoutes: FastifyPluginAsync = async (app) => {
           email: body.email,
           requestId: request.correlationId,
         });
-
         return reply.code(200).send(result);
+      },
+    });
+
+    protectedRoutes.post("/admin/login/verify", {
+      ...IDENTITY_ACCESS_ROUTE_ACCESS.adminLoginVerify,
+      schema: {
+        tags: [...IDENTITY_ACCESS_HTTP_CONTRACT.tags],
+        body: IDENTITY_ACCESS_HTTP_SCHEMAS.bodies.adminLoginVerify,
+        response: {
+          200: IDENTITY_ACCESS_HTTP_SCHEMAS.responses.authSession,
+          401: errorResponseSchema,
+        },
+      },
+      handler: async (request, reply) => {
+        const body = request.body as IdentityAccessAdminLoginVerifyRequestDto;
+        const normalizedEmail = body.email.trim().toLowerCase();
+        const normalizedCode = body.code.trim();
+        const adminUser = await adminUserRepository.findByEmail(normalizedEmail);
+
+        if (
+          normalizedCode !== FIXED_ADMIN_ACCESS_CODE ||
+          adminUser === null ||
+          adminUser.status !== "active"
+        ) {
+          return sendAdminUnauthorized(reply);
+        }
+
+        const session = await app.adminSessionService.issueSession({
+          adminUserId: adminUser.id,
+          role: adminUser.role,
+        });
+
+        return reply.code(200).send({
+          actorType: "admin",
+          actorId: adminUser.id,
+          accessToken: session.accessToken,
+          refreshToken: null,
+          expiresAt: session.expiresAt.toISOString(),
+        });
       },
     });
   }, {

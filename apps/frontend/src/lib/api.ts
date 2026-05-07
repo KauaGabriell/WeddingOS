@@ -1,5 +1,6 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3001";
 export const GUEST_ACCESS_CODE_STORAGE_KEY = "weddingos_guest_access_code";
+export const ADMIN_SESSION_TOKEN_STORAGE_KEY = "weddingos_admin_session_token";
 
 export class ApiRequestError extends Error {
   readonly code?: string;
@@ -14,11 +15,18 @@ export class ApiRequestError extends Error {
 }
 
 export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const adminToken =
+    typeof window !== "undefined"
+      ? window.localStorage.getItem(ADMIN_SESSION_TOKEN_STORAGE_KEY)
+      : null;
+  const shouldAttachAdminBearer = path.startsWith("/admin") && adminToken;
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     credentials: "include",
     ...options,
     headers: {
       "Content-Type": "application/json",
+      ...(shouldAttachAdminBearer ? { Authorization: `Bearer ${adminToken}` } : {}),
       ...options.headers,
     },
   });
@@ -200,12 +208,41 @@ export interface PhotoGalleryListDto {
   pageSize: number;
 }
 
+export interface PhotoPostDto {
+  id: string;
+  guestId: string;
+  authorName: string;
+  message: string;
+  mediaStorageKey: string;
+  mediaUrl: string | null;
+  mediaMimeType: string;
+  mediaSizeBytes: number;
+  mediaWidth: number | null;
+  mediaHeight: number | null;
+  moderationStatus: "pending" | "approved" | "hidden" | "removed";
+  submittedAt: string;
+  approvedAt: string | null;
+  hiddenAt: string | null;
+  moderatedByAdminUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreatePhotoPostResultDto {
+  photoPost: PhotoPostDto;
+  mediaUrl: string;
+}
+
 export interface AuthSessionDto {
   actorType: "guest" | "admin";
   actorId: string;
   accessToken: string;
   refreshToken: string | null;
   expiresAt: string;
+}
+
+export interface RequestAcceptedDto {
+  accepted: boolean;
 }
 
 export interface OpenGuestAccessRegistrationDto {
@@ -260,6 +297,16 @@ export const authApi = {
     apiFetch("/auth/guest/login/code", {
       method: "POST",
       body: JSON.stringify({ code }),
+    }),
+  requestAdminLogin: (email: string) =>
+    apiFetch<RequestAcceptedDto>("/auth/admin/login", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+  verifyAdminLoginCode: (input: { email: string; code: string }) =>
+    apiFetch<AuthSessionDto>("/auth/admin/login/verify", {
+      method: "POST",
+      body: JSON.stringify(input),
     }),
   registerOpenAccess: (input: {
     fullName: string;
@@ -341,6 +388,20 @@ export const guestApi = {
 
     return apiFetch<PhotoGalleryListDto>(`/photo-wall?${query.toString()}`);
   },
+  createPhotoPost: (input: {
+    authorName: string;
+    message: string;
+    fileName: string;
+    fileBodyBase64: string;
+    mediaMimeType: string;
+    mediaSizeBytes: number;
+    mediaWidth?: number;
+    mediaHeight?: number;
+  }) =>
+    apiFetch<CreatePhotoPostResultDto>("/photo-wall/posts", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
 };
 
 type ListAdminGuestsParams = {

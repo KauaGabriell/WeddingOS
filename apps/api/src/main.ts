@@ -159,11 +159,13 @@ export async function buildApp(env: AppEnv, options: BuildAppOptions = {}) {
     options.adminMagicLinkService ?? new SignedAdminMagicLinkService(env.JWT_SECRET);
   const adminSessionVerifier =
     options.adminSessionVerifier ?? new SignedAdminSessionService(env.JWT_SECRET);
+  const adminSessionService = adminSessionVerifier;
   app.decorate("prisma", prisma);
   app.decorate("storageClient", storageClient);
   app.decorate("guestSessionService", guestSessionService);
   app.decorate("adminMagicLinkService", adminMagicLinkService);
   app.decorate("adminSessionVerifier", adminSessionVerifier);
+  app.decorate("adminSessionService", adminSessionService);
   app.addHook("onClose", async () => {
     await prisma.$disconnect();
   });

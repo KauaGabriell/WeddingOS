@@ -37,7 +37,7 @@
   background: rgba(0, 0, 0, 0.6);
   border-bottom: 1px solid var(--admin-border);
   display: flex;
-  height: 64px;
+  height: 72px;
   justify-content: space-between;
   left: 50%;
   padding: 0 24px;
@@ -184,8 +184,8 @@
   border-radius: 12px;
   display: grid;
   gap: 8px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  padding: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 4px;
 }
 
 .filterButton {
@@ -197,12 +197,17 @@
   font-size: 12px;
   font-weight: 500;
   height: 32px;
+  white-space: nowrap;
 }
 
 .filterButtonActive {
   background: #353534;
   color: var(--admin-accent);
   font-weight: 700;
+}
+
+.filterPanel .filterButton:last-child {
+  grid-column: 1 / span 1;
 }
 
 .listSection {
@@ -242,10 +247,22 @@
 }
 
 .cardHeading p {
+  align-items: center;
   color: var(--admin-muted);
+  display: inline-flex;
   font-size: 14px;
+  gap: 8px;
   line-height: 20px;
   margin: 0;
+}
+
+.metaIcon {
+  border: 1.5px solid currentColor;
+  border-radius: 3px;
+  display: inline-block;
+  height: 10px;
+  opacity: 0.75;
+  width: 12px;
 }
 
 .badge {
@@ -263,6 +280,21 @@
   white-space: nowrap;
 }
 
+.badgeconfirmed {
+  background: rgba(255, 171, 243, 0.1);
+  color: var(--admin-accent);
+}
+
+.badgepending {
+  background: rgba(86, 64, 82, 0.22);
+  color: var(--admin-subtle);
+}
+
+.badgedeclined {
+  background: rgba(255, 180, 171, 0.12);
+  color: var(--admin-danger);
+}
+
 .cardActions {
   align-items: center;
   display: flex;
@@ -272,10 +304,14 @@
 .warmAction,
 .outlineAction,
 .iconAction {
+  align-items: center;
   border-radius: 8px;
+  display: inline-flex;
   font-family: inherit;
   font-size: 12px;
+  gap: 4px;
   height: 34px;
+  justify-content: center;
 }
 
 .warmAction {
@@ -319,6 +355,58 @@
   position: absolute;
   top: 5px;
   width: 12px;
+}
+
+.actionIcon {
+  background: currentColor;
+  border-radius: 2px;
+  display: inline-block;
+  height: 10px;
+  opacity: 0.75;
+  width: 10px;
+}
+
+.fabButton {
+  align-items: center;
+  background: linear-gradient(135deg, #ffabf3 0%, #ff00ff 100%);
+  border: 0;
+  border-radius: 16px;
+  bottom: 112px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  display: inline-flex;
+  height: 56px;
+  justify-content: center;
+  position: fixed;
+  right: max(calc((100vw - min(100vw, 430px)) / 2 + 24px), 24px);
+  width: 56px;
+  z-index: 25;
+}
+
+.fabIcon {
+  display: block;
+  height: 18px;
+  position: relative;
+  width: 18px;
+}
+
+.fabIcon::before,
+.fabIcon::after {
+  background: #380038;
+  content: "";
+  left: 50%;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.fabIcon::before {
+  height: 2px;
+  width: 18px;
+}
+
+.fabIcon::after {
+  height: 18px;
+  width: 2px;
 }
 
 .modeNotice {

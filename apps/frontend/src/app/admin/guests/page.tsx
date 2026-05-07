@@ -4,95 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { type AdminGuestListDto, type AdminGuestRowDto, adminApi } from "../../../lib/api";
 import styles from "./page.module.css";
 
-type FilterMode = "all" | "active" | "primary" | "companions";
+type FilterMode = "all" | "confirmed" | "pending" | "declined";
 type LoadState = "loading" | "ready" | "error";
-
-const fallbackRows: AdminGuestRowDto[] = [
-  {
-    guestGroup: {
-      id: "group-1",
-      displayName: "Familia Vasconcelos",
-      groupCode: "VASCONC1",
-      allowedCompanions: 2,
-      primaryContactName: "Beatriz Vasconcelos",
-      primaryContactPhone: "62999991111",
-      primaryContactEmail: null,
-      notes: null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    guest: {
-      id: "guest-1",
-      guestGroupId: "group-1",
-      fullName: "Beatriz Vasconcelos",
-      phone: "62999991111",
-      email: null,
-      isPrimary: true,
-      status: "active",
-      lastAccessAt: null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    eligibility: [],
-    responses: [],
-  },
-  {
-    guestGroup: {
-      id: "group-2",
-      displayName: "Familia Albuquerque",
-      groupCode: "ALBUQUQ2",
-      allowedCompanions: 1,
-      primaryContactName: "Lucas Albuquerque",
-      primaryContactPhone: "62988882222",
-      primaryContactEmail: null,
-      notes: null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    guest: {
-      id: "guest-2",
-      guestGroupId: "group-2",
-      fullName: "Lucas Albuquerque",
-      phone: "62988882222",
-      email: null,
-      isPrimary: true,
-      status: "active",
-      lastAccessAt: null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    eligibility: [],
-    responses: [],
-  },
-  {
-    guestGroup: {
-      id: "group-2",
-      displayName: "Familia Albuquerque",
-      groupCode: "ALBUQUQ2",
-      allowedCompanions: 1,
-      primaryContactName: "Lucas Albuquerque",
-      primaryContactPhone: "62988882222",
-      primaryContactEmail: null,
-      notes: null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    guest: {
-      id: "guest-3",
-      guestGroupId: "group-2",
-      fullName: "Amanda Albuquerque",
-      phone: null,
-      email: null,
-      isPrimary: false,
-      status: "active",
-      lastAccessAt: null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    eligibility: [],
-    responses: [],
-  },
-];
+type GuestStatus = "confirmed" | "pending" | "declined";
 
 const navItems = [
   { label: "Resumo", href: "/admin/dashboard", icon: "/admin-dashboard/nav-summary.svg" },
@@ -114,8 +28,44 @@ function formatMeta(row: AdminGuestRowDto) {
   return row.guestGroup.displayName;
 }
 
+function getGuestStatus(row: AdminGuestRowDto): GuestStatus {
+  const latestResponse = row.responses
+    .slice()
+    .sort(
+      (a, b) =>
+        new Date(b.updatedAt ?? b.createdAt).getTime() -
+        new Date(a.updatedAt ?? a.createdAt).getTime(),
+    )[0];
+
+  if (!latestResponse) {
+    return "pending";
+  }
+
+  if (latestResponse.responseStatus === "yes") {
+    return "confirmed";
+  }
+
+  if (latestResponse.responseStatus === "no") {
+    return "declined";
+  }
+
+  return "pending";
+}
+
+function getStatusLabel(status: GuestStatus) {
+  if (status === "confirmed") {
+    return "Confirmado";
+  }
+
+  if (status === "declined") {
+    return "Não vão";
+  }
+
+  return "Pendente";
+}
+
 export default function AdminGuestsPage() {
-  const [rows, setRows] = useState<AdminGuestRowDto[]>(fallbackRows);
+  const [rows, setRows] = useState<AdminGuestRowDto[]>([]);
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [search, setSearch] = useState("");
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
@@ -127,7 +77,7 @@ export default function AdminGuestsPage() {
       try {
         const response: AdminGuestListDto = await adminApi.listGuests({
           page: 1,
-          pageSize: 30,
+          pageSize: 100,
           status: "active",
         });
 
@@ -137,12 +87,12 @@ export default function AdminGuestsPage() {
 
         setRows(response.items);
         setLoadState("ready");
-      } catch {
+      } catch (error) {
         if (!isMounted) {
           return;
         }
 
-        setRows(fallbackRows);
+        console.error("Failed to load guests:", error);
         setLoadState("error");
       }
     }
@@ -158,15 +108,17 @@ export default function AdminGuestsPage() {
     const normalizedSearch = search.trim().toLowerCase();
 
     return rows.filter((row) => {
-      if (filterMode === "primary" && !row.guest.isPrimary) {
+      const guestStatus = getGuestStatus(row);
+
+      if (filterMode === "confirmed" && guestStatus !== "confirmed") {
         return false;
       }
 
-      if (filterMode === "companions" && row.guest.isPrimary) {
+      if (filterMode === "pending" && guestStatus !== "pending") {
         return false;
       }
 
-      if (filterMode === "active" && row.guest.status !== "active") {
+      if (filterMode === "declined" && guestStatus !== "declined") {
         return false;
       }
 
@@ -223,9 +175,9 @@ export default function AdminGuestsPage() {
           <div className={styles.filterPanel} aria-label="Filtros de convidados">
             {[
               { id: "all", label: "Todos" },
-              { id: "active", label: "Ativos" },
-              { id: "primary", label: "Principais" },
-              { id: "companions", label: "Acompanhantes" },
+              { id: "confirmed", label: "Confirmados" },
+              { id: "pending", label: "Pendentes" },
+              { id: "declined", label: "Não vão" },
             ].map((filter) => (
               <button
                 className={`${styles.filterButton} ${
@@ -247,19 +199,24 @@ export default function AdminGuestsPage() {
               <div className={styles.cardHeader}>
                 <div className={styles.cardHeading}>
                   <h2>{row.guest.fullName}</h2>
-                  <p>{row.guest.phone ?? formatMeta(row)}</p>
+                  <p>
+                    <span className={styles.metaIcon} aria-hidden="true" />
+                    {row.guest.phone ?? formatMeta(row)}
+                  </p>
                 </div>
-                <span className={styles.badge}>
-                  {row.guest.isPrimary ? "Convidado Principal" : "Acompanhante"}
+                <span className={`${styles.badge} ${styles[`badge${getGuestStatus(row)}`]}`}>
+                  {getStatusLabel(getGuestStatus(row))}
                 </span>
               </div>
 
               <div className={styles.cardActions}>
                 <button className={styles.warmAction} type="button">
+                  <span className={styles.actionIcon} aria-hidden="true" />
                   Editar
                 </button>
                 <button className={styles.outlineAction} type="button">
-                  Ver grupo
+                  <span className={styles.actionIcon} aria-hidden="true" />
+                  Dados
                 </button>
                 <button
                   className={styles.iconAction}
@@ -272,13 +229,11 @@ export default function AdminGuestsPage() {
             </article>
           ))}
         </section>
-
-        {loadState === "error" ? (
-          <p className={styles.modeNotice}>
-            Modo visual ativo. Entre como admin para carregar os convidados reais da API.
-          </p>
-        ) : null}
       </main>
+
+      <button className={styles.fabButton} type="button" aria-label="Adicionar convidado">
+        <span className={styles.fabIcon} aria-hidden="true" />
+      </button>
 
       <nav className={styles.bottomNav} aria-label="Navegacao inferior administrativa">
         {navItems.map((item) => (

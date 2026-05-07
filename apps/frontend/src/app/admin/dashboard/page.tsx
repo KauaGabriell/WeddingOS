@@ -1,3 +1,7 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { type AdminGuestRowDto, adminApi } from "../../../lib/api";
 import styles from "./page.module.css";
 
 const metricCards = [
@@ -77,6 +81,40 @@ const navItems = [
 ];
 
 export default function AdminDashboardPage() {
+  const [guests, setGuests] = useState<AdminGuestRowDto[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchStats() {
+      try {
+        const response = await adminApi.listGuests({ page: 1, pageSize: 100 });
+        setGuests(response.items);
+      } catch (error) {
+        console.error("Failed to fetch dashboard stats:", error);
+        if (error instanceof Error && error.message.includes("401")) {
+          console.warn("User is not authorized as admin. Please login first.");
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    fetchStats();
+  }, []);
+
+  const totalGuests = guests.length;
+  const confirmedGuests = guests.filter((row) => {
+    const latestResponse = row.responses
+      .slice()
+      .sort(
+        (a, b) =>
+          new Date(b.updatedAt ?? b.createdAt).getTime() -
+          new Date(a.updatedAt ?? a.createdAt).getTime(),
+      )[0];
+    return latestResponse?.responseStatus === "yes";
+  }).length;
+
+  const rsvpPercentage = totalGuests > 0 ? Math.round((confirmedGuests / totalGuests) * 100) : 0;
+
   return (
     <div className={styles.shell}>
       <header className={styles.topBar} aria-label="Navegação principal administrativa">
@@ -114,12 +152,21 @@ export default function AdminDashboardPage() {
             <div className={styles.rsvpHeader}>
               <p>Status da Lista</p>
               <h2>Confirmações RSVP</h2>
-              <span>82 convidados confirmados de um total de 120.</span>
+              {isLoading ? (
+                <span>Carregando dados...</span>
+              ) : (
+                <span>
+                  {confirmedGuests} convidados confirmados de um total de {totalGuests}.
+                </span>
+              )}
             </div>
-            <div className={styles.rsvpChart} aria-label="68% dos convidados confirmaram RSVP">
+            <div
+              className={styles.rsvpChart}
+              aria-label={`${rsvpPercentage}% dos convidados confirmaram RSVP`}
+            >
               <img src="/admin-dashboard/rsvp-ring.svg" alt="" aria-hidden="true" />
               <div className={styles.rsvpChartText}>
-                <strong>68%</strong>
+                <strong>{isLoading ? "--" : `${rsvpPercentage}%`}</strong>
                 <span>RSVP</span>
               </div>
             </div>
