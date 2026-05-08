@@ -18,6 +18,8 @@ import styles from "./page.module.css";
 type LoadState = "loading" | "ready" | "error";
 type SubmitState = "idle" | "submitting" | "success" | "error";
 type SubmitOutcome = "created" | "updated" | "replayed" | null;
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export default function GuestRsvpPage() {
   const [home, setHome] = useState<GuestHomeDto | null>(null);
@@ -71,6 +73,7 @@ export default function GuestRsvpPage() {
   }, []);
 
   const selectedEvent = events.find((event) => event.id === selectedEventId) ?? events[0] ?? null;
+  const canSubmitSelectedEvent = Boolean(selectedEventId && UUID_REGEX.test(selectedEventId));
   const responseByEvent = useMemo(
     () => new Map((home?.responses ?? []).map((response) => [response.eventId, response])),
     [home?.responses],
@@ -78,7 +81,10 @@ export default function GuestRsvpPage() {
   const selectedEventResponse = selectedEventId ? responseByEvent.get(selectedEventId) : undefined;
 
   useEffect(() => {
-    if (!selectedEventId) {
+    if (!canSubmitSelectedEvent) {
+      setSubmitState("error");
+      setSubmitOutcome(null);
+      setSubmitMessage("Conecte sua sessao novamente para confirmar presenca.");
       return;
     }
     const existing = responseByEvent.get(selectedEventId);
@@ -266,8 +272,16 @@ export default function GuestRsvpPage() {
                 onChange={(event) => setMessage(event.target.value)}
               />
 
-              <button className={styles.cta} type="submit" disabled={submitState === "submitting"}>
-                {submitState === "submitting" ? "ENVIANDO..." : "CONFIRMAR PRESENCA"}
+              <button
+                className={styles.cta}
+                type="submit"
+                disabled={submitState === "submitting" || !canSubmitSelectedEvent}
+              >
+                {submitState === "submitting"
+                  ? "ENVIANDO..."
+                  : canSubmitSelectedEvent
+                    ? "CONFIRMAR PRESENCA"
+                    : "ENTRE PARA CONFIRMAR"}
               </button>
 
               <p
