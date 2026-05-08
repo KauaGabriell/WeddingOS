@@ -30,7 +30,7 @@ export function createGetDashboardSummaryUseCase(dependencies: {
         dependencies.prisma.rsvpResponse.count(),
         dependencies.prisma.rsvpResponse.findMany({
           where: { responseStatus: "YES" },
-          select: { guestId: true },
+          select: { guestId: true, companionsConfirmed: true },
           distinct: ["guestId"],
         }),
         dependencies.prisma.gift.count({
@@ -47,7 +47,11 @@ export function createGetDashboardSummaryUseCase(dependencies: {
       return {
         totalGuests,
         totalRsvps,
-        confirmedGuests: confirmedGuestResponses.length,
+        confirmedGuests: confirmedGuestResponses.reduce(
+          (sum: number, response: { companionsConfirmed: number }) =>
+            sum + 1 + response.companionsConfirmed,
+          0,
+        ),
         totalGifts,
         reservedGifts,
         pendingPhotos,

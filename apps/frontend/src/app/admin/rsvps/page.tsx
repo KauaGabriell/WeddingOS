@@ -4,12 +4,19 @@ import { useEffect, useMemo, useState } from "react";
 import { AdminBottomNav } from "../../../components/admin-bottom-nav/admin-bottom-nav";
 import { AdminFeedback } from "../../../components/admin-feedback/admin-feedback";
 import { MobileTopBar } from "../../../components/mobile-top-bar/mobile-top-bar";
-import { type AdminGuestRowDto, type EventDto, adminApi, guestApi } from "../../../lib/api";
+import {
+  type AdminGuestRowDto,
+  type EventDto,
+  adminApi,
+  guestApi,
+} from "../../../lib/api";
 import styles from "./page.module.css";
 
 type ResponseFilter = "all" | "yes" | "pending" | "no";
 
-function getLatestResponseStatus(row: AdminGuestRowDto): "yes" | "pending" | "no" {
+function getLatestResponseStatus(
+  row: AdminGuestRowDto,
+): "yes" | "pending" | "no" {
   const latestResponse = row.responses
     .slice()
     .sort(
@@ -79,10 +86,25 @@ export default function AdminRsvpsPage() {
   }, []);
 
   const summary = useMemo(() => {
-    const counts = { total: rows.length, yes: 0, pending: 0, no: 0 };
+    const counts = { total: 0, yes: 0, pending: 0, no: 0 };
     for (const row of rows) {
       const status = getLatestResponseStatus(row);
+      counts.total += 1;
       counts[status] += 1;
+
+      // Add companions for confirmed responses
+      if (status === "yes") {
+        const latestResponse = row.responses
+          .slice()
+          .sort(
+            (a, b) =>
+              new Date(b.updatedAt ?? b.createdAt).getTime() -
+              new Date(a.updatedAt ?? a.createdAt).getTime(),
+          )[0];
+        if (latestResponse) {
+          counts.yes += latestResponse.companionsConfirmed;
+        }
+      }
     }
     return counts;
   }, [rows]);
@@ -189,11 +211,27 @@ export default function AdminRsvpsPage() {
           ) : null}
           {visibleRows.map((row) => {
             const latestStatus = getLatestResponseStatus(row);
+            const latestResponse = row.responses
+              .slice()
+              .sort(
+                (a, b) =>
+                  new Date(b.updatedAt ?? b.createdAt).getTime() -
+                  new Date(a.updatedAt ?? a.createdAt).getTime(),
+              )[0];
+            const companionsText =
+              latestResponse && latestResponse.companionsConfirmed > 0
+                ? ` + ${latestResponse.companionsConfirmed} acompanhante${latestResponse.companionsConfirmed > 1 ? "s" : ""}`
+                : "";
             return (
               <article className={styles.card} key={row.guest.id}>
                 <div className={styles.cardTop}>
-                  <h2>{row.guest.fullName}</h2>
-                  <span className={`${styles.badge} ${styles[`badge${latestStatus}`]}`}>
+                  <h2>
+                    {row.guest.fullName}
+                    {companionsText}
+                  </h2>
+                  <span
+                    className={`${styles.badge} ${styles[`badge${latestStatus}`]}`}
+                  >
                     {getStatusLabel(latestStatus)}
                   </span>
                 </div>
