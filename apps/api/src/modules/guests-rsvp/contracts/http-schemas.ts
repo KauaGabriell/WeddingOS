@@ -114,6 +114,9 @@ export const GUESTS_RSVP_HTTP_SCHEMAS = defineHttpSchemaCatalog({
     eventId: z.object({
       eventId: uuidSchema,
     }),
+    adminGuestId: z.object({
+      guestId: uuidSchema,
+    }),
   },
   queries: {
     guestList: paginationQuerySchema.extend({
@@ -145,6 +148,17 @@ export const GUESTS_RSVP_HTTP_SCHEMAS = defineHttpSchemaCatalog({
       companionsConfirmed: z.number().int().min(0),
       message: z.string().trim().max(500).optional(),
     }),
+    adminUpdateGuest: z
+      .object({
+        fullName: z.string().trim().min(1).optional(),
+        phone: z.string().trim().max(40).nullable().optional(),
+        status: z.enum(GUEST_STATUSES).optional(),
+      })
+      .refine(
+        (value) =>
+          value.fullName !== undefined || value.phone !== undefined || value.status !== undefined,
+        "At least one field must be provided",
+      ),
   },
   responses: {
     guestGroup: guestGroupResponseSchema,

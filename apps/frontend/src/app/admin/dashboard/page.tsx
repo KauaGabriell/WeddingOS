@@ -32,10 +32,10 @@ const shortcuts = [
     tone: "warm",
   },
   {
-    href: "/admin/photo-wall",
+    href: "/admin/rsvps",
     icon: "/admin-dashboard/moderation.svg",
-    title: "Moderar Mural",
-    subtitle: "Aprovar fotos e mensagens",
+    title: "Visao de RSVP",
+    subtitle: "Consolidado por evento e status",
     tone: "pink",
   },
   {

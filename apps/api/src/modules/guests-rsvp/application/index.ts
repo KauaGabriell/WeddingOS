@@ -6,4 +6,5 @@ export * from "./guests-rsvp-errors.js";
 export * from "./guests-rsvp-use-cases.js";
 export * from "./list-admin-guests-and-rsvps.js";
 export * from "./list-guest-events.js";
+export * from "./manage-admin-guest.js";
 export * from "./rsvp-idempotency-contract.js";

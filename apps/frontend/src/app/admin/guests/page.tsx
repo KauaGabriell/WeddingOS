@@ -7,6 +7,7 @@ import styles from "./page.module.css";
 type FilterMode = "all" | "confirmed" | "pending" | "declined";
 type LoadState = "loading" | "ready" | "error";
 type GuestStatus = "confirmed" | "pending" | "declined";
+type ModalMode = "details" | "edit" | null;
 
 const navItems = [
   { label: "Resumo", href: "/admin/dashboard", icon: "/admin-dashboard/nav-summary.svg" },
@@ -69,6 +70,12 @@ export default function AdminGuestsPage() {
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [search, setSearch] = useState("");
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
+  const [selectedGuestId, setSelectedGuestId] = useState<string | null>(null);
+  const [modalMode, setModalMode] = useState<ModalMode>(null);
+  const [editFullName, setEditFullName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editAllowedCompanions, setEditAllowedCompanions] = useState(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -134,9 +141,95 @@ export default function AdminGuestsPage() {
     });
   }, [filterMode, rows, search]);
 
+  const selectedRow = useMemo(
+    () => rows.find((row) => row.guest.id === selectedGuestId) ?? null,
+    [rows, selectedGuestId],
+  );
+
+  const familyMembers = useMemo(() => {
+    if (!selectedRow) {
+      return [];
+    }
+
+    return rows
+      .filter((row) => row.guest.guestGroupId === selectedRow.guest.guestGroupId)
+      .sort((a, b) => Number(b.guest.isPrimary) - Number(a.guest.isPrimary));
+  }, [rows, selectedRow]);
+
+  function openDetails(row: AdminGuestRowDto) {
+    setSelectedGuestId(row.guest.id);
+    setModalMode("details");
+  }
+
+  function openEdit(row: AdminGuestRowDto) {
+    setSelectedGuestId(row.guest.id);
+    setEditFullName(row.guest.fullName);
+    setEditPhone(row.guest.phone ?? "");
+    setEditAllowedCompanions(row.guestGroup.allowedCompanions);
+    setModalMode("edit");
+  }
+
+  function closeModal() {
+    setModalMode(null);
+    setSelectedGuestId(null);
+    setIsSubmitting(false);
+  }
+
+  async function handleSave() {
+    if (!selectedRow) {
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const updated = await adminApi.updateGuest(selectedRow.guest.id, {
+        fullName: editFullName.trim(),
+        phone: editPhone.trim() || null,
+        allowedCompanions: editAllowedCompanions,
+      });
+
+      setRows((current) =>
+        current.map((row) =>
+          row.guest.id === updated.id
+            ? {
+                ...row,
+                guest: updated,
+                guestGroup: { ...row.guestGroup, allowedCompanions: editAllowedCompanions },
+              }
+            : row,
+        ),
+      );
+      closeModal();
+    } catch (error) {
+      console.error("Failed to update guest:", error);
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!selectedRow) {
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      await adminApi.updateGuest(selectedRow.guest.id, {
+        status: "inactive",
+      });
+
+      setRows((current) => current.filter((row) => row.guest.id !== selectedRow.guest.id));
+      closeModal();
+    } catch (error) {
+      console.error("Failed to deactivate guest:", error);
+      setIsSubmitting(false);
+    }
+  }
+
   return (
     <div className={styles.shell}>
-      <header className={styles.topBar} aria-label="Navegacao principal administrativa">
+      <header className={styles.topBar} aria-label="Navegação principal administrativa">
         <div className={styles.brandGroup}>
           <button
             className={styles.menuButton}
@@ -210,17 +303,22 @@ export default function AdminGuestsPage() {
               </div>
 
               <div className={styles.cardActions}>
-                <button className={styles.warmAction} type="button">
+                <button className={styles.warmAction} onClick={() => openEdit(row)} type="button">
                   <span className={styles.actionIcon} aria-hidden="true" />
                   Editar
                 </button>
-                <button className={styles.outlineAction} type="button">
+                <button
+                  className={styles.outlineAction}
+                  onClick={() => openDetails(row)}
+                  type="button"
+                >
                   <span className={styles.actionIcon} aria-hidden="true" />
                   Dados
                 </button>
                 <button
                   className={styles.iconAction}
                   type="button"
+                  onClick={() => openEdit(row)}
                   aria-label="Desativar convidado"
                 >
                   <span />
@@ -228,6 +326,13 @@ export default function AdminGuestsPage() {
               </div>
             </article>
           ))}
+
+          {loadState === "loading" ? (
+            <p className={styles.modeNotice}>Carregando convidados...</p>
+          ) : null}
+          {loadState === "error" ? (
+            <p className={styles.modeNotice}>Falha ao carregar convidados. Atualize a pagina.</p>
+          ) : null}
         </section>
       </main>
 
@@ -248,6 +353,102 @@ export default function AdminGuestsPage() {
           </a>
         ))}
       </nav>
+
+      {modalMode && selectedRow ? (
+        <>
+          <button
+            aria-label="Fechar modal"
+            className={styles.modalBackdrop}
+            onClick={closeModal}
+            type="button"
+          />
+          <dialog
+            className={styles.modalCard}
+            open
+            aria-label={modalMode === "details" ? "Dados do convidado" : "Editar convidado"}
+          >
+            <header className={styles.modalHeader}>
+              <h2>{modalMode === "details" ? "Dados do convidado" : "Editar convidado"}</h2>
+              <button className={styles.modalClose} type="button" onClick={closeModal}>
+                Fechar
+              </button>
+            </header>
+
+            {modalMode === "details" ? (
+              <div className={styles.modalBody}>
+                <p>
+                  <strong>Nome:</strong> {selectedRow.guest.fullName}
+                </p>
+                <p>
+                  <strong>Telefone:</strong> {selectedRow.guest.phone ?? "Nao informado"}
+                </p>
+                <p>
+                  <strong>Grupo:</strong> {selectedRow.guestGroup.displayName}
+                </p>
+                <div className={styles.companionsBlock}>
+                  <strong>Membros do grupo</strong>
+                  <ul>
+                    {familyMembers.map((member) => (
+                      <li key={member.guest.id}>
+                        {member.guest.fullName}
+                        {member.guest.isPrimary ? " (Principal)" : ""}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            ) : (
+              <div className={styles.modalBody}>
+                <label className={styles.modalField}>
+                  <span>Nome completo</span>
+                  <input
+                    type="text"
+                    value={editFullName}
+                    onChange={(event) => setEditFullName(event.target.value)}
+                  />
+                </label>
+                <label className={styles.modalField}>
+                  <span>Telefone</span>
+                  <input
+                    type="text"
+                    value={editPhone}
+                    onChange={(event) => setEditPhone(event.target.value)}
+                  />
+                </label>
+                <label className={styles.modalField}>
+                  <span>Acompanhantes permitidos</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="20"
+                    value={editAllowedCompanions}
+                    onChange={(event) => setEditAllowedCompanions(Number(event.target.value))}
+                  />
+                </label>
+
+                <div className={styles.modalActions}>
+                  <button
+                    className={styles.modalPrimary}
+                    type="button"
+                    disabled={isSubmitting || !editFullName.trim()}
+                    onClick={() => void handleSave()}
+                  >
+                    Salvar
+                  </button>
+                  <button
+                    className={styles.modalDanger}
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={() => void handleDelete()}
+                  >
+                    Excluir convidado
+                  </button>
+                </div>
+              </div>
+            )}
+          </dialog>
+        </>
+      ) : null}
     </div>
   );
 }

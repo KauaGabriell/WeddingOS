@@ -411,6 +411,14 @@ type ListAdminGuestsParams = {
   status?: "active" | "inactive";
 };
 
+type ListAdminRsvpsParams = {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  eventId?: string;
+  responseStatus?: RsvpResponseStatus;
+};
+
 export const adminApi = {
   listGuests: ({ page = 1, pageSize = 20, search, status }: ListAdminGuestsParams = {}) => {
     const query = new URLSearchParams({
@@ -427,5 +435,44 @@ export const adminApi = {
     }
 
     return apiFetch<AdminGuestListDto>(`/admin/guests?${query.toString()}`);
+  },
+  updateGuest: (
+    guestId: string,
+    input: {
+      fullName?: string;
+      phone?: string | null;
+      status?: "active" | "inactive";
+      allowedCompanions?: number;
+    },
+  ) =>
+    apiFetch<GuestDto>(`/admin/guests/${guestId}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }),
+  listRsvps: ({
+    page = 1,
+    pageSize = 20,
+    search,
+    eventId,
+    responseStatus,
+  }: ListAdminRsvpsParams = {}) => {
+    const query = new URLSearchParams({
+      page: String(page),
+      pageSize: String(pageSize),
+    });
+
+    if (search) {
+      query.set("search", search);
+    }
+
+    if (eventId) {
+      query.set("eventId", eventId);
+    }
+
+    if (responseStatus) {
+      query.set("responseStatus", responseStatus);
+    }
+
+    return apiFetch<AdminGuestListDto>(`/admin/rsvps?${query.toString()}`);
   },
 };

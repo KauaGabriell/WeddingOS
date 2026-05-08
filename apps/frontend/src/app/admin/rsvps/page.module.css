@@ -1,0 +1,262 @@
+.shell {
+  --bg: #131313;
+  --surface: #201f1f;
+  --surface-soft: #1a1a1a;
+  --text: #e5e2e1;
+  --muted: #c6b3bf;
+  --accent: #ffabf3;
+  --danger: #ffb4ab;
+  --border: rgba(255, 255, 255, 0.07);
+  --serif: "Noto Serif", Georgia, "Times New Roman", serif;
+  --sans: Manrope, Inter, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  margin: 0 auto;
+  min-height: 100svh;
+  position: relative;
+  width: min(100vw, 430px);
+  z-index: 0;
+}
+
+.shell::before {
+  background: #0a0a0a;
+  content: "";
+  inset: 0;
+  position: fixed;
+  z-index: -1;
+}
+
+.shell,
+.shell * {
+  box-sizing: border-box;
+}
+
+.topBar {
+  align-items: center;
+  backdrop-filter: blur(14px);
+  background: rgba(0, 0, 0, 0.68);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  height: 72px;
+  justify-content: space-between;
+  left: 50%;
+  padding: 0 24px;
+  position: fixed;
+  top: 0;
+  transform: translateX(-50%);
+  width: min(100%, 430px);
+  z-index: 30;
+}
+
+.brand {
+  color: var(--text);
+  font-family: var(--serif);
+  font-size: 20px;
+  font-style: italic;
+  letter-spacing: 2px;
+  text-decoration: none;
+}
+
+.actionLink {
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 96px 24px 112px;
+}
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.eyebrow {
+  color: #edbbac;
+  font-size: 10px;
+  letter-spacing: 2px;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.hero h1 {
+  font-family: var(--serif);
+  font-size: 34px;
+  line-height: 42px;
+  margin: 0;
+}
+
+.summaryGrid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.summaryGrid article {
+  background: var(--surface);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 74px;
+  padding: 12px;
+}
+
+.summaryGrid span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.summaryGrid strong {
+  color: var(--accent);
+  font-size: 24px;
+}
+
+.filters {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.filterRow {
+  background: #0f0f0f;
+  border-radius: 12px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding: 4px;
+}
+
+.filterButton {
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  min-height: 32px;
+}
+
+.filterButtonActive {
+  background: #353534;
+  color: var(--accent);
+}
+
+.eventSelect {
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  font-family: inherit;
+  min-height: 44px;
+  padding: 0 12px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.card {
+  background: var(--surface);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px;
+}
+
+.cardTop {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.card h2 {
+  font-size: 16px;
+  margin: 0;
+}
+
+.card p {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0;
+}
+
+.card small {
+  color: #9c9c9c;
+  font-size: 11px;
+}
+
+.badge {
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 4px 10px;
+  text-transform: uppercase;
+}
+
+.badgeyes {
+  background: rgba(255, 171, 243, 0.12);
+  color: var(--accent);
+}
+
+.badgepending {
+  background: rgba(198, 179, 191, 0.14);
+  color: #d0b5ca;
+}
+
+.badgeno {
+  background: rgba(255, 180, 171, 0.14);
+  color: var(--danger);
+}
+
+.emptyState {
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.bottomNav {
+  align-items: center;
+  backdrop-filter: blur(18px);
+  background: rgba(10, 10, 10, 0.88);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  bottom: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  height: 80px;
+  left: 50%;
+  padding: 12px 16px 16px;
+  position: fixed;
+  transform: translateX(-50%);
+  width: min(100%, 430px);
+  z-index: 30;
+}
+
+.navItem {
+  align-items: center;
+  color: #737373;
+  display: flex;
+  flex-direction: column;
+  font-size: 10px;
+  gap: 6px;
+  justify-content: center;
+  min-height: 44px;
+  text-decoration: none;
+}
+
+.navItem img {
+  height: 20px;
+  width: 20px;
+}

@@ -13,6 +13,7 @@ import {
   PrismaGuestRepository,
   PrismaRsvpResponseRepository,
   createListAdminGuestsAndRsvpsUseCase,
+  createManageAdminGuestUseCase,
   type EventGuestEligibility,
   type Guest,
   type GuestGroup,
@@ -52,6 +53,7 @@ import {
 export const ADMIN_BACKOFFICE_ROUTE_ACCESS = {
   dashboard: adminRoute(),
   listGuests: adminRoute(),
+  updateGuest: adminRoute(),
   listRsvps: adminRoute(),
   listGifts: adminRoute(),
   createGift: adminRoute(),
@@ -235,6 +237,9 @@ export const registerAdminBackofficeRoutes: FastifyPluginAsync<RegisterAdminBack
       eventGuestEligibilityRepository,
       rsvpResponseRepository,
     });
+    const manageAdminGuest = createManageAdminGuestUseCase({
+      guestRepository,
+    });
 
     const giftRepository = new PrismaGiftRepository(
       app.prisma.gift as unknown as ConstructorParameters<typeof PrismaGiftRepository>[0],
@@ -335,6 +340,47 @@ export const registerAdminBackofficeRoutes: FastifyPluginAsync<RegisterAdminBack
               page: result.page,
               pageSize: result.pageSize,
             });
+          } catch (error) {
+            if (error instanceof GuestsRsvpApplicationError) {
+              return sendGuestsError(error, reply);
+            }
+
+            throw error;
+          }
+        },
+      });
+
+      protectedRoutes.patch("/guests/:guestId", {
+        ...ADMIN_BACKOFFICE_ROUTE_ACCESS.updateGuest,
+        preHandler: options.preHandler,
+        schema: {
+          tags: [...ADMIN_BACKOFFICE_HTTP_CONTRACT.tags],
+          params: GUESTS_RSVP_HTTP_SCHEMAS.params.adminGuestId,
+          body: GUESTS_RSVP_HTTP_SCHEMAS.bodies.adminUpdateGuest,
+          response: {
+            200: GUESTS_RSVP_HTTP_SCHEMAS.responses.guest,
+            401: errorResponseSchema,
+            403: errorResponseSchema,
+            404: errorResponseSchema,
+          },
+        },
+        handler: async (request, reply) => {
+          const params = request.params as { guestId: string };
+          const body = request.body as {
+            fullName?: string;
+            phone?: string | null;
+            status?: "active" | "inactive";
+          };
+
+          try {
+            const guest = await manageAdminGuest.execute({
+              guestId: params.guestId,
+              fullName: body.fullName,
+              phone: body.phone,
+              status: body.status,
+            });
+
+            return reply.code(200).send(serializeGuest(guest));
           } catch (error) {
             if (error instanceof GuestsRsvpApplicationError) {
               return sendGuestsError(error, reply);
