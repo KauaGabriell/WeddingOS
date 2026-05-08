@@ -241,44 +241,58 @@
 }
 
 .countdownGrid {
+  align-items: center;
   display: grid;
-  gap: 24px;
+  gap: 14px;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin-top: 8px;
+  margin-top: 14px;
 }
 
 .countdownUnit {
+  align-items: center;
+  background: rgba(19, 19, 19, 0.28);
+  border: 1px solid rgba(255, 171, 243, 0.12);
+  border-radius: 12px;
   display: flex;
   flex-direction: column;
+  justify-content: center;
+  min-height: 118px;
   min-width: 0;
   position: relative;
+  padding: 10px 8px 12px;
   text-align: center;
 }
 
 .countdownUnit strong {
   color: var(--guest-text);
   font-family: var(--guest-serif);
-  font-size: clamp(52px, 15.4vw, 60px);
+  font-size: clamp(44px, 13.2vw, 52px);
   font-weight: 700;
-  line-height: 60px;
+  letter-spacing: -0.6px;
+  line-height: 1;
 }
 
 .countdownUnit span:last-child {
   color: var(--guest-muted);
   font-size: 10px;
-  letter-spacing: 1px;
+  letter-spacing: 1.2px;
   line-height: 15px;
+  margin-top: 8px;
   text-transform: uppercase;
 }
 
 .separator {
-  color: rgba(86, 64, 82, 0.3);
+  align-items: center;
+  color: rgba(255, 171, 243, 0.44);
+  display: flex;
   font-family: var(--guest-serif);
-  font-size: 36px;
-  left: -16px;
-  line-height: 40px;
+  font-size: 26px;
+  font-weight: 700;
+  height: 100%;
+  left: -12px;
+  line-height: 1;
   position: absolute;
-  top: 16px;
+  top: 0;
 }
 
 .dateRow {
@@ -745,11 +759,11 @@
   }
 
   .countdownGrid {
-    gap: 14px;
+    gap: 10px;
   }
 
   .separator {
-    left: -10px;
+    left: -8px;
   }
 
   .eventsCard {
