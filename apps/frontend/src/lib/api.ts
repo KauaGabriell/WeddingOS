@@ -73,7 +73,10 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
       : null;
   const shouldAttachAdminBearer = path.startsWith("/admin") && adminToken;
   const shouldAttachGuestBearer =
-    !path.startsWith("/auth") && !path.startsWith("/admin") && isGuestProtectedPath(path) && guestToken;
+    !path.startsWith("/auth") &&
+    !path.startsWith("/admin") &&
+    isGuestProtectedPath(path) &&
+    guestToken;
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
     credentials: "include",
@@ -337,6 +340,15 @@ export interface AdminGuestListDto {
   pageSize: number;
 }
 
+export interface AdminDashboardSummaryDto {
+  totalGuests: number;
+  totalRsvps: number;
+  confirmedGuests: number;
+  totalGifts: number;
+  reservedGifts: number;
+  pendingPhotos: number;
+}
+
 type ListEventsParams = {
   eventType?: EventType;
   page?: number;
@@ -399,10 +411,13 @@ export const authApi = {
     companionsCount: number;
     companionNames: string[];
   }) => {
-    const result = await apiFetch<OpenGuestAccessRegistrationDto>("/auth/guest/register-open-access", {
-      method: "POST",
-      body: JSON.stringify(input),
-    });
+    const result = await apiFetch<OpenGuestAccessRegistrationDto>(
+      "/auth/guest/register-open-access",
+      {
+        method: "POST",
+        body: JSON.stringify(input),
+      },
+    );
     persistGuestSessionIfBrowser(result.authSession);
     return result;
   },
@@ -535,6 +550,7 @@ export interface AdminPhotoWallListDto {
 }
 
 export const adminApi = {
+  getDashboard: () => apiFetch<AdminDashboardSummaryDto>("/admin/dashboard"),
   listGuests: ({ page = 1, pageSize = 20, search, status }: ListAdminGuestsParams = {}) => {
     const query = new URLSearchParams({
       page: String(page),
@@ -563,6 +579,10 @@ export const adminApi = {
     apiFetch<GuestDto>(`/admin/guests/${guestId}`, {
       method: "PATCH",
       body: JSON.stringify(input),
+    }),
+  deleteGuest: (guestId: string) =>
+    apiFetch<{ success: true }>(`/admin/guests/${guestId}`, {
+      method: "DELETE",
     }),
   listRsvps: ({
     page = 1,

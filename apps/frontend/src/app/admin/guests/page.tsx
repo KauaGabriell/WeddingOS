@@ -145,11 +145,11 @@ export default function AdminGuestsPage() {
     if (!selectedRow) return;
     setIsSubmitting(true);
     try {
-      await adminApi.updateGuest(selectedRow.guest.id, { status: "inactive" });
+      await adminApi.deleteGuest(selectedRow.guest.id);
       setRows((current) => current.filter((row) => row.guest.id !== selectedRow.guest.id));
       closeModal();
     } catch (error) {
-      console.error("Failed to deactivate guest:", error);
+      console.error("Failed to delete guest:", error);
       setIsSubmitting(false);
     }
   }

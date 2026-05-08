@@ -57,6 +57,7 @@ export const ADMIN_BACKOFFICE_ROUTE_ACCESS = {
   dashboard: adminRoute(),
   listGuests: adminRoute(),
   updateGuest: adminRoute(),
+  deleteGuest: adminRoute(),
   listRsvps: adminRoute(),
   listGifts: adminRoute(),
   listGiftReservations: adminRoute(),
@@ -422,6 +423,96 @@ export const registerAdminBackofficeRoutes: FastifyPluginAsync<RegisterAdminBack
 
             throw error;
           }
+        },
+      });
+
+      protectedRoutes.delete("/guests/:guestId", {
+        ...ADMIN_BACKOFFICE_ROUTE_ACCESS.deleteGuest,
+        preHandler: options.preHandler,
+        schema: {
+          tags: [...ADMIN_BACKOFFICE_HTTP_CONTRACT.tags],
+          params: GUESTS_RSVP_HTTP_SCHEMAS.params.adminGuestId,
+          response: {
+            200: GUESTS_RSVP_HTTP_SCHEMAS.responses.deleteGuest,
+            401: errorResponseSchema,
+            403: errorResponseSchema,
+            404: errorResponseSchema,
+          },
+        },
+        handler: async (request, reply) => {
+          const params = request.params as { guestId: string };
+          const guest = await guestRepository.findById(params.guestId);
+
+          if (!guest) {
+            return sendGuestsError(new GuestsRsvpApplicationError("guest_not_found"), reply);
+          }
+
+          await app.prisma.$transaction(async (transactionClient: any) => {
+            const activeReservations = await transactionClient.giftReservation.findMany({
+              where: {
+                guestId: params.guestId,
+                reservationStatus: "ACTIVE",
+              },
+              select: {
+                giftId: true,
+              },
+            });
+            const activeReservedGiftIds = activeReservations.map(
+              (reservation: { giftId: string }) => reservation.giftId,
+            );
+
+            await transactionClient.auditLog.updateMany({
+              where: { actorGuestId: params.guestId },
+              data: { actorGuestId: null },
+            });
+            await transactionClient.giftReservation.deleteMany({
+              where: { guestId: params.guestId },
+            });
+
+            if (activeReservedGiftIds.length > 0) {
+              await transactionClient.gift.updateMany({
+                where: {
+                  id: { in: activeReservedGiftIds },
+                  status: "RESERVED",
+                },
+                data: {
+                  status: "AVAILABLE",
+                  updatedAt: new Date(),
+                },
+              });
+            }
+
+            await transactionClient.photoPost.deleteMany({
+              where: { guestId: params.guestId },
+            });
+            await transactionClient.rsvpResponse.deleteMany({
+              where: { guestId: params.guestId },
+            });
+            await transactionClient.eventGuestEligibility.deleteMany({
+              where: { guestId: params.guestId },
+            });
+            await transactionClient.inviteToken.deleteMany({
+              where: { guestId: params.guestId },
+            });
+            await transactionClient.guest.delete({
+              where: { id: params.guestId },
+            });
+
+            const remainingGuestsInGroup = await transactionClient.guest.count({
+              where: { guestGroupId: guest.guestGroupId },
+            });
+
+            if (remainingGuestsInGroup === 0) {
+              await transactionClient.inviteToken.deleteMany({
+                where: { guestGroupId: guest.guestGroupId },
+              });
+              await transactionClient.guestGroup.delete({
+                where: { id: guest.guestGroupId },
+              });
+            }
+          });
+
+          return reply.code(200).send({ success: true });
         },
       });
 

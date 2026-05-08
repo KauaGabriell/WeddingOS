@@ -4,27 +4,29 @@ import { useEffect, useState } from "react";
 import { AdminBottomNav } from "../../../components/admin-bottom-nav/admin-bottom-nav";
 import { AdminFeedback } from "../../../components/admin-feedback/admin-feedback";
 import { MobileTopBar } from "../../../components/mobile-top-bar/mobile-top-bar";
-import { type AdminGuestRowDto, ApiRequestError, adminApi } from "../../../lib/api";
+import { type AdminDashboardSummaryDto, ApiRequestError, adminApi } from "../../../lib/api";
 import styles from "./page.module.css";
 
-const metricCards = [
-  {
-    kind: "gifts",
-    icon: "/admin-dashboard/gift.svg",
-    label: "Total em Presentes",
-    value: "R$ 14.250,00",
-    trendIcon: "/admin-dashboard/trend.svg",
-    trend: "+12% desde ontem",
-  },
-  {
-    kind: "photos",
-    icon: "/admin-dashboard/photos.svg",
-    label: "Fotos Pendentes",
-    value: "24",
-    badge: "Moderar",
-    note: "Aguardando aprovacao para o mural.",
-  },
-];
+function createMetricCards(summary: AdminDashboardSummaryDto | null, isLoading: boolean) {
+  return [
+    {
+      kind: "gifts",
+      icon: "/admin-dashboard/gift.svg",
+      label: "Total de Presentes",
+      value: isLoading || !summary ? "--" : String(summary.totalGifts),
+      trendIcon: "/admin-dashboard/trend.svg",
+      trend: isLoading || !summary ? "Sincronizando" : `${summary.reservedGifts} reservados`,
+    },
+    {
+      kind: "photos",
+      icon: "/admin-dashboard/photos.svg",
+      label: "Fotos Pendentes",
+      value: isLoading || !summary ? "--" : String(summary.pendingPhotos),
+      badge: "Moderar",
+      note: "Aguardando aprovacao para o mural.",
+    },
+  ];
+}
 
 const shortcuts = [
   {
@@ -43,37 +45,17 @@ const shortcuts = [
   },
 ];
 
-const activities = [
-  {
-    title: "Nova familia cadastrada",
-    body: "A familia Vasconcelos concluiu o cadastro aberto.",
-    time: "Ha 15 minutos",
-    tone: "pink",
-  },
-  {
-    title: "RSVP Confirmado",
-    body: "Familia Silveira (4 pessoas) confirmou presenca.",
-    time: "Ha 2 horas",
-    tone: "warm",
-  },
-  {
-    title: "Foto enviada",
-    body: "Uma nova foto do ensaio foi postada.",
-    time: "Ontem",
-    tone: "muted",
-  },
-];
-
 export default function AdminDashboardPage() {
-  const [guests, setGuests] = useState<AdminGuestRowDto[]>([]);
+  const [summary, setSummary] = useState<AdminDashboardSummaryDto | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
 
   useEffect(() => {
     async function fetchStats() {
       try {
-        const response = await adminApi.listGuests({ page: 1, pageSize: 100 });
-        setGuests(response.items);
+        const response = await adminApi.getDashboard();
+        setSummary(response);
+        setHasError(false);
       } catch (error) {
         console.error("Failed to fetch dashboard stats:", error);
         setHasError(true);
@@ -87,19 +69,10 @@ export default function AdminDashboardPage() {
     void fetchStats();
   }, []);
 
-  const totalGuests = guests.length;
-  const confirmedGuests = guests.filter((row) => {
-    const latestResponse = row.responses
-      .slice()
-      .sort(
-        (a, b) =>
-          new Date(b.updatedAt ?? b.createdAt).getTime() -
-          new Date(a.updatedAt ?? a.createdAt).getTime(),
-      )[0];
-    return latestResponse?.responseStatus === "yes";
-  }).length;
-
+  const totalGuests = summary?.totalGuests ?? 0;
+  const confirmedGuests = summary?.confirmedGuests ?? 0;
   const rsvpPercentage = totalGuests > 0 ? Math.round((confirmedGuests / totalGuests) * 100) : 0;
+  const metricCards = createMetricCards(summary, isLoading);
 
   return (
     <div className={styles.shell}>
@@ -163,7 +136,7 @@ export default function AdminDashboardPage() {
             actionLabel="Reautenticar"
           />
         ) : null}
-        {!isLoading && !hasError && guests.length === 0 ? (
+        {!isLoading && !hasError && totalGuests === 0 ? (
           <AdminFeedback
             variant="empty"
             title="Sem convidados cadastrados"
@@ -173,7 +146,7 @@ export default function AdminDashboardPage() {
           />
         ) : null}
 
-        <section className={styles.quickArea} aria-label="Atalhos e atividades">
+        <section className={styles.quickArea} aria-label="Atalhos administrativos">
           <div className={styles.shortcuts}>
             {shortcuts.map((shortcut) => (
               <a className={styles.shortcutCard} href={shortcut.href} key={shortcut.href}>
@@ -187,25 +160,6 @@ export default function AdminDashboardPage() {
               </a>
             ))}
           </div>
-
-          <aside className={styles.activityCard} aria-label="Atividades recentes">
-            <div className={styles.activityHeader}>
-              <h2>Atividades</h2>
-              <a href="/admin/audit-logs">Ver tudo</a>
-            </div>
-            <div className={styles.activityList}>
-              {activities.map((activity) => (
-                <article className={styles.activityItem} key={activity.title}>
-                  <span className={`${styles.activityDot} ${styles[activity.tone]}`} />
-                  <div>
-                    <h3>{activity.title}</h3>
-                    <p>{activity.body}</p>
-                    <time>{activity.time}</time>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </aside>
         </section>
       </main>
 

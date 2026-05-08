@@ -19,19 +19,25 @@ export function createGetDashboardSummaryUseCase(dependencies: {
       const [
         totalGuests,
         totalRsvps,
-        confirmedGuests,
+        confirmedGuestResponses,
         totalGifts,
         reservedGifts,
         pendingPhotos,
       ] = await Promise.all([
-        dependencies.prisma.guest.count(),
-        dependencies.prisma.rsvpResponse.count(),
-        dependencies.prisma.rsvpResponse.count({
-          where: { responseStatus: "YES" },
+        dependencies.prisma.guest.count({
+          where: { status: "ACTIVE" },
         }),
-        dependencies.prisma.gift.count(),
+        dependencies.prisma.rsvpResponse.count(),
+        dependencies.prisma.rsvpResponse.findMany({
+          where: { responseStatus: "YES" },
+          select: { guestId: true },
+          distinct: ["guestId"],
+        }),
         dependencies.prisma.gift.count({
-          where: { status: "RESERVED" },
+          where: { isActive: true },
+        }),
+        dependencies.prisma.gift.count({
+          where: { status: "RESERVED", isActive: true },
         }),
         dependencies.prisma.photoPost.count({
           where: { moderationStatus: "PENDING" },
@@ -41,7 +47,7 @@ export function createGetDashboardSummaryUseCase(dependencies: {
       return {
         totalGuests,
         totalRsvps,
-        confirmedGuests,
+        confirmedGuests: confirmedGuestResponses.length,
         totalGifts,
         reservedGifts,
         pendingPhotos,

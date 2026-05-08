@@ -96,6 +96,10 @@ const submitRsvpResponseSchema = z.object({
   outcome: z.enum(["created", "updated", "replayed"]),
 });
 
+const deleteGuestResponseSchema = z.object({
+  success: z.literal(true),
+});
+
 const adminGuestRsvpRowResponseSchema = z.object({
   guestGroup: guestGroupResponseSchema,
   guest: guestResponseSchema,
@@ -168,6 +172,7 @@ export const GUESTS_RSVP_HTTP_SCHEMAS = defineHttpSchemaCatalog({
     eventGuestEligibility: eventGuestEligibilityResponseSchema,
     rsvpResponse: rsvpResponseSchema,
     submitRsvp: submitRsvpResponseSchema,
+    deleteGuest: deleteGuestResponseSchema,
     guestHome: guestHomeResponseSchema,
     eventList: paginatedItemsResponseSchema(eventResponseSchema),
     adminGuestRsvpRow: adminGuestRsvpRowResponseSchema,

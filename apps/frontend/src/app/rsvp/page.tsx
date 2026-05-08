@@ -17,8 +17,7 @@ import styles from "./page.module.css";
 type LoadState = "loading" | "ready" | "error";
 type SubmitState = "idle" | "submitting" | "success" | "error";
 type SubmitOutcome = "created" | "updated" | "replayed" | null;
-const UUID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export default function GuestRsvpPage() {
   const [home, setHome] = useState<GuestHomeDto | null>(null);
@@ -49,7 +48,9 @@ export default function GuestRsvpPage() {
       if (eventsResult.status === "fulfilled") {
         const homeResponse = homeResult.status === "fulfilled" ? homeResult.value : null;
         const activeEvents =
-          eventsResult.value.items.length > 0 ? eventsResult.value.items : homeResponse?.events ?? [];
+          eventsResult.value.items.length > 0
+            ? eventsResult.value.items
+            : (homeResponse?.events ?? []);
         const sorted = sortEventsByStart(activeEvents);
 
         setHome(homeResponse);
@@ -119,7 +120,9 @@ export default function GuestRsvpPage() {
     if (!selectedEventId || !canSubmitSelectedEvent) {
       setSubmitState("error");
       setSubmitOutcome(null);
-      setSubmitMessage("Entre novamente para carregar os eventos reais antes de confirmar presenca.");
+      setSubmitMessage(
+        "Entre novamente para carregar os eventos reais antes de confirmar presenca.",
+      );
       return;
     }
 
@@ -179,9 +182,7 @@ export default function GuestRsvpPage() {
         <section className={styles.hero} aria-labelledby="rsvp-title">
           <p className={styles.eyebrow}>Confirmacao de Presenca</p>
           <h1 id="rsvp-title">Voce e nosso convidado.</h1>
-          <p>
-            Selecione um evento e confirme sua resposta.
-          </p>
+          <p>Selecione um evento e confirme sua resposta.</p>
         </section>
 
         {loadState === "error" ? (
