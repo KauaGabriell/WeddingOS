@@ -82,11 +82,23 @@ export default function GuestRsvpPage() {
 
   useEffect(() => {
     if (!canSubmitSelectedEvent) {
+      if (loadState === "loading") {
+        setSubmitState("idle");
+        setSubmitOutcome(null);
+        setSubmitMessage("Confirme sua presenca para cada evento.");
+        return;
+      }
+
       setSubmitState("error");
       setSubmitOutcome(null);
       setSubmitMessage("Conecte sua sessao novamente para confirmar presenca.");
       return;
     }
+
+    setSubmitState("idle");
+    setSubmitOutcome(null);
+    setSubmitMessage("Confirme sua presenca para cada evento.");
+
     const existing = responseByEvent.get(selectedEventId);
     if (!existing) {
       setResponseStatus("yes");
@@ -97,7 +109,7 @@ export default function GuestRsvpPage() {
     setResponseStatus(existing.responseStatus);
     setCompanionsConfirmed(existing.companionsConfirmed);
     setMessage(existing.message ?? "");
-  }, [selectedEventId, responseByEvent]);
+  }, [selectedEventId, responseByEvent, canSubmitSelectedEvent, loadState]);
 
   function updateCompanions(next: number) {
     setCompanionsConfirmed(Math.max(0, next));
