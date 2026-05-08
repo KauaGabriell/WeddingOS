@@ -38,21 +38,41 @@ function resolveCookieValue(cookieHeader: string | undefined, name: string): str
   return null;
 }
 
-function resolveGuestSessionToken(request: FastifyRequest): string {
+function resolveGuestSessionTokens(request: FastifyRequest): {
+  bearerToken: string | null;
+  cookieToken: string | null;
+} {
+  const cookieHeader = Array.isArray(request.headers.cookie)
+    ? request.headers.cookie[0]
+    : request.headers.cookie;
+  const cookieToken = resolveCookieValue(cookieHeader, DEFAULT_GUEST_SESSION_COOKIE_NAME);
+
   try {
-    return resolveBearerToken(request);
-  } catch (error) {
-    const cookieHeader = Array.isArray(request.headers.cookie)
-      ? request.headers.cookie[0]
-      : request.headers.cookie;
-    const cookieToken = resolveCookieValue(cookieHeader, DEFAULT_GUEST_SESSION_COOKIE_NAME);
-
-    if (cookieToken) {
-      return cookieToken;
-    }
-
-    throw error;
+    return {
+      bearerToken: resolveBearerToken(request),
+      cookieToken,
+    };
+  } catch {
+    return {
+      bearerToken: null,
+      cookieToken,
+    };
   }
+}
+
+function assertGuestSessionTokenAvailable(tokens: {
+  bearerToken: string | null;
+  cookieToken: string | null;
+}): string {
+  if (tokens.bearerToken) {
+    return tokens.bearerToken;
+  }
+
+  if (tokens.cookieToken) {
+    return tokens.cookieToken;
+  }
+
+  throw unauthorizedError("Missing guest session");
 }
 
 export function createGuestAuthGuard(verifier: GuestSessionVerifier): GuestAuthGuard {
@@ -64,18 +84,38 @@ export function createGuestAuthGuardWithFallback(
   adminVerifier?: AdminSessionVerifier,
 ): GuestAuthGuard {
   return async (request) => {
-    const token = resolveGuestSessionToken(request);
-    const principal =
+    const requestId = resolveAuthRequestId(request);
+    const tokens = resolveGuestSessionTokens(request);
+    const primaryToken = assertGuestSessionTokenAvailable(tokens);
+    let principal =
       (await verifier.verifySession({
-        token,
-        requestId: resolveAuthRequestId(request),
+        token: primaryToken,
+        requestId,
       })) ??
       (adminVerifier
         ? await adminVerifier.verifySession({
-            token,
-            requestId: resolveAuthRequestId(request),
+            token: primaryToken,
+            requestId,
           })
         : null);
+
+    if (
+      principal === null &&
+      tokens.cookieToken &&
+      tokens.cookieToken !== primaryToken
+    ) {
+      principal =
+        (await verifier.verifySession({
+          token: tokens.cookieToken,
+          requestId,
+        })) ??
+        (adminVerifier
+          ? await adminVerifier.verifySession({
+              token: tokens.cookieToken,
+              requestId,
+            })
+          : null);
+    }
 
     if (!principal) {
       throw unauthorizedError("Invalid guest session");
@@ -92,11 +132,20 @@ export function createGuestAuthGuardWithFallback(
 
 export function createGuestAuthGuardLegacy(verifier: GuestSessionVerifier): GuestAuthGuard {
   return async (request) => {
-    const token = resolveGuestSessionToken(request);
-    const principal = await verifier.verifySession({
-      token,
-      requestId: resolveAuthRequestId(request),
+    const requestId = resolveAuthRequestId(request);
+    const tokens = resolveGuestSessionTokens(request);
+    const primaryToken = assertGuestSessionTokenAvailable(tokens);
+    let principal = await verifier.verifySession({
+      token: primaryToken,
+      requestId,
     });
+
+    if (principal === null && tokens.cookieToken && tokens.cookieToken !== primaryToken) {
+      principal = await verifier.verifySession({
+        token: tokens.cookieToken,
+        requestId,
+      });
+    }
 
     if (!principal) {
       throw unauthorizedError("Invalid guest session");

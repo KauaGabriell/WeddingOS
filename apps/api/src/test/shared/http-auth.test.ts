@@ -87,6 +87,13 @@ async function testAuthGuardsSeparateGuestAndAdmin(): Promise<void> {
   const cookieRequest = createAuthRequest(undefined, "weddingos_guest_session=guest-token");
   const resolvedGuestByCookie = await guestGuard(cookieRequest);
   assert.deepEqual(resolvedGuestByCookie, guestPrincipal);
+
+  const staleBearerFreshCookieRequest = createAuthRequest(
+    "Bearer stale-token",
+    "weddingos_guest_session=guest-token",
+  );
+  const resolvedGuestByFreshCookie = await guestGuard(staleBearerFreshCookieRequest);
+  assert.deepEqual(resolvedGuestByFreshCookie, guestPrincipal);
 }
 
 async function testAccessPolicies(): Promise<void> {

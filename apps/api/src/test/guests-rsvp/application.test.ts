@@ -396,18 +396,25 @@ async function testConfirmAndDeclineAttendanceUseCases(): Promise<void> {
   );
   assert.equal(auditWrites[1]?.entityId, "rsvp-1");
 
-  await assert.rejects(
-    () =>
-      confirmUseCase.execute({
+  currentResponse = null;
+  assert.equal(
+    (
+      await confirmUseCase.execute({
         eventId: "event-1",
         guestId: "guest-1",
         responseStatus: "yes",
         companionsConfirmed: 2,
-      }),
-    (error: unknown) =>
-      error instanceof GuestsRsvpApplicationError && error.reason === "companions_limit_exceeded",
+      })
+    ).outcome,
+    "created",
   );
-  assert.equal(auditWrites.length, 2);
+  assert.equal(auditWrites[2]?.entityId, "rsvp-created");
+  assert.deepEqual(auditWrites[2]?.metadata, {
+    eventId: "event-1",
+    responseStatus: "yes",
+    companionsConfirmed: 2,
+    outcome: "created",
+  });
 
   const declineUseCase = createDeclineAttendanceUseCase(sharedDependencies);
   currentResponse = null;
@@ -419,7 +426,7 @@ async function testConfirmAndDeclineAttendanceUseCases(): Promise<void> {
   });
   assert.equal(declined.persistedResponse.responseStatus, "no");
   assert.equal(declined.persistedResponse.companionsConfirmed, 0);
-  assert.deepEqual(auditWrites[2], {
+  assert.deepEqual(auditWrites[3], {
     entityType: "rsvp_response",
     entityId: "rsvp-created",
     actionType: "RSVP_SUBMITTED",
