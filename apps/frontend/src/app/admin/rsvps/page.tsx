@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { type AdminGuestRowDto, adminApi } from "../../../lib/api";
+import { AdminFeedback } from "../../../components/admin-feedback/admin-feedback";
+import { type AdminGuestRowDto, type EventDto, adminApi, guestApi } from "../../../lib/api";
 import styles from "./page.module.css";
 
 type ResponseFilter = "all" | "yes" | "pending" | "no";
@@ -35,7 +36,7 @@ function getStatusLabel(status: "yes" | "pending" | "no") {
   }
 
   if (status === "no") {
-    return "Nao vai";
+    return "Não vai";
   }
 
   return "Pendente";
@@ -43,21 +44,31 @@ function getStatusLabel(status: "yes" | "pending" | "no") {
 
 export default function AdminRsvpsPage() {
   const [rows, setRows] = useState<AdminGuestRowDto[]>([]);
+  const [events, setEvents] = useState<EventDto[]>([]);
   const [statusFilter, setStatusFilter] = useState<ResponseFilter>("all");
   const [eventFilter, setEventFilter] = useState<string>("all");
   const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
 
   useEffect(() => {
     let active = true;
 
-    async function loadRows() {
+    async function loadData() {
       try {
-        const response = await adminApi.listRsvps({ page: 1, pageSize: 100 });
+        const [rsvpsResponse, eventsResponse] = await Promise.all([
+          adminApi.listRsvps({ page: 1, pageSize: 100 }),
+          guestApi.listEvents({ page: 1, pageSize: 100 }),
+        ]);
+
         if (active) {
-          setRows(response.items);
+          setRows(rsvpsResponse.items);
+          setEvents(eventsResponse.items);
         }
       } catch (error) {
-        console.error("Failed to load RSVPs:", error);
+        console.error("Failed to load data:", error);
+        if (active) {
+          setHasError(true);
+        }
       } finally {
         if (active) {
           setIsLoading(false);
@@ -65,25 +76,15 @@ export default function AdminRsvpsPage() {
       }
     }
 
-    void loadRows();
+    void loadData();
 
     return () => {
       active = false;
     };
   }, []);
 
-  const eventIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const row of rows) {
-      for (const response of row.responses) {
-        ids.add(response.eventId);
-      }
-    }
-    return Array.from(ids);
-  }, [rows]);
-
   const summary = useMemo(() => {
-    const counts = { yes: 0, pending: 0, no: 0 };
+    const counts = { total: rows.length, yes: 0, pending: 0, no: 0 };
     for (const row of rows) {
       const status = getLatestResponseStatus(row);
       counts[status] += 1;
@@ -119,11 +120,15 @@ export default function AdminRsvpsPage() {
 
       <main className={styles.main}>
         <section className={styles.hero}>
-          <p className={styles.eyebrow}>Visao consolidada</p>
-          <h1>Confirmacoes RSVP</h1>
+          <p className={styles.eyebrow}>Visão consolidada</p>
+          <h1>Confirmações RSVP</h1>
         </section>
 
         <section className={styles.summaryGrid}>
+          <article>
+            <span>Total</span>
+            <strong>{summary.total}</strong>
+          </article>
           <article>
             <span>Confirmados</span>
             <strong>{summary.yes}</strong>
@@ -133,7 +138,7 @@ export default function AdminRsvpsPage() {
             <strong>{summary.pending}</strong>
           </article>
           <article>
-            <span>Nao vao</span>
+            <span>Não vão</span>
             <strong>{summary.no}</strong>
           </article>
         </section>
@@ -144,7 +149,7 @@ export default function AdminRsvpsPage() {
               { id: "all", label: "Todos" },
               { id: "yes", label: "Confirmados" },
               { id: "pending", label: "Pendentes" },
-              { id: "no", label: "Nao vao" },
+              { id: "no", label: "Não vão" },
             ].map((item) => (
               <button
                 className={`${styles.filterButton} ${
@@ -165,15 +170,31 @@ export default function AdminRsvpsPage() {
             value={eventFilter}
           >
             <option value="all">Todos os eventos</option>
-            {eventIds.map((eventId, index) => (
-              <option key={eventId} value={eventId}>
-                Evento {index + 1}
+            {events.map((event) => (
+              <option key={event.id} value={event.id}>
+                {event.name}
               </option>
             ))}
           </select>
         </section>
 
         <section className={styles.list}>
+          {isLoading ? (
+            <AdminFeedback
+              variant="loading"
+              title="Carregando confirmações"
+              body="Estamos consultando os RSVPs por convidado."
+            />
+          ) : null}
+          {hasError ? (
+            <AdminFeedback
+              variant="error"
+              title="Falha ao carregar RSVPs"
+              body="Não foi possível consultar as confirmações agora."
+              actionHref="/admin/login"
+              actionLabel="Reautenticar"
+            />
+          ) : null}
           {visibleRows.map((row) => {
             const latestStatus = getLatestResponseStatus(row);
             return (
@@ -189,8 +210,12 @@ export default function AdminRsvpsPage() {
               </article>
             );
           })}
-          {!isLoading && visibleRows.length === 0 ? (
-            <p className={styles.emptyState}>Nenhum RSVP encontrado para este filtro.</p>
+          {!isLoading && !hasError && visibleRows.length === 0 ? (
+            <AdminFeedback
+              variant="empty"
+              title="Nenhum RSVP encontrado"
+              body="Ajuste o status ou o evento para visualizar respostas."
+            />
           ) : null}
         </section>
       </main>

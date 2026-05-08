@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { AdminFeedback } from "../../../components/admin-feedback/admin-feedback";
 import { type AdminGuestListDto, type AdminGuestRowDto, adminApi } from "../../../lib/api";
 import styles from "./page.module.css";
 
@@ -287,6 +288,30 @@ export default function AdminGuestsPage() {
         </section>
 
         <section className={styles.listSection} aria-label="Lista de convidados">
+          {loadState === "loading" ? (
+            <AdminFeedback
+              variant="loading"
+              title="Carregando convidados"
+              body="Estamos sincronizando a lista de presença."
+            />
+          ) : null}
+          {loadState === "error" ? (
+            <AdminFeedback
+              variant="error"
+              title="Falha ao carregar convidados"
+              body="Não foi possível buscar os convidados agora."
+              actionHref="/admin/login"
+              actionLabel="Reautenticar"
+            />
+          ) : null}
+          {loadState === "ready" && visibleRows.length === 0 ? (
+            <AdminFeedback
+              variant="empty"
+              title="Nenhum convidado encontrado"
+              body="Ajuste os filtros ou cadastre novos convidados."
+            />
+          ) : null}
+
           {visibleRows.map((row) => (
             <article className={styles.guestCard} key={row.guest.id}>
               <div className={styles.cardHeader}>
@@ -326,13 +351,6 @@ export default function AdminGuestsPage() {
               </div>
             </article>
           ))}
-
-          {loadState === "loading" ? (
-            <p className={styles.modeNotice}>Carregando convidados...</p>
-          ) : null}
-          {loadState === "error" ? (
-            <p className={styles.modeNotice}>Falha ao carregar convidados. Atualize a pagina.</p>
-          ) : null}
         </section>
       </main>
 

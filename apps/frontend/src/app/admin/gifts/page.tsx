@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { AdminFeedback } from "../../../components/admin-feedback/admin-feedback";
 import { type GiftCatalogItemDto, type GiftDto, adminApi } from "../../../lib/api";
 import styles from "./page.module.css";
 
@@ -292,19 +293,30 @@ export default function AdminGiftsPage() {
           </button>
         </section>
 
+        {loadState === "loading" ? (
+          <AdminFeedback
+            variant="loading"
+            title="Carregando presentes"
+            body="Estamos sincronizando a lista administrativa de presentes."
+          />
+        ) : null}
         {loadState === "error" ? (
-          <section className={styles.emptyState}>
-            <h2>Falha ao carregar</h2>
-            <p>Verifique sua sessao administrativa e tente novamente.</p>
-          </section>
+          <AdminFeedback
+            variant="error"
+            title="Falha ao carregar presentes"
+            body="Verifique sua sessão administrativa e tente novamente."
+            actionHref="/admin/login"
+            actionLabel="Reautenticar"
+          />
         ) : null}
 
         <section className={styles.list}>
-          {filteredItems.length === 0 ? (
-            <article className={styles.emptyState}>
-              <h2>Nenhum item encontrado</h2>
-              <p>Ajuste o filtro para visualizar outros presentes.</p>
-            </article>
+          {loadState === "ready" && filteredItems.length === 0 ? (
+            <AdminFeedback
+              variant="empty"
+              title="Nenhum item encontrado"
+              body="Ajuste o filtro para visualizar outros presentes."
+            />
           ) : null}
 
           {filteredItems

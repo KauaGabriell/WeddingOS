@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { AdminFeedback } from "../../../components/admin-feedback/admin-feedback";
 import { type AdminGuestRowDto, adminApi } from "../../../lib/api";
 import styles from "./page.module.css";
 
@@ -83,6 +84,7 @@ const navItems = [
 export default function AdminDashboardPage() {
   const [guests, setGuests] = useState<AdminGuestRowDto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
 
   useEffect(() => {
     async function fetchStats() {
@@ -91,6 +93,7 @@ export default function AdminDashboardPage() {
         setGuests(response.items);
       } catch (error) {
         console.error("Failed to fetch dashboard stats:", error);
+        setHasError(true);
         if (error instanceof Error && error.message.includes("401")) {
           console.warn("User is not authorized as admin. Please login first.");
         }
@@ -176,6 +179,32 @@ export default function AdminDashboardPage() {
             <MetricCard key={card.kind} {...card} />
           ))}
         </section>
+
+        {isLoading ? (
+          <AdminFeedback
+            variant="loading"
+            title="Sincronizando painel"
+            body="Estamos carregando os indicadores administrativos."
+          />
+        ) : null}
+        {hasError ? (
+          <AdminFeedback
+            variant="error"
+            title="Falha ao carregar indicadores"
+            body="Não foi possível carregar os dados em tempo real do painel."
+            actionHref="/admin/login"
+            actionLabel="Reautenticar"
+          />
+        ) : null}
+        {!isLoading && !hasError && guests.length === 0 ? (
+          <AdminFeedback
+            variant="empty"
+            title="Sem convidados cadastrados"
+            body="Assim que os convidados forem adicionados, o painel mostrará o resumo."
+            actionHref="/admin/guests"
+            actionLabel="Gerenciar convidados"
+          />
+        ) : null}
 
         <section className={styles.quickArea} aria-label="Atalhos e atividades">
           <div className={styles.shortcuts}>

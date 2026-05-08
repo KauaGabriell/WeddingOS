@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { AdminFeedback } from "../../../components/admin-feedback/admin-feedback";
 import { type PhotoPostDto, adminApi } from "../../../lib/api";
 import styles from "./page.module.css";
 
@@ -147,19 +148,28 @@ export default function AdminPhotoWallPage() {
           ))}
         </section>
 
+        {loadState === "loading" ? (
+          <AdminFeedback
+            variant="loading"
+            title="Carregando mural"
+            body="Estamos buscando os posts para moderação."
+          />
+        ) : null}
         {loadState === "error" ? (
-          <section className={styles.emptyCard}>
-            <h2>Falha ao carregar mural</h2>
-            <p>Atualize a pagina para tentar novamente.</p>
-          </section>
+          <AdminFeedback
+            variant="error"
+            title="Falha ao carregar mural"
+            body="Atualize a página para tentar novamente."
+          />
         ) : null}
 
         <section className={styles.feed}>
           {loadState === "ready" && items.length === 0 ? (
-            <section className={styles.emptyCard}>
-              <h2>Nenhum post encontrado</h2>
-              <p>Ajuste o filtro para exibir outros status.</p>
-            </section>
+            <AdminFeedback
+              variant="empty"
+              title="Nenhum post encontrado"
+              body="Ajuste o filtro para exibir outros status."
+            />
           ) : null}
 
           {items.map((item) => {
