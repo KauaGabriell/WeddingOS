@@ -105,7 +105,10 @@ export default function GuestRsvpPage() {
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selectedEventId) {
+    if (!selectedEventId || !canSubmitSelectedEvent) {
+      setSubmitState("error");
+      setSubmitOutcome(null);
+      setSubmitMessage("Entre novamente para carregar os eventos reais antes de confirmar presenca.");
       return;
     }
 
