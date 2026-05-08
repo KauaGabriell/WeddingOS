@@ -71,7 +71,6 @@ export default function GuestRsvpPage() {
   }, []);
 
   const selectedEvent = events.find((event) => event.id === selectedEventId) ?? events[0] ?? null;
-  const allowedCompanions = home?.guestGroup.allowedCompanions ?? 99;
   const responseByEvent = useMemo(
     () => new Map((home?.responses ?? []).map((response) => [response.eventId, response])),
     [home?.responses],
@@ -95,7 +94,7 @@ export default function GuestRsvpPage() {
   }, [selectedEventId, responseByEvent]);
 
   function updateCompanions(next: number) {
-    setCompanionsConfirmed(Math.max(0, Math.min(allowedCompanions, next)));
+    setCompanionsConfirmed(Math.max(0, next));
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -112,8 +111,7 @@ export default function GuestRsvpPage() {
       const result = await guestApi.submitRsvp({
         eventId: selectedEventId,
         responseStatus,
-        companionsConfirmed:
-          responseStatus === "no" ? 0 : Math.max(0, Math.min(allowedCompanions, companionsConfirmed)),
+        companionsConfirmed: responseStatus === "no" ? 0 : companionsConfirmed,
         message: message.trim() ? message.trim() : undefined,
       });
 
@@ -162,8 +160,7 @@ export default function GuestRsvpPage() {
           <p className={styles.eyebrow}>Confirmacao de Presenca</p>
           <h1 id="rsvp-title">Voce e nosso convidado.</h1>
           <p>
-            Selecione um evento e confirme sua resposta. O limite de acompanhantes reflete seu
-            convite.
+            Selecione um evento e confirme sua resposta.
           </p>
         </section>
 
@@ -249,17 +246,12 @@ export default function GuestRsvpPage() {
                   <button
                     type="button"
                     onClick={() => updateCompanions(companionsConfirmed + 1)}
-                    disabled={
-                      responseStatus === "no" || companionsConfirmed >= allowedCompanions
-                    }
+                    disabled={responseStatus === "no"}
                     aria-label="Aumentar acompanhantes"
                   >
                     +
                   </button>
                 </div>
-                <small className={styles.companionHint}>
-                  Limite do seu convite: {allowedCompanions}
-                </small>
               </div>
 
               <label className={styles.fieldLabel} htmlFor="message">

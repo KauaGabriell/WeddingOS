@@ -70,28 +70,12 @@ function isReplay(
   );
 }
 
-function assertCompanionsWithinLimit(
-  companionsConfirmed: number,
-  allowedCompanions: number,
-): void {
-  if (companionsConfirmed > allowedCompanions) {
-    throw new GuestsRsvpApplicationError("companions_limit_exceeded");
-  }
-}
-
 export function createConfirmAttendanceUseCase(
   dependencies: ConfirmAttendanceDependencies,
 ): ConfirmAttendanceUseCase {
   return {
     async execute(input) {
       const guest = assertActiveGuest(await dependencies.guestRepository.findById(input.guestId));
-      const guestGroup = await dependencies.guestGroupRepository.findById(guest.guestGroupId);
-
-      if (guestGroup === null) {
-        throw new GuestsRsvpApplicationError("guest_group_not_found");
-      }
-
-      assertCompanionsWithinLimit(input.companionsConfirmed, guestGroup.allowedCompanions);
       const event = await dependencies.eventRepository.findById(input.eventId);
 
       if (event === null) {
