@@ -29,6 +29,7 @@ if (!databaseUrl) {
 
 const ids = {
   adminUser: "9f85fe42-0c47-45d4-b9a3-3f4141c0c100",
+  coupleAdminUser: "9f85fe42-0c47-45d4-b9a3-3f4141c0c101",
   guestGroup: "9f85fe42-0c47-45d4-b9a3-3f4141c0c200",
   primaryGuest: "9f85fe42-0c47-45d4-b9a3-3f4141c0c210",
   secondaryGuest: "9f85fe42-0c47-45d4-b9a3-3f4141c0c211",
@@ -55,6 +56,7 @@ const fixtures = {
   guestAccessToken: "guest-link-alice-bruno-2026",
   guestAccessCode: "WOSIGOR2026",
   adminEmail: "admin@weddingos.local",
+  coupleAdminEmail: "noivos@admin",
 };
 
 const linkInviteIssuedAt = new Date();
@@ -93,6 +95,26 @@ async function seed(): Promise<void> {
           name: "Alice Cerimonial",
           email: fixtures.adminEmail,
           authProvider: "magic_link",
+          role: AdminUserRole.SUPER_ADMIN,
+          status: AdminUserStatus.ACTIVE,
+        },
+      });
+
+      await tx.adminUser.upsert({
+        where: { id: ids.coupleAdminUser },
+        update: {
+          name: "Ygor e Amanda",
+          email: fixtures.coupleAdminEmail,
+          authProvider: "fixed_code",
+          role: AdminUserRole.SUPER_ADMIN,
+          status: AdminUserStatus.ACTIVE,
+          lastLoginAt: null,
+        },
+        create: {
+          id: ids.coupleAdminUser,
+          name: "Ygor e Amanda",
+          email: fixtures.coupleAdminEmail,
+          authProvider: "fixed_code",
           role: AdminUserRole.SUPER_ADMIN,
           status: AdminUserStatus.ACTIVE,
         },

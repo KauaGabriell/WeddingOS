@@ -95,12 +95,12 @@ export default function AdminLoginPage() {
         <section className={styles.card}>
           <h2>1. Solicitar codigo</h2>
           <form onSubmit={handleRequest} className={styles.form}>
-            <label htmlFor="admin-email">Email</label>
+            <label htmlFor="admin-email">Email ou usuario</label>
             <input
               id="admin-email"
-              type="email"
-              placeholder="admin@exemplo.com"
-              autoComplete="email"
+              type="text"
+              placeholder="noivos@admin"
+              autoComplete="username"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
             />

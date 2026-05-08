@@ -94,6 +94,13 @@ const logoutSuccessResponseSchema = z.object({
   success: z.literal(true),
 });
 
+const adminLoginIdentifierSchema = z
+  .string()
+  .trim()
+  .min(5)
+  .max(120)
+  .refine((value) => value === "noivos@admin" || z.string().email().safeParse(value).success);
+
 export const IDENTITY_ACCESS_HTTP_SCHEMAS = defineHttpSchemaCatalog({
   params: {
     inviteTokenId: z.object({
@@ -115,10 +122,10 @@ export const IDENTITY_ACCESS_HTTP_SCHEMAS = defineHttpSchemaCatalog({
       companionNames: z.array(z.string().trim().min(3).max(120)).max(12),
     }),
     adminLogin: z.object({
-      email: z.string().trim().email(),
+      email: adminLoginIdentifierSchema,
     }),
     adminLoginVerify: z.object({
-      email: z.string().trim().email(),
+      email: adminLoginIdentifierSchema,
       code: z.string().trim().length(8),
     }),
     revokeInviteToken: z.object({
