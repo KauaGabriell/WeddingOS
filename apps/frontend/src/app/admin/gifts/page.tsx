@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { type GiftDto, adminApi } from "../../../lib/api";
+import { type GiftCatalogItemDto, type GiftDto, adminApi } from "../../../lib/api";
 import styles from "./page.module.css";
 
 type LoadState = "loading" | "ready" | "error";
@@ -68,6 +68,8 @@ function fromFormState(form: GiftFormState) {
 
 export default function AdminGiftsPage() {
   const [items, setItems] = useState<GiftDto[]>([]);
+  const [catalogItems, setCatalogItems] = useState<GiftCatalogItemDto[]>([]);
+  const [guestNameById, setGuestNameById] = useState<Record<string, string>>({});
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
   const [modalMode, setModalMode] = useState<ModalMode>(null);
@@ -80,16 +82,33 @@ export default function AdminGiftsPage() {
 
     async function loadGifts() {
       try {
-        const result = await adminApi.listGifts({
-          page: 1,
-          pageSize: 100,
-        });
+        const [giftsResult, catalogResult, guestsResult] = await Promise.all([
+          adminApi.listGifts({
+            page: 1,
+            pageSize: 100,
+          }),
+          adminApi.listGiftReservations({
+            page: 1,
+            pageSize: 100,
+          }),
+          adminApi.listGuests({
+            page: 1,
+            pageSize: 100,
+            status: "active",
+          }),
+        ]);
 
         if (!isMounted) {
           return;
         }
 
-        setItems(result.items);
+        setItems(giftsResult.items);
+        setCatalogItems(catalogResult.items);
+        setGuestNameById(
+          Object.fromEntries(
+            guestsResult.items.map((entry) => [entry.guest.id, entry.guest.fullName]),
+          ),
+        );
         setLoadState("ready");
       } catch (error) {
         if (!isMounted) {
@@ -119,6 +138,16 @@ export default function AdminGiftsPage() {
     }
     return items.filter((gift) => gift.status === filterMode);
   }, [filterMode, items]);
+
+  const reservationByGiftId = useMemo(
+    () =>
+      Object.fromEntries(
+        catalogItems
+          .filter((entry) => entry.activeReservation)
+          .map((entry) => [entry.gift.id, entry.activeReservation]),
+      ),
+    [catalogItems],
+  );
 
   const stats = useMemo(() => {
     const totalEstimated = items.reduce((sum, gift) => sum + (gift.estimatedValue ?? 0), 0);
@@ -310,6 +339,23 @@ export default function AdminGiftsPage() {
                   <span>Ordem #{gift.displayOrder}</span>
                 </div>
 
+                {reservationByGiftId[gift.id] ? (
+                  <div className={styles.reservationInfo}>
+                    <p>
+                      Reservado por{" "}
+                      <strong>
+                        {guestNameById[reservationByGiftId[gift.id]?.guestId ?? ""] ??
+                          "Convidado nao identificado"}
+                      </strong>
+                    </p>
+                    <span>
+                      {formatDateTime(
+                        reservationByGiftId[gift.id]?.reservedAt ?? new Date().toISOString(),
+                      )}
+                    </span>
+                  </div>
+                ) : null}
+
                 <div className={styles.giftActions}>
                   <button
                     type="button"
@@ -447,4 +493,19 @@ function formatMoney(value: number | null) {
     style: "currency",
     currency: "BRL",
   }).format(normalized);
+}
+
+function formatDateTime(isoDate: string) {
+  const date = new Date(isoDate);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
 }

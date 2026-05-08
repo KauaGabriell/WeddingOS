@@ -521,6 +521,42 @@ export const adminApi = {
 
     return apiFetch<AdminGiftListDto>(`/admin/gifts?${query.toString()}`);
   },
+  listGiftReservations: ({
+    page = 1,
+    pageSize = 20,
+    category,
+    status,
+    minEstimatedValue,
+    maxEstimatedValue,
+    reservationStatus,
+  }: ListAdminGiftsParams & { reservationStatus?: GiftStatus } = {}) => {
+    const query = new URLSearchParams({
+      page: String(page),
+      pageSize: String(pageSize),
+    });
+
+    if (category) {
+      query.set("category", category);
+    }
+
+    if (status) {
+      query.set("status", status);
+    }
+
+    if (reservationStatus) {
+      query.set("reservationStatus", reservationStatus);
+    }
+
+    if (typeof minEstimatedValue === "number") {
+      query.set("minEstimatedValue", String(minEstimatedValue));
+    }
+
+    if (typeof maxEstimatedValue === "number") {
+      query.set("maxEstimatedValue", String(maxEstimatedValue));
+    }
+
+    return apiFetch<GiftCatalogListDto>(`/admin/gifts/reservations?${query.toString()}`);
+  },
   createGift: (input: {
     name: string;
     category: string;

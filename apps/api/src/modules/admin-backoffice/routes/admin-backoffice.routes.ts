@@ -23,8 +23,10 @@ import {
 } from "../../guests-rsvp/index.js";
 import {
   GIFT_REGISTRY_HTTP_SCHEMAS,
+  PrismaGiftReservationRepository,
   PrismaGiftRepository,
   createListAdminGiftsUseCase,
+  createListPublicGiftCatalogUseCase,
   createCreateGiftUseCase,
   createUpdateGiftUseCase,
   AdminGiftManagementError,
@@ -56,6 +58,7 @@ export const ADMIN_BACKOFFICE_ROUTE_ACCESS = {
   updateGuest: adminRoute(),
   listRsvps: adminRoute(),
   listGifts: adminRoute(),
+  listGiftReservations: adminRoute(),
   createGift: adminRoute(),
   updateGift: adminRoute(),
   listPhotoWallPosts: adminRoute(),
@@ -174,6 +177,27 @@ function serializeGift(gift: {
   };
 }
 
+function serializeGiftReservation(reservation: {
+  id: string;
+  giftId: string;
+  guestId: string;
+  reservationStatus: string;
+  purchaseNotes: string | null;
+  reservedAt: Date;
+  releasedAt: Date | null;
+  releasedByAdminUserId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  return {
+    ...reservation,
+    reservedAt: reservation.reservedAt.toISOString(),
+    releasedAt: reservation.releasedAt?.toISOString() ?? null,
+    createdAt: reservation.createdAt.toISOString(),
+    updatedAt: reservation.updatedAt.toISOString(),
+  };
+}
+
 function serializePhotoPost(photoPost: {
   id: string;
   guestId: string;
@@ -244,8 +268,16 @@ export const registerAdminBackofficeRoutes: FastifyPluginAsync<RegisterAdminBack
     const giftRepository = new PrismaGiftRepository(
       app.prisma.gift as unknown as ConstructorParameters<typeof PrismaGiftRepository>[0],
     );
+    const giftReservationRepository = new PrismaGiftReservationRepository(
+      app.prisma
+        .giftReservation as unknown as ConstructorParameters<typeof PrismaGiftReservationRepository>[0],
+    );
     const giftDependencies = { giftRepository, auditLogWriter };
     const listAdminGifts = createListAdminGiftsUseCase(giftDependencies);
+    const listPublicGiftCatalog = createListPublicGiftCatalogUseCase({
+      giftRepository,
+      giftReservationRepository,
+    });
     const createGift = createCreateGiftUseCase(giftDependencies);
     const updateGift = createUpdateGiftUseCase(giftDependencies);
 
@@ -475,6 +507,45 @@ export const registerAdminBackofficeRoutes: FastifyPluginAsync<RegisterAdminBack
 
             throw error;
           }
+        },
+      });
+
+      protectedRoutes.get("/gifts/reservations", {
+        ...ADMIN_BACKOFFICE_ROUTE_ACCESS.listGiftReservations,
+        preHandler: options.preHandler,
+        schema: {
+          tags: [...ADMIN_BACKOFFICE_HTTP_CONTRACT.tags],
+          querystring: GIFT_REGISTRY_HTTP_SCHEMAS.queries.giftCatalog,
+          response: {
+            200: GIFT_REGISTRY_HTTP_SCHEMAS.responses.giftCatalogList,
+            401: errorResponseSchema,
+            403: errorResponseSchema,
+            400: errorResponseSchema,
+          },
+        },
+        handler: async (request, reply) => {
+          const query = request.query as GiftRegistryGiftCatalogQueryDto;
+
+          const result = await listPublicGiftCatalog.execute({
+            category: query.category,
+            status: query.status,
+            reservationStatus: query.reservationStatus,
+            minEstimatedValue: query.minEstimatedValue,
+            maxEstimatedValue: query.maxEstimatedValue,
+            page: query.page,
+            pageSize: query.pageSize,
+          });
+
+          return reply.code(200).send({
+            items: result.items.map((item) => ({
+              gift: serializeGift(item.gift),
+              activeReservation: item.activeReservation
+                ? serializeGiftReservation(item.activeReservation)
+                : null,
+            })),
+            page: result.page,
+            pageSize: result.pageSize,
+          });
         },
       });
 

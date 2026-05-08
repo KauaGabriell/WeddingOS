@@ -52,7 +52,7 @@ export default function AdminRsvpsPage() {
 
     async function loadRows() {
       try {
-        const response = await adminApi.listRsvps({ page: 1, pageSize: 150 });
+        const response = await adminApi.listRsvps({ page: 1, pageSize: 100 });
         if (active) {
           setRows(response.items);
         }

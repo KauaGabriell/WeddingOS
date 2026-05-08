@@ -332,6 +332,34 @@
   line-height: 18px;
 }
 
+.reservationInfo {
+  background: #171616;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+}
+
+.reservationInfo p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 18px;
+  margin: 0;
+}
+
+.reservationInfo strong {
+  color: var(--warm);
+  font-weight: 700;
+}
+
+.reservationInfo span {
+  color: var(--subtle);
+  font-size: 11px;
+  line-height: 16px;
+}
+
 .giftActions {
   display: flex;
   gap: 8px;
