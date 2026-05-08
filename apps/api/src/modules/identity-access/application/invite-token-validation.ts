@@ -9,13 +9,14 @@ export type InviteTokenValidationFailureReason = "not_found" | "expired" | "used
 export interface InviteTokenValidationSuccess {
   readonly ok: true;
   readonly inviteToken: InviteToken;
-  readonly lifecycleStatus: "issued";
+  readonly lifecycleStatus: InviteTokenLifecycleStatus;
 }
 
 export interface InviteTokenValidationFailure {
   readonly ok: false;
   readonly reason: InviteTokenValidationFailureReason;
   readonly lifecycleStatus: InviteTokenLifecycleStatus | null;
+  readonly inviteToken?: InviteToken;
 }
 
 export type InviteTokenValidationResult =
@@ -38,7 +39,10 @@ export class InviteTokenValidationError extends Error {
 export function validateInviteToken(
   inviteToken: InviteToken | null,
   now = new Date(),
+  options: { readonly allowedStatuses?: readonly InviteTokenLifecycleStatus[] } = {},
 ): InviteTokenValidationResult {
+  const allowedStatuses = options.allowedStatuses ?? ["issued"];
+
   if (inviteToken === null) {
     return {
       ok: false,
@@ -49,11 +53,12 @@ export function validateInviteToken(
 
   const lifecycleStatus = resolveInviteTokenLifecycleStatus(inviteToken, now);
 
-  if (lifecycleStatus !== "issued") {
+  if (!allowedStatuses.includes(lifecycleStatus)) {
     return {
       ok: false,
-      reason: lifecycleStatus,
+      reason: lifecycleStatus as InviteTokenValidationFailureReason,
       lifecycleStatus,
+      inviteToken,
     };
   }
 
@@ -67,8 +72,9 @@ export function validateInviteToken(
 export function assertInviteTokenIsUsable(
   inviteToken: InviteToken | null,
   now = new Date(),
+  options: { readonly allowedStatuses?: readonly InviteTokenLifecycleStatus[] } = {},
 ): InviteToken {
-  const validationResult = validateInviteToken(inviteToken, now);
+  const validationResult = validateInviteToken(inviteToken, now, options);
 
   if (!validationResult.ok) {
     throw new InviteTokenValidationError(validationResult);

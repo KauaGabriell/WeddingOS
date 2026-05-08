@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { GuestBottomNav } from "../../components/guest-bottom-nav/guest-bottom-nav";
+import { MobileTopBar } from "../../components/mobile-top-bar/mobile-top-bar";
 import { PublicFeedback } from "../../components/public-feedback/public-feedback";
 import { type EventDto, type GuestHomeDto, type RsvpResponseStatus, guestApi } from "../../lib/api";
 import {
@@ -148,17 +149,11 @@ export default function GuestRsvpPage() {
 
   return (
     <div className={styles.shell}>
-      <header className={styles.topBar} aria-label="Navegacao principal do convidado">
-        <div className={styles.brandGroup}>
-          <button className={styles.avatarButton} type="button" aria-label="Perfil">
-            <img src="/guest-home/profile-avatar.jpg" alt="" aria-hidden="true" />
-          </button>
-          <a className={styles.brand} href="/guest/home">
-            Wedding OS
-          </a>
-        </div>
-        <span className={styles.menuDots} aria-hidden="true" />
-      </header>
+      <MobileTopBar
+        variant="guest"
+        brandHref="/guest/home"
+        avatarSrc="/guest-home/profile-avatar.jpg"
+      />
 
       <main className={styles.main}>
         <section className={styles.hero} aria-labelledby="rsvp-title">

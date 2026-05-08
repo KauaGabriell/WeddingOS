@@ -1,0 +1,97 @@
+.topBar {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(100%, 430px);
+  height: 72px;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 40;
+  backdrop-filter: blur(20px);
+  background: rgb(10 10 10 / 82%);
+  border-bottom: 1px solid rgb(255 255 255 / 8%);
+}
+
+.brandGroup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.menuButton {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  border: 1px solid rgb(255 255 255 / 14%);
+  background: rgb(30 30 30 / 60%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.menuButton img {
+  width: 18px;
+  height: 18px;
+}
+
+.brand {
+  text-decoration: none;
+  color: #f5f2f7;
+  font: 700 11px / 1 Manrope, "Segoe UI", sans-serif;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.avatarLink {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 14%);
+  flex-shrink: 0;
+}
+
+.avatarLink img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.menuPanelBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 44%);
+  z-index: 55;
+  border: 0;
+}
+
+.menuPanel {
+  position: fixed;
+  top: 76px;
+  right: calc(50% - min(100vw, 430px) / 2 + 24px);
+  min-width: 176px;
+  border-radius: 12px;
+  border: 1px solid rgb(255 255 255 / 10%);
+  background: linear-gradient(150deg, #1d1b20 0%, #111216 100%);
+  box-shadow: 0 14px 30px rgb(0 0 0 / 35%);
+  padding: 10px;
+  z-index: 60;
+}
+
+.menuAction {
+  width: 100%;
+  min-height: 44px;
+  border-radius: 10px;
+  border: 1px solid rgb(255 171 243 / 32%);
+  background: rgb(255 171 243 / 14%);
+  color: #ffdff9;
+  font: 700 12px / 1 Manrope, "Segoe UI", sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}

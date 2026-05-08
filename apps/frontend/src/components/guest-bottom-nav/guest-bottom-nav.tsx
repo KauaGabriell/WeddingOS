@@ -1,3 +1,7 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import styles from "./guest-bottom-nav.module.css";
 
 type GuestBottomNavTab = "home" | "rsvp" | "gifts" | "wall";
@@ -14,18 +18,27 @@ type GuestBottomNavProps = {
 };
 
 export function GuestBottomNav({ activeTab }: GuestBottomNavProps) {
+  const pathname = usePathname();
+
+  function isActive(tab: GuestBottomNavTab, href: string) {
+    if (activeTab) {
+      return tab === activeTab;
+    }
+    return pathname === href || pathname.startsWith(`${href}/`);
+  }
+
   return (
     <nav className={styles.bottomNav} aria-label="Navegacao inferior do convidado">
       {navItems.map((item) => (
-        <a
-          className={`${styles.navItem} ${item.tab === activeTab ? styles.navItemActive : ""}`}
+        <Link
+          className={`${styles.navItem} ${isActive(item.tab, item.href) ? styles.navItemActive : ""}`}
           href={item.href}
           key={item.href}
-          aria-current={item.tab === activeTab ? "page" : undefined}
+          aria-current={isActive(item.tab, item.href) ? "page" : undefined}
         >
           <img src={item.icon} alt="" aria-hidden="true" />
           <span>{item.label}</span>
-        </a>
+        </Link>
       ))}
     </nav>
   );

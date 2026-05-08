@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { AdminBottomNav } from "../../../components/admin-bottom-nav/admin-bottom-nav";
 import { AdminFeedback } from "../../../components/admin-feedback/admin-feedback";
-import { type AdminGuestRowDto, adminApi } from "../../../lib/api";
+import { MobileTopBar } from "../../../components/mobile-top-bar/mobile-top-bar";
+import { type AdminGuestRowDto, ApiRequestError, adminApi } from "../../../lib/api";
 import styles from "./page.module.css";
 
 const metricCards = [
@@ -20,7 +22,7 @@ const metricCards = [
     label: "Fotos Pendentes",
     value: "24",
     badge: "Moderar",
-    note: "Aguardando sua aprovação para o mural.",
+    note: "Aguardando aprovacao para o mural.",
   },
 ];
 
@@ -39,26 +41,19 @@ const shortcuts = [
     subtitle: "Consolidado por evento e status",
     tone: "pink",
   },
-  {
-    href: "/admin/settings",
-    icon: "/admin-dashboard/settings.svg",
-    title: "Configurações",
-    subtitle: "Perfil e preferências do site",
-    tone: "neutral",
-  },
 ];
 
 const activities = [
   {
     title: "Nova familia cadastrada",
     body: "A familia Vasconcelos concluiu o cadastro aberto.",
-    time: "Há 15 minutos",
+    time: "Ha 15 minutos",
     tone: "pink",
   },
   {
     title: "RSVP Confirmado",
-    body: "Família Silveira (4 pessoas) confirmou presença.",
-    time: "Há 2 horas",
+    body: "Familia Silveira (4 pessoas) confirmou presenca.",
+    time: "Ha 2 horas",
     tone: "warm",
   },
   {
@@ -67,18 +62,6 @@ const activities = [
     time: "Ontem",
     tone: "muted",
   },
-];
-
-const navItems = [
-  {
-    label: "Resumo",
-    href: "/admin/dashboard",
-    icon: "/admin-dashboard/nav-summary.svg",
-    active: true,
-  },
-  { label: "Convidados", href: "/admin/guests", icon: "/admin-dashboard/nav-guests.svg" },
-  { label: "Presentes", href: "/admin/gifts", icon: "/admin-dashboard/nav-gifts.svg" },
-  { label: "Ajustes", href: "/admin/settings", icon: "/admin-dashboard/nav-settings.svg" },
 ];
 
 export default function AdminDashboardPage() {
@@ -94,14 +77,14 @@ export default function AdminDashboardPage() {
       } catch (error) {
         console.error("Failed to fetch dashboard stats:", error);
         setHasError(true);
-        if (error instanceof Error && error.message.includes("401")) {
+        if (error instanceof ApiRequestError && error.status === 401) {
           console.warn("User is not authorized as admin. Please login first.");
         }
       } finally {
         setIsLoading(false);
       }
     }
-    fetchStats();
+    void fetchStats();
   }, []);
 
   const totalGuests = guests.length;
@@ -120,41 +103,25 @@ export default function AdminDashboardPage() {
 
   return (
     <div className={styles.shell}>
-      <header className={styles.topBar} aria-label="Navegação principal administrativa">
-        <div className={styles.brandGroup}>
-          <button
-            className={styles.menuButton}
-            type="button"
-            aria-label="Abrir menu administrativo"
-          >
-            <img src="/admin-dashboard/menu.svg" alt="" aria-hidden="true" />
-          </button>
-          <a className={styles.brand} href="/admin/dashboard">
-            Wedding OS
-          </a>
-        </div>
-        <a className={styles.avatarLink} href="/admin/dashboard" aria-label="Perfil administrativo">
-          <img src="/admin-dashboard/profile.png" alt="" />
-        </a>
-      </header>
+      <MobileTopBar
+        variant="admin"
+        brandHref="/admin/dashboard"
+        avatarSrc="/admin-dashboard/profile.png"
+      />
 
       <main className={styles.main}>
         <section className={styles.welcome} aria-labelledby="admin-dashboard-title">
           <div>
-            <h1 id="admin-dashboard-title">Olá, Alice &amp; Bruno</h1>
-            <p>Seu grande dia está a 124 dias de distância.</p>
+            <h1 id="admin-dashboard-title">Ola, Ygor &amp; Amanda</h1>
+            <p>Seu grande dia esta a 124 dias de distancia.</p>
           </div>
-          <a className={styles.inviteButton} href="/admin/invites">
-            <img src="/admin-dashboard/send-invites.svg" alt="" aria-hidden="true" />
-            <span>Enviar Convites Digitais</span>
-          </a>
         </section>
 
-        <section className={styles.metricsGrid} aria-label="Métricas administrativas">
+        <section className={styles.metricsGrid} aria-label="Metricas administrativas">
           <article className={styles.rsvpCard}>
             <div className={styles.rsvpHeader}>
               <p>Status da Lista</p>
-              <h2>Confirmações RSVP</h2>
+              <h2>Confirmacoes RSVP</h2>
               {isLoading ? (
                 <span>Carregando dados...</span>
               ) : (
@@ -191,7 +158,7 @@ export default function AdminDashboardPage() {
           <AdminFeedback
             variant="error"
             title="Falha ao carregar indicadores"
-            body="Não foi possível carregar os dados em tempo real do painel."
+            body="Nao foi possivel carregar os dados em tempo real do painel."
             actionHref="/admin/login"
             actionLabel="Reautenticar"
           />
@@ -200,7 +167,7 @@ export default function AdminDashboardPage() {
           <AdminFeedback
             variant="empty"
             title="Sem convidados cadastrados"
-            body="Assim que os convidados forem adicionados, o painel mostrará o resumo."
+            body="Assim que os convidados forem adicionados, o painel mostrara o resumo."
             actionHref="/admin/guests"
             actionLabel="Gerenciar convidados"
           />
@@ -219,11 +186,6 @@ export default function AdminDashboardPage() {
                 </span>
               </a>
             ))}
-
-            <a className={styles.editButton} href="/admin/settings">
-              <img src="/admin-dashboard/edit.svg" alt="" aria-hidden="true" />
-              <span>Editar Cerimonial</span>
-            </a>
           </div>
 
           <aside className={styles.activityCard} aria-label="Atividades recentes">
@@ -256,19 +218,7 @@ export default function AdminDashboardPage() {
         <span className={styles.visuallyHidden}>Abrir mural administrativo</span>
       </a>
 
-      <nav className={styles.bottomNav} aria-label="Navegação inferior administrativa">
-        {navItems.map((item) => (
-          <a
-            className={`${styles.navItem} ${item.active ? styles.navItemActive : ""}`}
-            href={item.href}
-            key={item.href}
-            aria-current={item.active ? "page" : undefined}
-          >
-            <img src={item.icon} alt="" aria-hidden="true" />
-            <span>{item.label}</span>
-          </a>
-        ))}
-      </nav>
+      <AdminBottomNav />
     </div>
   );
 }

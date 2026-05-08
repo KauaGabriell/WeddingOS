@@ -65,8 +65,12 @@ export async function authenticateGuestWithInviteToken(
   const shouldConsumeInviteToken = options.consumeInviteToken ?? true;
   let inviteToken: InviteToken;
 
+  const allowedStatuses = shouldConsumeInviteToken ? (["issued"] as const) : (["issued", "used"] as const);
+
   try {
-    inviteToken = assertInviteTokenIsUsable(await resolveInviteToken(), now);
+    inviteToken = assertInviteTokenIsUsable(await resolveInviteToken(), now, {
+      allowedStatuses,
+    });
   } catch (error) {
     if (error instanceof InviteTokenValidationError) {
       throw new GuestInviteTokenAuthenticationError();
@@ -84,12 +88,13 @@ export async function authenticateGuestWithInviteToken(
     if (shouldConsumeInviteToken) {
       await dependencies.inviteTokenConsumptionTransactionRunner.run(async (context) => {
         const storedInviteToken = context.findInviteTokenById(inviteToken.id);
-        inviteToken = assertInviteTokenIsUsable(
-          await storedInviteToken,
-          dependencies.now?.() ?? new Date(),
-        );
+        inviteToken = assertInviteTokenIsUsable(await storedInviteToken, dependencies.now?.() ?? new Date(), {
+          allowedStatuses: ["issued"],
+        });
         authenticatedAt = dependencies.now?.() ?? new Date();
-        inviteToken = assertInviteTokenIsUsable(inviteToken, authenticatedAt);
+        inviteToken = assertInviteTokenIsUsable(inviteToken, authenticatedAt, {
+          allowedStatuses: ["issued"],
+        });
 
         await context.markInviteTokenAsUsed({
           inviteTokenId: inviteToken.id,

@@ -90,6 +90,10 @@ const requestAcceptedResponseSchema = z.object({
   accepted: z.literal(true),
 });
 
+const logoutSuccessResponseSchema = z.object({
+  success: z.literal(true),
+});
+
 export const IDENTITY_ACCESS_HTTP_SCHEMAS = defineHttpSchemaCatalog({
   params: {
     inviteTokenId: z.object({
@@ -129,6 +133,7 @@ export const IDENTITY_ACCESS_HTTP_SCHEMAS = defineHttpSchemaCatalog({
     openAccessGuestGroup: openAccessGuestGroupResponseSchema,
     openGuestAccessRegistration: openGuestAccessRegistrationResponseSchema,
     requestAccepted: requestAcceptedResponseSchema,
+    logoutSuccess: logoutSuccessResponseSchema,
   },
 });
 
@@ -146,6 +151,9 @@ export type IdentityAccessOpenGuestAccessRegistrationResponseDto = z.infer<
 >;
 export type IdentityAccessRequestAcceptedResponseDto = z.infer<
   typeof IDENTITY_ACCESS_HTTP_SCHEMAS.responses.requestAccepted
+>;
+export type IdentityAccessLogoutSuccessResponseDto = z.infer<
+  typeof IDENTITY_ACCESS_HTTP_SCHEMAS.responses.logoutSuccess
 >;
 export type IdentityAccessGuestTokenLoginRequestDto = z.infer<
   typeof IDENTITY_ACCESS_HTTP_SCHEMAS.bodies.guestTokenLogin

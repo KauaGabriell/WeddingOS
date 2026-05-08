@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { AdminBottomNav } from "../../../components/admin-bottom-nav/admin-bottom-nav";
 import { AdminFeedback } from "../../../components/admin-feedback/admin-feedback";
+import { MobileTopBar } from "../../../components/mobile-top-bar/mobile-top-bar";
 import { type AdminGuestListDto, type AdminGuestRowDto, adminApi } from "../../../lib/api";
 import styles from "./page.module.css";
 
@@ -9,26 +11,6 @@ type FilterMode = "all" | "confirmed" | "pending" | "declined";
 type LoadState = "loading" | "ready" | "error";
 type GuestStatus = "confirmed" | "pending" | "declined";
 type ModalMode = "details" | "edit" | null;
-
-const navItems = [
-  { label: "Resumo", href: "/admin/dashboard", icon: "/admin-dashboard/nav-summary.svg" },
-  {
-    label: "Convidados",
-    href: "/admin/guests",
-    icon: "/admin-dashboard/nav-guests.svg",
-    active: true,
-  },
-  { label: "Presentes", href: "/admin/gifts", icon: "/admin-dashboard/nav-gifts.svg" },
-  { label: "Ajustes", href: "/admin/settings", icon: "/admin-dashboard/nav-settings.svg" },
-];
-
-function formatMeta(row: AdminGuestRowDto) {
-  if (row.guest.isPrimary) {
-    return `${row.guestGroup.allowedCompanions} acompanhante${row.guestGroup.allowedCompanions === 1 ? "" : "s"}`;
-  }
-
-  return row.guestGroup.displayName;
-}
 
 function getGuestStatus(row: AdminGuestRowDto): GuestStatus {
   const latestResponse = row.responses
@@ -39,30 +21,15 @@ function getGuestStatus(row: AdminGuestRowDto): GuestStatus {
         new Date(a.updatedAt ?? a.createdAt).getTime(),
     )[0];
 
-  if (!latestResponse) {
+  if (!latestResponse || latestResponse.responseStatus === "pending") {
     return "pending";
   }
-
-  if (latestResponse.responseStatus === "yes") {
-    return "confirmed";
-  }
-
-  if (latestResponse.responseStatus === "no") {
-    return "declined";
-  }
-
-  return "pending";
+  return latestResponse.responseStatus === "yes" ? "confirmed" : "declined";
 }
 
 function getStatusLabel(status: GuestStatus) {
-  if (status === "confirmed") {
-    return "Confirmado";
-  }
-
-  if (status === "declined") {
-    return "Não vão";
-  }
-
+  if (status === "confirmed") return "Confirmado";
+  if (status === "declined") return "Nao vao";
   return "Pendente";
 }
 
@@ -80,7 +47,6 @@ export default function AdminGuestsPage() {
 
   useEffect(() => {
     let isMounted = true;
-
     async function loadGuests() {
       try {
         const response: AdminGuestListDto = await adminApi.listGuests({
@@ -88,25 +54,16 @@ export default function AdminGuestsPage() {
           pageSize: 100,
           status: "active",
         });
-
-        if (!isMounted) {
-          return;
-        }
-
+        if (!isMounted) return;
         setRows(response.items);
         setLoadState("ready");
       } catch (error) {
-        if (!isMounted) {
-          return;
-        }
-
+        if (!isMounted) return;
         console.error("Failed to load guests:", error);
         setLoadState("error");
       }
     }
-
     void loadGuests();
-
     return () => {
       isMounted = false;
     };
@@ -114,26 +71,10 @@ export default function AdminGuestsPage() {
 
   const visibleRows = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
-
     return rows.filter((row) => {
       const guestStatus = getGuestStatus(row);
-
-      if (filterMode === "confirmed" && guestStatus !== "confirmed") {
-        return false;
-      }
-
-      if (filterMode === "pending" && guestStatus !== "pending") {
-        return false;
-      }
-
-      if (filterMode === "declined" && guestStatus !== "declined") {
-        return false;
-      }
-
-      if (!normalizedSearch) {
-        return true;
-      }
-
+      if (filterMode !== "all" && guestStatus !== filterMode) return false;
+      if (!normalizedSearch) return true;
       return (
         row.guest.fullName.toLowerCase().includes(normalizedSearch) ||
         row.guestGroup.displayName.toLowerCase().includes(normalizedSearch) ||
@@ -148,10 +89,7 @@ export default function AdminGuestsPage() {
   );
 
   const familyMembers = useMemo(() => {
-    if (!selectedRow) {
-      return [];
-    }
-
+    if (!selectedRow) return [];
     return rows
       .filter((row) => row.guest.guestGroupId === selectedRow.guest.guestGroupId)
       .sort((a, b) => Number(b.guest.isPrimary) - Number(a.guest.isPrimary));
@@ -177,19 +115,14 @@ export default function AdminGuestsPage() {
   }
 
   async function handleSave() {
-    if (!selectedRow) {
-      return;
-    }
-
+    if (!selectedRow) return;
     setIsSubmitting(true);
-
     try {
       const updated = await adminApi.updateGuest(selectedRow.guest.id, {
         fullName: editFullName.trim(),
         phone: editPhone.trim() || null,
         allowedCompanions: editAllowedCompanions,
       });
-
       setRows((current) =>
         current.map((row) =>
           row.guest.id === updated.id
@@ -209,17 +142,10 @@ export default function AdminGuestsPage() {
   }
 
   async function handleDelete() {
-    if (!selectedRow) {
-      return;
-    }
-
+    if (!selectedRow) return;
     setIsSubmitting(true);
-
     try {
-      await adminApi.updateGuest(selectedRow.guest.id, {
-        status: "inactive",
-      });
-
+      await adminApi.updateGuest(selectedRow.guest.id, { status: "inactive" });
       setRows((current) => current.filter((row) => row.guest.id !== selectedRow.guest.id));
       closeModal();
     } catch (error) {
@@ -230,23 +156,11 @@ export default function AdminGuestsPage() {
 
   return (
     <div className={styles.shell}>
-      <header className={styles.topBar} aria-label="Navegação principal administrativa">
-        <div className={styles.brandGroup}>
-          <button
-            className={styles.menuButton}
-            type="button"
-            aria-label="Abrir menu administrativo"
-          >
-            <img src="/admin-dashboard/menu.svg" alt="" aria-hidden="true" />
-          </button>
-          <a className={styles.brand} href="/admin/dashboard">
-            Wedding OS
-          </a>
-        </div>
-        <a className={styles.avatarLink} href="/admin/dashboard" aria-label="Perfil administrativo">
-          <img src="/admin-dashboard/profile.png" alt="" />
-        </a>
-      </header>
+      <MobileTopBar
+        variant="admin"
+        brandHref="/admin/dashboard"
+        avatarSrc="/admin-dashboard/profile.png"
+      />
 
       <main className={styles.main}>
         <section className={styles.hero}>
@@ -271,7 +185,7 @@ export default function AdminGuestsPage() {
               { id: "all", label: "Todos" },
               { id: "confirmed", label: "Confirmados" },
               { id: "pending", label: "Pendentes" },
-              { id: "declined", label: "Não vão" },
+              { id: "declined", label: "Nao vao" },
             ].map((filter) => (
               <button
                 className={`${styles.filterButton} ${
@@ -292,14 +206,14 @@ export default function AdminGuestsPage() {
             <AdminFeedback
               variant="loading"
               title="Carregando convidados"
-              body="Estamos sincronizando a lista de presença."
+              body="Estamos sincronizando a lista de presenca."
             />
           ) : null}
           {loadState === "error" ? (
             <AdminFeedback
               variant="error"
               title="Falha ao carregar convidados"
-              body="Não foi possível buscar os convidados agora."
+              body="Nao foi possivel buscar os convidados agora."
               actionHref="/admin/login"
               actionLabel="Reautenticar"
             />
@@ -319,7 +233,7 @@ export default function AdminGuestsPage() {
                   <h2>{row.guest.fullName}</h2>
                   <p>
                     <span className={styles.metaIcon} aria-hidden="true" />
-                    {row.guest.phone ?? formatMeta(row)}
+                    {row.guest.phone ?? row.guestGroup.displayName}
                   </p>
                 </div>
                 <span className={`${styles.badge} ${styles[`badge${getGuestStatus(row)}`]}`}>
@@ -358,19 +272,7 @@ export default function AdminGuestsPage() {
         <span className={styles.fabIcon} aria-hidden="true" />
       </button>
 
-      <nav className={styles.bottomNav} aria-label="Navegacao inferior administrativa">
-        {navItems.map((item) => (
-          <a
-            className={`${styles.navItem} ${item.active ? styles.navItemActive : ""}`}
-            href={item.href}
-            key={item.href}
-            aria-current={item.active ? "page" : undefined}
-          >
-            <img src={item.icon} alt="" aria-hidden="true" />
-            <span>{item.label}</span>
-          </a>
-        ))}
-      </nav>
+      <AdminBottomNav />
 
       {modalMode && selectedRow ? (
         <>

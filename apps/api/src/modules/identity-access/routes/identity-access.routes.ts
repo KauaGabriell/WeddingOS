@@ -28,12 +28,14 @@ import {
   PrismaInviteTokenConsumptionTransactionRunner,
   PrismaInviteTokenRepository,
 } from "../index.js";
+import { DEFAULT_GUEST_SESSION_COOKIE_NAME } from "../infrastructure/guest-session.js";
 
 export const IDENTITY_ACCESS_ROUTE_ACCESS = {
   requestGuestAccess: publicRoute(),
   registerOpenGuestAccess: publicRoute(),
   loginWithInviteToken: publicRoute(),
   loginWithShortCode: publicRoute(),
+  logoutGuest: publicRoute(),
   adminLogin: publicRoute(),
   adminLoginVerify: publicRoute(),
 };
@@ -345,6 +347,33 @@ export const registerIdentityAccessRoutes: FastifyPluginAsync = async (app) => {
 
           throw error;
         }
+      },
+    });
+
+    protectedRoutes.post("/guest/logout", {
+      ...IDENTITY_ACCESS_ROUTE_ACCESS.logoutGuest,
+      schema: {
+        tags: [...IDENTITY_ACCESS_HTTP_CONTRACT.tags],
+        response: {
+          200: IDENTITY_ACCESS_HTTP_SCHEMAS.responses.logoutSuccess,
+        },
+      },
+      handler: async (_request, reply) => {
+        reply.header(
+          "set-cookie",
+          buildSetCookieHeader({
+            name: DEFAULT_GUEST_SESSION_COOKIE_NAME,
+            value: "",
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "lax",
+            path: "/",
+            maxAge: 0,
+            expires: new Date(0),
+          }),
+        );
+
+        return reply.code(200).send({ success: true });
       },
     });
 

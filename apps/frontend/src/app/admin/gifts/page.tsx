@@ -1,25 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { AdminBottomNav } from "../../../components/admin-bottom-nav/admin-bottom-nav";
 import { AdminFeedback } from "../../../components/admin-feedback/admin-feedback";
+import { MobileTopBar } from "../../../components/mobile-top-bar/mobile-top-bar";
 import { type GiftCatalogItemDto, type GiftDto, adminApi } from "../../../lib/api";
 import styles from "./page.module.css";
 
 type LoadState = "loading" | "ready" | "error";
 type FilterMode = "all" | "available" | "reserved" | "archived";
 type ModalMode = "create" | "edit" | null;
-
-const navItems = [
-  { label: "Resumo", href: "/admin/dashboard", icon: "/admin-dashboard/nav-summary.svg" },
-  { label: "Convidados", href: "/admin/guests", icon: "/admin-dashboard/nav-guests.svg" },
-  {
-    label: "Presentes",
-    href: "/admin/gifts",
-    icon: "/admin-dashboard/nav-gifts.svg",
-    active: true,
-  },
-  { label: "Ajustes", href: "/admin/settings", icon: "/admin-dashboard/nav-settings.svg" },
-];
 
 const filterOptions: Array<{ label: string; value: FilterMode }> = [
   { label: "Todos", value: "all" },
@@ -231,23 +221,11 @@ export default function AdminGiftsPage() {
 
   return (
     <div className={styles.shell}>
-      <header className={styles.topBar} aria-label="Navegacao principal administrativa">
-        <div className={styles.brandGroup}>
-          <button
-            className={styles.menuButton}
-            type="button"
-            aria-label="Abrir menu administrativo"
-          >
-            <img src="/admin-dashboard/menu.svg" alt="" aria-hidden="true" />
-          </button>
-          <a className={styles.brand} href="/admin/dashboard">
-            Wedding OS
-          </a>
-        </div>
-        <a className={styles.avatarLink} href="/admin/dashboard" aria-label="Perfil administrativo">
-          <img src="/admin-dashboard/profile.png" alt="" />
-        </a>
-      </header>
+      <MobileTopBar
+        variant="admin"
+        brandHref="/admin/dashboard"
+        avatarSrc="/admin-dashboard/profile.png"
+      />
 
       <main className={styles.main}>
         <section className={styles.hero}>
@@ -482,19 +460,7 @@ export default function AdminGiftsPage() {
         </div>
       ) : null}
 
-      <nav className={styles.bottomNav} aria-label="Navegacao inferior administrativa">
-        {navItems.map((item) => (
-          <a
-            key={item.href}
-            className={`${styles.navItem} ${item.active ? styles.navItemActive : ""}`}
-            href={item.href}
-            aria-current={item.active ? "page" : undefined}
-          >
-            <img src={item.icon} alt="" aria-hidden="true" />
-            <span>{item.label}</span>
-          </a>
-        ))}
-      </nav>
+      <AdminBottomNav />
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { type FormEvent, Suspense, useEffect, useMemo, useState } from "react";
 import {
+  ApiRequestError,
   GUEST_ACCESS_CODE_STORAGE_KEY,
   type OpenGuestAccessRegistrationDto,
   authApi,
@@ -171,7 +172,7 @@ function GuestOpenAccessContent() {
       setStatus("success");
     } catch (error) {
       const message =
-        error instanceof Error && error.message === "Request could not be completed"
+        error instanceof ApiRequestError && error.code === "PHONE_ALREADY_REGISTERED"
           ? "Nao foi possivel concluir o cadastro. Se este telefone ja foi usado, entre com o codigo salvo."
           : "Nao foi possivel concluir o cadastro agora.";
       setServerError(message);
@@ -366,7 +367,7 @@ function GuestOpenAccessContent() {
           <blockquote>
             "Queremos que a entrada seja simples, mas organizada para toda a familia."
           </blockquote>
-          <cite>Alice &amp; Bruno</cite>
+          <cite>Ygor &amp; Amanda</cite>
         </aside>
       </main>
     </div>

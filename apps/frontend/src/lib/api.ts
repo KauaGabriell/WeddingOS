@@ -15,6 +15,34 @@ export class ApiRequestError extends Error {
   }
 }
 
+function resolveSanitizedErrorMessage(path: string, status: number): string {
+  if (status === 401) {
+    return "Sua sessao nao pode ser validada no momento.";
+  }
+
+  if (status === 403) {
+    return "Voce nao tem permissao para executar esta acao.";
+  }
+
+  if (status === 404) {
+    return "O recurso solicitado nao foi encontrado.";
+  }
+
+  if (status === 409) {
+    return "Nao foi possivel concluir a operacao devido ao estado atual dos dados.";
+  }
+
+  if (status >= 500) {
+    return "Servico temporariamente indisponivel. Tente novamente em instantes.";
+  }
+
+  if (path.startsWith("/auth")) {
+    return "Nao foi possivel concluir a autenticacao agora.";
+  }
+
+  return "Nao foi possivel concluir a requisicao agora.";
+}
+
 export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const adminToken =
     typeof window !== "undefined"
@@ -35,7 +63,7 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     throw new ApiRequestError(
-      errorData.message || "Erro na requisicao",
+      resolveSanitizedErrorMessage(path, response.status),
       response.status,
       typeof errorData.code === "string" ? errorData.code : undefined,
     );
@@ -246,6 +274,10 @@ export interface RequestAcceptedDto {
   accepted: boolean;
 }
 
+export interface LogoutSuccessDto {
+  success: true;
+}
+
 export interface OpenGuestAccessRegistrationDto {
   authSession: AuthSessionDto;
   guest: GuestDto;
@@ -298,6 +330,10 @@ export const authApi = {
     apiFetch("/auth/guest/login/code", {
       method: "POST",
       body: JSON.stringify({ code }),
+    }),
+  logoutGuest: () =>
+    apiFetch<LogoutSuccessDto>("/auth/guest/logout", {
+      method: "POST",
     }),
   requestAdminLogin: (email: string) =>
     apiFetch<RequestAcceptedDto>("/auth/admin/login", {

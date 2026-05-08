@@ -1,20 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { AdminBottomNav } from "../../../components/admin-bottom-nav/admin-bottom-nav";
 import { AdminFeedback } from "../../../components/admin-feedback/admin-feedback";
+import { MobileTopBar } from "../../../components/mobile-top-bar/mobile-top-bar";
 import { type PhotoPostDto, adminApi } from "../../../lib/api";
 import styles from "./page.module.css";
 
 type ModerationFilter = "all" | "pending" | "approved" | "hidden" | "removed";
 type ModerationAction = "approved" | "hidden" | "removed";
 type LoadState = "loading" | "ready" | "error";
-
-const navItems = [
-  { label: "Resumo", href: "/admin/dashboard", icon: "/admin-dashboard/nav-summary.svg" },
-  { label: "Convidados", href: "/admin/guests", icon: "/admin-dashboard/nav-guests.svg" },
-  { label: "Presentes", href: "/admin/gifts", icon: "/admin-dashboard/nav-gifts.svg" },
-  { label: "Ajustes", href: "/admin/settings", icon: "/admin-dashboard/nav-settings.svg" },
-];
 
 const filters: Array<{ id: ModerationFilter; label: string }> = [
   { id: "all", label: "Todos" },
@@ -101,14 +96,11 @@ export default function AdminPhotoWallPage() {
 
   return (
     <div className={styles.shell}>
-      <header className={styles.topBar} aria-label="Navegacao principal administrativa">
-        <a className={styles.brand} href="/admin/dashboard">
-          Wedding OS
-        </a>
-        <a className={styles.actionLink} href="/admin/guests">
-          Convidados
-        </a>
-      </header>
+      <MobileTopBar
+        variant="admin"
+        brandHref="/admin/dashboard"
+        avatarSrc="/admin-dashboard/profile.png"
+      />
 
       <main className={styles.main}>
         <section className={styles.hero}>
@@ -236,14 +228,7 @@ export default function AdminPhotoWallPage() {
         </section>
       </main>
 
-      <nav className={styles.bottomNav} aria-label="Navegacao inferior administrativa">
-        {navItems.map((item) => (
-          <a key={item.href} className={styles.navItem} href={item.href}>
-            <img src={item.icon} alt="" aria-hidden="true" />
-            <span>{item.label}</span>
-          </a>
-        ))}
-      </nav>
+      <AdminBottomNav />
     </div>
   );
 }

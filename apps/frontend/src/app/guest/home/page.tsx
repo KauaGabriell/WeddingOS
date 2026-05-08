@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { GuestBottomNav } from "../../../components/guest-bottom-nav/guest-bottom-nav";
+import { MobileTopBar } from "../../../components/mobile-top-bar/mobile-top-bar";
 import { PublicFeedback } from "../../../components/public-feedback/public-feedback";
 import {
   type EventDto,
@@ -87,23 +88,17 @@ export default function GuestHomePage() {
   const countdown = useMemo(() => buildCountdown(weddingEvent?.startsAt), [weddingEvent?.startsAt]);
   const responses = home?.responses ?? [];
   const rsvpSummary = buildRsvpSummary(nextEvents, responses);
-  const heroName = home?.guestGroup.displayName ?? primaryGuest?.fullName ?? "Igor & Amanda";
+  const heroName = home?.guestGroup.displayName ?? primaryGuest?.fullName ?? "Ygor & Amanda";
   const invitationStatus = loadState === "ready" ? "Convite conectado" : "Modo visual";
   const accessCode = home?.accessCode ?? storedAccessCode;
 
   return (
     <div className={styles.shell}>
-      <header className={styles.topBar} aria-label="Navegacao principal do convidado">
-        <div className={styles.brandGroup}>
-          <button className={styles.menuButton} type="button" aria-label="Abrir menu">
-            <img src="/guest-home/menu-icon.svg" alt="" aria-hidden="true" />
-          </button>
-          <span className={styles.brand}>Wedding OS</span>
-        </div>
-        <a className={styles.avatarLink} href="/guest/home" aria-label="Perfil do convidado">
-          <img src="/guest-home/profile-avatar.jpg" alt="" />
-        </a>
-      </header>
+      <MobileTopBar
+        variant="guest"
+        brandHref="/guest/home"
+        avatarSrc="/guest-home/profile-avatar.jpg"
+      />
 
       <main className={styles.main}>
         <section className={styles.hero} aria-labelledby="guest-home-title">
@@ -152,7 +147,7 @@ export default function GuestHomePage() {
               <p>
                 {weddingEvent
                   ? formatEventLine(weddingEvent)
-                  : "05 de Setembro, 2026 - Local a confirmar"}
+                  : "05 de Setembro, 2026 - BR-153, Km 7 - s/n - Zona Rural, Anapolis - GO"}
               </p>
             </div>
           </article>
