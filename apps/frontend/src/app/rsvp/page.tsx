@@ -6,7 +6,6 @@ import { MobileTopBar } from "../../components/mobile-top-bar/mobile-top-bar";
 import { PublicFeedback } from "../../components/public-feedback/public-feedback";
 import { type EventDto, type GuestHomeDto, type RsvpResponseStatus, guestApi } from "../../lib/api";
 import {
-  fallbackEvents,
   formatEventTime,
   formatFullDate,
   formatLocation,
@@ -23,7 +22,7 @@ const UUID_REGEX =
 
 export default function GuestRsvpPage() {
   const [home, setHome] = useState<GuestHomeDto | null>(null);
-  const [events, setEvents] = useState<EventDto[]>(fallbackEvents);
+  const [events, setEvents] = useState<EventDto[]>([]);
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [submitState, setSubmitState] = useState<SubmitState>("idle");
   const [submitOutcome, setSubmitOutcome] = useState<SubmitOutcome>(null);
@@ -38,32 +37,32 @@ export default function GuestRsvpPage() {
     let isMounted = true;
 
     async function loadData() {
-      try {
-        const [homeResponse, eventsResponse] = await Promise.all([
-          guestApi.getHome(),
-          guestApi.listEvents(),
-        ]);
-        if (!isMounted) {
-          return;
-        }
+      const [homeResult, eventsResult] = await Promise.allSettled([
+        guestApi.getHome(),
+        guestApi.listEvents(),
+      ]);
 
+      if (!isMounted) {
+        return;
+      }
+
+      if (eventsResult.status === "fulfilled") {
+        const homeResponse = homeResult.status === "fulfilled" ? homeResult.value : null;
         const activeEvents =
-          eventsResponse.items.length > 0 ? eventsResponse.items : homeResponse.events;
-        const sorted = sortEventsByStart(activeEvents.length > 0 ? activeEvents : fallbackEvents);
+          eventsResult.value.items.length > 0 ? eventsResult.value.items : homeResponse?.events ?? [];
+        const sorted = sortEventsByStart(activeEvents);
 
         setHome(homeResponse);
         setEvents(sorted);
         setSelectedEventId(sorted[0]?.id ?? "");
         setLoadState("ready");
-      } catch {
-        if (!isMounted) {
-          return;
-        }
-        const sorted = sortEventsByStart(fallbackEvents);
-        setEvents(sorted);
-        setSelectedEventId(sorted[0]?.id ?? "");
-        setLoadState("error");
+        return;
       }
+
+      setHome(null);
+      setEvents([]);
+      setSelectedEventId("");
+      setLoadState("error");
     }
 
     loadData();
