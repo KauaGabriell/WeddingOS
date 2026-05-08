@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { GuestBottomNav } from "../../components/guest-bottom-nav/guest-bottom-nav";
+import { PublicFeedback } from "../../components/public-feedback/public-feedback";
 import { type EventDto, guestApi } from "../../lib/api";
 import {
   fallbackEvents,
@@ -103,6 +104,15 @@ export default function GuestEventsPage() {
         ) : null}
 
         <section className={styles.timeline} aria-label="Agenda de eventos">
+          {loadState === "ready" && sortedEvents.length === 0 ? (
+            <PublicFeedback
+              variant="empty"
+              title="Nenhum evento encontrado"
+              body="Ainda nao existem eventos elegiveis para seu convite."
+              actionHref="/guest/home"
+              actionLabel="Voltar ao inicio"
+            />
+          ) : null}
           {loadState === "loading"
             ? skeletonKeys.map((key) => <EventCardSkeleton key={key} />)
             : sortedEvents.map((event, index) => (

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { GuestBottomNav } from "../../components/guest-bottom-nav/guest-bottom-nav";
+import { PublicFeedback } from "../../components/public-feedback/public-feedback";
 import { type EventDto, type GuestHomeDto, type RsvpResponseStatus, guestApi } from "../../lib/api";
 import {
   fallbackEvents,
@@ -170,106 +171,120 @@ export default function GuestRsvpPage() {
         </section>
 
         {loadState === "error" ? (
-          <section className={styles.noticeCard}>
-            <strong>Modo visual ativo</strong>
-            <p>Conecte sua sessao para salvar respostas reais no convite.</p>
-            <a href="/guest/login/code">Entrar com codigo</a>
-          </section>
+          <PublicFeedback
+            variant="error"
+            title="Modo visual ativo"
+            body="Conecte sua sessao para salvar respostas reais no convite."
+            actionHref="/guest/login/code"
+            actionLabel="Entrar com codigo"
+          />
+        ) : null}
+
+        {events.length === 0 ? (
+          <PublicFeedback
+            variant="empty"
+            title="Nenhum evento disponivel"
+            body="Ainda nao ha eventos elegiveis para confirmar presenca."
+            actionHref="/events"
+            actionLabel="Ver agenda"
+          />
         ) : null}
 
         <section className={styles.content}>
-          <form className={styles.formCard} onSubmit={handleSubmit}>
-            <label className={styles.fieldLabel} htmlFor="event">
-              Evento
-            </label>
-            <select
-              id="event"
-              className={styles.select}
-              value={selectedEventId}
-              onChange={(event) => setSelectedEventId(event.target.value)}
-            >
-              {events.map((event) => (
-                <option key={event.id} value={event.id}>
-                  {event.name}
-                </option>
-              ))}
-            </select>
-            {selectedEventResponse ? (
-              <p className={styles.existingResponseNotice}>
-                Voce ja confirmou presenca para esse evento.
+          {events.length > 0 ? (
+            <form className={styles.formCard} onSubmit={handleSubmit}>
+              <label className={styles.fieldLabel} htmlFor="event">
+                Evento
+              </label>
+              <select
+                id="event"
+                className={styles.select}
+                value={selectedEventId}
+                onChange={(event) => setSelectedEventId(event.target.value)}
+              >
+                {events.map((event) => (
+                  <option key={event.id} value={event.id}>
+                    {event.name}
+                  </option>
+                ))}
+              </select>
+              {selectedEventResponse ? (
+                <p className={styles.existingResponseNotice}>
+                  Voce ja confirmou presenca para esse evento.
+                </p>
+              ) : null}
+
+              <div className={styles.presenceSection}>
+                <p className={styles.fieldLabel}>Presenca</p>
+                <div className={styles.toggleRow}>
+                  <button
+                    className={responseStatus === "yes" ? styles.toggleActive : styles.toggle}
+                    type="button"
+                    onClick={() => setResponseStatus("yes")}
+                  >
+                    Sim
+                  </button>
+                  <button
+                    className={responseStatus === "no" ? styles.toggleActive : styles.toggle}
+                    type="button"
+                    onClick={() => setResponseStatus("no")}
+                  >
+                    Nao vou
+                  </button>
+                </div>
+              </div>
+
+              <div className={styles.companionSection}>
+                <div className={styles.companionHeader}>
+                  <p className={styles.fieldLabel}>Acompanhantes</p>
+                  <span>Quantidade</span>
+                </div>
+                <div className={styles.stepper}>
+                  <button
+                    type="button"
+                    onClick={() => updateCompanions(companionsConfirmed - 1)}
+                    disabled={responseStatus === "no"}
+                    aria-label="Diminuir acompanhantes"
+                  >
+                    -
+                  </button>
+                  <strong>{responseStatus === "no" ? 0 : companionsConfirmed}</strong>
+                  <button
+                    type="button"
+                    onClick={() => updateCompanions(companionsConfirmed + 1)}
+                    disabled={responseStatus === "no"}
+                    aria-label="Aumentar acompanhantes"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              <label className={styles.fieldLabel} htmlFor="message">
+                Recado para os noivos
+              </label>
+              <input
+                id="message"
+                className={styles.input}
+                placeholder="Deixe uma mensagem carinhosa..."
+                value={message}
+                maxLength={240}
+                onChange={(event) => setMessage(event.target.value)}
+              />
+
+              <button className={styles.cta} type="submit" disabled={submitState === "submitting"}>
+                {submitState === "submitting" ? "ENVIANDO..." : "CONFIRMAR PRESENCA"}
+              </button>
+
+              <p
+                className={styles.feedback}
+                data-state={submitState}
+                data-outcome={submitOutcome ?? undefined}
+              >
+                {submitMessage}
               </p>
-            ) : null}
-
-            <div className={styles.presenceSection}>
-              <p className={styles.fieldLabel}>Presenca</p>
-              <div className={styles.toggleRow}>
-                <button
-                  className={responseStatus === "yes" ? styles.toggleActive : styles.toggle}
-                  type="button"
-                  onClick={() => setResponseStatus("yes")}
-                >
-                  Sim
-                </button>
-                <button
-                  className={responseStatus === "no" ? styles.toggleActive : styles.toggle}
-                  type="button"
-                  onClick={() => setResponseStatus("no")}
-                >
-                  Nao vou
-                </button>
-              </div>
-            </div>
-
-            <div className={styles.companionSection}>
-              <div className={styles.companionHeader}>
-                <p className={styles.fieldLabel}>Acompanhantes</p>
-                <span>Quantidade</span>
-              </div>
-              <div className={styles.stepper}>
-                <button
-                  type="button"
-                  onClick={() => updateCompanions(companionsConfirmed - 1)}
-                  disabled={responseStatus === "no"}
-                  aria-label="Diminuir acompanhantes"
-                >
-                  -
-                </button>
-                <strong>{responseStatus === "no" ? 0 : companionsConfirmed}</strong>
-                <button
-                  type="button"
-                  onClick={() => updateCompanions(companionsConfirmed + 1)}
-                  disabled={responseStatus === "no"}
-                  aria-label="Aumentar acompanhantes"
-                >
-                  +
-                </button>
-              </div>
-            </div>
-
-            <label className={styles.fieldLabel} htmlFor="message">
-              Recado para os noivos
-            </label>
-            <input
-              id="message"
-              className={styles.input}
-              placeholder="Deixe uma mensagem carinhosa..."
-              value={message}
-              maxLength={240}
-              onChange={(event) => setMessage(event.target.value)}
-            />
-
-            <button className={styles.cta} type="submit" disabled={submitState === "submitting"}>
-              {submitState === "submitting" ? "ENVIANDO..." : "CONFIRMAR PRESENCA"}
-            </button>
-
-            <p
-              className={styles.feedback}
-              data-state={submitState}
-              data-outcome={submitOutcome ?? undefined}
-            >
-              {submitMessage}
-            </p>
-          </form>
+            </form>
+          ) : null}
 
           {selectedEvent ? (
             <article className={styles.eventCard}>

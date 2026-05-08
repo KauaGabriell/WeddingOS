@@ -36,6 +36,7 @@ import {
 import {
   PHOTO_WALL_HTTP_SCHEMAS,
   PrismaPhotoPostRepository,
+  StorageBackedPhotoStorageProvider,
   createListModerationPhotoPostsUseCase,
   createModeratePhotoPostUseCase,
   PhotoWallModerationError,
@@ -284,6 +285,7 @@ export const registerAdminBackofficeRoutes: FastifyPluginAsync<RegisterAdminBack
     const photoPostRepository = new PrismaPhotoPostRepository(
       app.prisma.photoPost as unknown as ConstructorParameters<typeof PrismaPhotoPostRepository>[0],
     );
+    const photoStorageProvider = new StorageBackedPhotoStorageProvider(app.storageClient);
     const adminUserRepository = new PrismaAdminUserRepository(
       app.prisma.adminUser as unknown as ConstructorParameters<typeof PrismaAdminUserRepository>[0],
     );
@@ -648,8 +650,27 @@ export const registerAdminBackofficeRoutes: FastifyPluginAsync<RegisterAdminBack
             pageSize: query.pageSize,
           });
 
+          const items = await Promise.all(
+            result.items.map(async (item) => {
+              const serialized = serializePhotoPost(item);
+              if (!serialized.mediaStorageKey) {
+                return serialized;
+              }
+
+              try {
+                const mediaUrl = await photoStorageProvider.getSignedMediaUrl(serialized.mediaStorageKey);
+                return {
+                  ...serialized,
+                  mediaUrl,
+                };
+              } catch {
+                return serialized;
+              }
+            }),
+          );
+
           return reply.code(200).send({
-            items: result.items.map(serializePhotoPost),
+            items,
             page: result.page,
             pageSize: result.pageSize,
           });
@@ -686,7 +707,20 @@ export const registerAdminBackofficeRoutes: FastifyPluginAsync<RegisterAdminBack
               requestId: request.correlationId,
             });
 
-            return reply.code(200).send(serializePhotoPost(photoPost));
+            const serialized = serializePhotoPost(photoPost);
+            if (!serialized.mediaStorageKey) {
+              return reply.code(200).send(serialized);
+            }
+
+            try {
+              const mediaUrl = await photoStorageProvider.getSignedMediaUrl(serialized.mediaStorageKey);
+              return reply.code(200).send({
+                ...serialized,
+                mediaUrl,
+              });
+            } catch {
+              return reply.code(200).send(serialized);
+            }
           } catch (error) {
             if (error instanceof PhotoWallModerationError) {
               return sendPhotoWallError(error, reply);

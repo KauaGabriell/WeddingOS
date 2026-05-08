@@ -2,7 +2,12 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { ADMIN_SESSION_TOKEN_STORAGE_KEY, ApiRequestError, authApi } from "../../../lib/api";
+import {
+  ADMIN_SESSION_TOKEN_STORAGE_KEY,
+  ADMIN_USER_ID_STORAGE_KEY,
+  ApiRequestError,
+  authApi,
+} from "../../../lib/api";
 import styles from "./page.module.css";
 
 type LoginState = "idle" | "requesting" | "requested" | "verifying" | "authenticated" | "error";
@@ -58,6 +63,7 @@ export default function AdminLoginPage() {
         code: code.trim(),
       });
       window.localStorage.setItem(ADMIN_SESSION_TOKEN_STORAGE_KEY, session.accessToken);
+      window.localStorage.setItem(ADMIN_USER_ID_STORAGE_KEY, session.actorId);
       setState("authenticated");
       setFeedback("Login concluido. Redirecionando...");
       router.push("/admin/dashboard");

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { GuestBottomNav } from "../../components/guest-bottom-nav/guest-bottom-nav";
+import { PublicFeedback } from "../../components/public-feedback/public-feedback";
 import { ApiRequestError, type GiftCatalogItemDto, guestApi } from "../../lib/api";
 import styles from "./page.module.css";
 
@@ -181,11 +182,13 @@ export default function GiftsPage() {
         </section>
 
         {loadState === "error" ? (
-          <section className={styles.noticeCard}>
-            <strong>Modo visual ativo</strong>
-            <p>Conecte sua sessao para listar os presentes reais do evento.</p>
-            <a href="/guest/login/code">Entrar com codigo</a>
-          </section>
+          <PublicFeedback
+            variant="error"
+            title="Modo visual ativo"
+            body="Conecte sua sessao para listar os presentes reais do evento."
+            actionHref="/guest/login/code"
+            actionLabel="Entrar com codigo"
+          />
         ) : null}
 
         <section className={styles.filters}>
@@ -209,10 +212,11 @@ export default function GiftsPage() {
 
         <section className={styles.list}>
           {items.length === 0 ? (
-            <article className={styles.emptyState}>
-              <h2>Nenhum presente encontrado</h2>
-              <p>Ajuste os filtros para buscar outros itens.</p>
-            </article>
+            <PublicFeedback
+              variant="empty"
+              title="Nenhum presente encontrado"
+              body="Ajuste os filtros para buscar outros itens."
+            />
           ) : null}
 
           {items.map(({ gift, activeReservation }) => {

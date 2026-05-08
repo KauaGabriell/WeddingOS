@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { GuestBottomNav } from "../../components/guest-bottom-nav/guest-bottom-nav";
+import { PublicFeedback } from "../../components/public-feedback/public-feedback";
 import { type PhotoGalleryItemDto, guestApi } from "../../lib/api";
 import styles from "./page.module.css";
 
@@ -40,9 +41,17 @@ const fallbackItems: PhotoGalleryItemDto[] = [
   },
 ];
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3001";
+
 export default function PhotoWallPage() {
   const [items, setItems] = useState<PhotoGalleryItemDto[]>(fallbackItems);
   const [loadState, setLoadState] = useState<LoadState>("loading");
+
+  function getFullMediaUrl(path: string | null) {
+    if (!path) return "";
+    if (path.startsWith("http") || path.startsWith("/")) return path;
+    return `${API_BASE_URL}/${path}`;
+  }
 
   useEffect(() => {
     let isMounted = true;
@@ -108,17 +117,26 @@ export default function PhotoWallPage() {
         </section>
 
         {loadState === "error" ? (
-          <section className={styles.noticeCard}>
-            <strong>Modo visual ativo</strong>
-            <p>Conecte sua sessao para carregar as fotos reais do mural.</p>
-            <a href="/guest/login/code">Entrar com codigo</a>
-          </section>
+          <PublicFeedback
+            variant="error"
+            title="Modo visual ativo"
+            body="Conecte sua sessao para carregar as fotos reais do mural."
+            actionHref="/guest/login/code"
+            actionLabel="Entrar com codigo"
+          />
         ) : null}
 
         <section className={styles.gallery}>
+          {loadState === "ready" && items.length === 0 ? (
+            <PublicFeedback
+              variant="empty"
+              title="Nenhuma foto aprovada"
+              body="Quando houver publicacoes aprovadas, elas aparecerao aqui."
+            />
+          ) : null}
           {featured ? (
             <article className={styles.featuredPost}>
-              <img src={featured.mediaUrl} alt={featured.message} />
+              <img src={getFullMediaUrl(featured.mediaUrl)} alt={featured.message} />
               <div className={styles.featuredGradient} />
               <div className={styles.featuredContent}>
                 <p>Por {featured.authorName}</p>
@@ -134,7 +152,7 @@ export default function PhotoWallPage() {
                 key={item.id}
                 className={`${styles.photoCard} ${index % 3 === 0 ? styles.photoCardWide : ""}`}
               >
-                <img src={item.mediaUrl} alt={item.message} />
+                <img src={getFullMediaUrl(item.mediaUrl)} alt={item.message} />
                 <div className={styles.photoOverlay}>
                   <p>{item.authorName}</p>
                   <span>{item.message}</span>

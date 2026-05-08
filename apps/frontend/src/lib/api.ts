@@ -1,6 +1,7 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3001";
 export const GUEST_ACCESS_CODE_STORAGE_KEY = "weddingos_guest_access_code";
 export const ADMIN_SESSION_TOKEN_STORAGE_KEY = "weddingos_admin_session_token";
+export const ADMIN_USER_ID_STORAGE_KEY = "weddingos_admin_user_id";
 
 export class ApiRequestError extends Error {
   readonly code?: string;
@@ -419,6 +420,12 @@ type ListAdminRsvpsParams = {
   responseStatus?: RsvpResponseStatus;
 };
 
+type ListAdminPhotoWallParams = {
+  page?: number;
+  pageSize?: number;
+  moderationStatus?: "pending" | "approved" | "hidden" | "removed";
+};
+
 type ListAdminGiftsParams = {
   page?: number;
   pageSize?: number;
@@ -430,6 +437,12 @@ type ListAdminGiftsParams = {
 
 export interface AdminGiftListDto {
   items: GiftDto[];
+  page: number;
+  pageSize: number;
+}
+
+export interface AdminPhotoWallListDto {
+  items: PhotoPostDto[];
   page: number;
   pageSize: number;
 }
@@ -586,6 +599,32 @@ export const adminApi = {
   ) =>
     apiFetch<GiftDto>(`/admin/gifts/${giftId}`, {
       method: "PATCH",
+      body: JSON.stringify(input),
+    }),
+  listPhotoWallPosts: ({
+    page = 1,
+    pageSize = 20,
+    moderationStatus,
+  }: ListAdminPhotoWallParams = {}) => {
+    const query = new URLSearchParams({
+      page: String(page),
+      pageSize: String(pageSize),
+    });
+
+    if (moderationStatus) {
+      query.set("moderationStatus", moderationStatus);
+    }
+
+    return apiFetch<AdminPhotoWallListDto>(`/admin/photo-wall?${query.toString()}`);
+  },
+  moderatePhotoPost: (
+    photoPostId: string,
+    input: {
+      moderationStatus: "approved" | "hidden" | "removed";
+    },
+  ) =>
+    apiFetch<PhotoPostDto>(`/admin/photo-wall/posts/${photoPostId}/moderate`, {
+      method: "POST",
       body: JSON.stringify(input),
     }),
 };

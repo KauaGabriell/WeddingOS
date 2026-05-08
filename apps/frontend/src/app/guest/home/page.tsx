@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { GuestBottomNav } from "../../../components/guest-bottom-nav/guest-bottom-nav";
+import { PublicFeedback } from "../../../components/public-feedback/public-feedback";
 import {
   type EventDto,
   GUEST_ACCESS_CODE_STORAGE_KEY,
@@ -122,14 +123,13 @@ export default function GuestHomePage() {
         </section>
 
         {loadState === "error" ? (
-          <section className={styles.noticeCard} aria-label="Aviso de conexao">
-            <strong>Entre para ver seu convite completo</strong>
-            <p>
-              Quando a API estiver ativa e sua sessao de convidado estiver valida, esta tela carrega
-              RSVP e eventos do seu convite.
-            </p>
-            <a href="/guest/login/code">Acessar com codigo</a>
-          </section>
+          <PublicFeedback
+            variant="error"
+            title="Entre para ver seu convite completo"
+            body="Quando a API estiver ativa e sua sessao de convidado estiver valida, esta tela carrega RSVP e eventos do seu convite."
+            actionHref="/guest/login/code"
+            actionLabel="Acessar com codigo"
+          />
         ) : null}
 
         <section className={styles.bento} aria-label="Resumo do convite">
