@@ -419,6 +419,21 @@ type ListAdminRsvpsParams = {
   responseStatus?: RsvpResponseStatus;
 };
 
+type ListAdminGiftsParams = {
+  page?: number;
+  pageSize?: number;
+  category?: string;
+  status?: "available" | "reserved" | "archived";
+  minEstimatedValue?: number;
+  maxEstimatedValue?: number;
+};
+
+export interface AdminGiftListDto {
+  items: GiftDto[];
+  page: number;
+  pageSize: number;
+}
+
 export const adminApi = {
   listGuests: ({ page = 1, pageSize = 20, search, status }: ListAdminGuestsParams = {}) => {
     const query = new URLSearchParams({
@@ -475,4 +490,66 @@ export const adminApi = {
 
     return apiFetch<AdminGuestListDto>(`/admin/rsvps?${query.toString()}`);
   },
+  listGifts: ({
+    page = 1,
+    pageSize = 20,
+    category,
+    status,
+    minEstimatedValue,
+    maxEstimatedValue,
+  }: ListAdminGiftsParams = {}) => {
+    const query = new URLSearchParams({
+      page: String(page),
+      pageSize: String(pageSize),
+    });
+
+    if (category) {
+      query.set("category", category);
+    }
+
+    if (status) {
+      query.set("status", status);
+    }
+
+    if (typeof minEstimatedValue === "number") {
+      query.set("minEstimatedValue", String(minEstimatedValue));
+    }
+
+    if (typeof maxEstimatedValue === "number") {
+      query.set("maxEstimatedValue", String(maxEstimatedValue));
+    }
+
+    return apiFetch<AdminGiftListDto>(`/admin/gifts?${query.toString()}`);
+  },
+  createGift: (input: {
+    name: string;
+    category: string;
+    description?: string;
+    estimatedValue?: number;
+    imageUrl?: string;
+    displayOrder: number;
+    status: "available" | "reserved" | "archived";
+    isActive: boolean;
+  }) =>
+    apiFetch<GiftDto>("/admin/gifts", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  updateGift: (
+    giftId: string,
+    input: {
+      name: string;
+      category: string;
+      description?: string;
+      estimatedValue?: number;
+      imageUrl?: string;
+      displayOrder: number;
+      status: "available" | "reserved" | "archived";
+      isActive: boolean;
+    },
+  ) =>
+    apiFetch<GiftDto>(`/admin/gifts/${giftId}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }),
 };
