@@ -1,3 +1,4 @@
+import { CloudinaryStorageClient } from "./cloudinary-storage-client.js";
 import { S3StorageClient } from "./s3-storage-client.js";
 import type { StorageClient } from "./storage-client.js";
 
@@ -11,7 +12,30 @@ export type S3StorageEnvConfig = {
   S3_SIGNED_URL_EXPIRES_IN_SECONDS: number;
 };
 
-export function createStorageClient(config: S3StorageEnvConfig): StorageClient {
+export type CloudinaryStorageEnvConfig = {
+  CLOUDINARY_CLOUD_NAME: string;
+  CLOUDINARY_API_KEY: string;
+  CLOUDINARY_API_SECRET: string;
+  CLOUDINARY_FOLDER: string;
+  CLOUDINARY_SIGNED_URL_EXPIRES_IN_SECONDS: number;
+};
+
+export type StorageEnvConfig = S3StorageEnvConfig &
+  CloudinaryStorageEnvConfig & {
+    STORAGE_PROVIDER: "s3" | "cloudinary";
+  };
+
+export function createStorageClient(config: StorageEnvConfig): StorageClient {
+  if (config.STORAGE_PROVIDER === "cloudinary") {
+    return new CloudinaryStorageClient({
+      cloudName: config.CLOUDINARY_CLOUD_NAME,
+      apiKey: config.CLOUDINARY_API_KEY,
+      apiSecret: config.CLOUDINARY_API_SECRET,
+      folder: config.CLOUDINARY_FOLDER,
+      defaultSignedUrlExpiresInSeconds: config.CLOUDINARY_SIGNED_URL_EXPIRES_IN_SECONDS,
+    });
+  }
+
   return new S3StorageClient({
     bucket: config.S3_BUCKET,
     defaultSignedUrlExpiresInSeconds: config.S3_SIGNED_URL_EXPIRES_IN_SECONDS,

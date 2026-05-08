@@ -52,6 +52,7 @@ const envSchema = z.object({
   API_HOST: z.string().min(1).default("0.0.0.0"),
   API_PORT: z.coerce.number().int().min(1).max(65535).default(3001),
   CORS_ORIGIN: z.string().default("http://localhost:3000"),
+  STORAGE_PROVIDER: z.enum(["s3", "cloudinary"]).default("cloudinary"),
   S3_ENDPOINT: z.string().min(1).default("http://localhost:9000"),
   S3_REGION: z.string().min(1).default("us-east-1"),
   S3_BUCKET: z.string().min(1).default("weddingos-photos"),
@@ -59,6 +60,11 @@ const envSchema = z.object({
   S3_SECRET_ACCESS_KEY: z.string().min(1).default("minioadmin"),
   S3_FORCE_PATH_STYLE: booleanFromEnv.default(true),
   S3_SIGNED_URL_EXPIRES_IN_SECONDS: z.coerce.number().int().min(60).default(900),
+  CLOUDINARY_CLOUD_NAME: z.string().min(1).default("CHANGE_ME_CLOUDINARY_CLOUD_NAME"),
+  CLOUDINARY_API_KEY: z.string().min(1).default("CHANGE_ME_CLOUDINARY_API_KEY"),
+  CLOUDINARY_API_SECRET: z.string().min(1).default("CHANGE_ME_CLOUDINARY_API_SECRET"),
+  CLOUDINARY_FOLDER: z.string().min(1).default("weddingos"),
+  CLOUDINARY_SIGNED_URL_EXPIRES_IN_SECONDS: z.coerce.number().int().min(60).default(900),
   JWT_SECRET: z.string().min(32).default("CHANGE_ME_JWT_SECRET_MIN_32_CHARS"),
   DATABASE_URL: z.string().min(1).default("postgresql://postgres:postgres@localhost:5432/weddingos?schema=public"),
 });
@@ -132,12 +138,14 @@ function createNoopPrismaClient(): PrismaClient {
 
 export function loadEnv(): AppEnv {
   const parsed = envSchema.parse(process.env);
+  const rawOrigins = parsed.CORS_ORIGIN.split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  const corsOrigins = rawOrigins.length > 0 ? rawOrigins : ["http://localhost:3000"];
 
   return {
     ...parsed,
-    corsOrigins: parsed.CORS_ORIGIN.split(",")
-      .map((origin) => origin.trim())
-      .filter(Boolean),
+    corsOrigins,
   };
 }
 
