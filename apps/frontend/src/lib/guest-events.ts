@@ -31,8 +31,8 @@ export const fallbackEvents: EventDto[] = [
     eventType: "wedding",
     startsAt: "2026-09-05T16:00:00-03:00",
     location: {
-      venueName: "BR-153, Km 7 - s/n - Zona Rural",
-      addressLine: "Anapolis - GO, 75000-000",
+      venueName: "Espaco Premier",
+      addressLine: "Anapolis - GO",
       addressNumber: null,
       neighborhood: null,
       city: "Anapolis",

@@ -1,7 +1,26 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3001";
 export const GUEST_ACCESS_CODE_STORAGE_KEY = "weddingos_guest_access_code";
+export const GUEST_SESSION_TOKEN_STORAGE_KEY = "weddingos_guest_session_token";
 export const ADMIN_SESSION_TOKEN_STORAGE_KEY = "weddingos_admin_session_token";
 export const ADMIN_USER_ID_STORAGE_KEY = "weddingos_admin_user_id";
+
+function isGuestProtectedPath(path: string): boolean {
+  return (
+    path.startsWith("/guest") ||
+    path.startsWith("/events") ||
+    path.startsWith("/rsvp") ||
+    path.startsWith("/gifts") ||
+    path.startsWith("/photo-wall")
+  );
+}
+
+function persistGuestSessionIfBrowser(session: AuthSessionDto) {
+  if (typeof window === "undefined" || session.actorType !== "guest") {
+    return;
+  }
+
+  window.localStorage.setItem(GUEST_SESSION_TOKEN_STORAGE_KEY, session.accessToken);
+}
 
 export class ApiRequestError extends Error {
   readonly code?: string;
@@ -48,7 +67,13 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
     typeof window !== "undefined"
       ? window.localStorage.getItem(ADMIN_SESSION_TOKEN_STORAGE_KEY)
       : null;
+  const guestToken =
+    typeof window !== "undefined"
+      ? window.localStorage.getItem(GUEST_SESSION_TOKEN_STORAGE_KEY)
+      : null;
   const shouldAttachAdminBearer = path.startsWith("/admin") && adminToken;
+  const shouldAttachGuestBearer =
+    !path.startsWith("/auth") && !path.startsWith("/admin") && isGuestProtectedPath(path) && guestToken;
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
     credentials: "include",
@@ -56,12 +81,24 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
     headers: {
       "Content-Type": "application/json",
       ...(shouldAttachAdminBearer ? { Authorization: `Bearer ${adminToken}` } : {}),
+      ...(shouldAttachGuestBearer ? { Authorization: `Bearer ${guestToken}` } : {}),
       ...options.headers,
     },
   });
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
+    if (response.status === 401 && typeof window !== "undefined") {
+      if (isGuestProtectedPath(path)) {
+        window.localStorage.removeItem(GUEST_SESSION_TOKEN_STORAGE_KEY);
+        window.location.replace("/guest/login/code");
+      } else if (path.startsWith("/admin")) {
+        window.localStorage.removeItem(ADMIN_SESSION_TOKEN_STORAGE_KEY);
+        window.localStorage.removeItem(ADMIN_USER_ID_STORAGE_KEY);
+        window.location.replace("/admin/login");
+      }
+    }
+
     throw new ApiRequestError(
       resolveSanitizedErrorMessage(path, response.status),
       response.status,
@@ -321,20 +358,31 @@ type ListPhotoWallParams = {
 };
 
 export const authApi = {
-  loginWithToken: (token: string) =>
-    apiFetch("/auth/guest/login/token", {
+  loginWithToken: async (token: string) => {
+    const session = await apiFetch<AuthSessionDto>("/auth/guest/login/token", {
       method: "POST",
       body: JSON.stringify({ token }),
-    }),
-  loginWithCode: (code: string) =>
-    apiFetch("/auth/guest/login/code", {
+    });
+    persistGuestSessionIfBrowser(session);
+    return session;
+  },
+  loginWithCode: async (code: string) => {
+    const session = await apiFetch<AuthSessionDto>("/auth/guest/login/code", {
       method: "POST",
       body: JSON.stringify({ code }),
-    }),
-  logoutGuest: () =>
-    apiFetch<LogoutSuccessDto>("/auth/guest/logout", {
+    });
+    persistGuestSessionIfBrowser(session);
+    return session;
+  },
+  logoutGuest: async () => {
+    const result = await apiFetch<LogoutSuccessDto>("/auth/guest/logout", {
       method: "POST",
-    }),
+    });
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(GUEST_SESSION_TOKEN_STORAGE_KEY);
+    }
+    return result;
+  },
   requestAdminLogin: (email: string) =>
     apiFetch<RequestAcceptedDto>("/auth/admin/login", {
       method: "POST",
@@ -345,16 +393,19 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify(input),
     }),
-  registerOpenAccess: (input: {
+  registerOpenAccess: async (input: {
     fullName: string;
     phone: string;
     companionsCount: number;
     companionNames: string[];
-  }) =>
-    apiFetch<OpenGuestAccessRegistrationDto>("/auth/guest/register-open-access", {
+  }) => {
+    const result = await apiFetch<OpenGuestAccessRegistrationDto>("/auth/guest/register-open-access", {
       method: "POST",
       body: JSON.stringify(input),
-    }),
+    });
+    persistGuestSessionIfBrowser(result.authSession);
+    return result;
+  },
 };
 
 export const guestApi = {

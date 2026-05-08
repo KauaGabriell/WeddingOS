@@ -147,7 +147,7 @@ export default function GuestHomePage() {
               <p>
                 {weddingEvent
                   ? formatEventLine(weddingEvent)
-                  : "05 de Setembro, 2026 - BR-153, Km 7 - s/n - Zona Rural, Anapolis - GO"}
+                  : "05 de setembro de 2026 - Espaco Premier"}
               </p>
             </div>
           </article>
