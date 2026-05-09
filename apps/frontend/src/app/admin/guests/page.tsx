@@ -13,18 +13,31 @@ type GuestStatus = "confirmed" | "pending" | "declined";
 type ModalMode = "details" | "edit" | null;
 
 function getGuestStatus(row: AdminGuestRowDto): GuestStatus {
-  const latestResponse = row.responses
-    .slice()
-    .sort(
-      (a, b) =>
-        new Date(b.updatedAt ?? b.createdAt).getTime() -
-        new Date(a.updatedAt ?? a.createdAt).getTime(),
-    )[0];
-
-  if (!latestResponse || latestResponse.responseStatus === "pending") {
+  if (!row.responses || row.responses.length === 0) {
     return "pending";
   }
-  return latestResponse.responseStatus === "yes" ? "confirmed" : "declined";
+
+  const latestResponse = row.responses
+    .slice()
+    .sort((a, b) => {
+      const aTime = a.respondedAt ? new Date(a.respondedAt).getTime() : new Date(a.createdAt).getTime();
+      const bTime = b.respondedAt ? new Date(b.respondedAt).getTime() : new Date(b.createdAt).getTime();
+      return bTime - aTime;
+    })[0];
+
+  if (!latestResponse) {
+    return "pending";
+  }
+
+  if (latestResponse.responseStatus === "yes") {
+    return "confirmed";
+  }
+  
+  if (latestResponse.responseStatus === "no") {
+    return "declined";
+  }
+
+  return "pending";
 }
 
 function getStatusLabel(status: GuestStatus) {

@@ -174,12 +174,20 @@ export class PrismaRsvpResponseRepository implements RsvpResponseRepository {
   }
 
   async save(entity: RsvpResponse): Promise<RsvpResponse> {
-    const record = await this.responses.upsert({
+    await this.responses.upsert({
       where: { id: entity.id },
       create: mapEntity(entity),
       update: mapEntity(entity),
+    });
+
+    const record = await this.responses.findUnique({
+      where: { id: entity.id },
       include: { companions: true },
     });
+
+    if (!record) {
+      throw new Error(`RsvpResponse not found after upsert: ${entity.id}`);
+    }
 
     return mapRecord(record);
   }
@@ -227,9 +235,10 @@ export class PrismaRsvpResponseRepository implements RsvpResponseRepository {
   }
 
   async updateResponse(responseId: string, input: SubmitRsvpResponseInput): Promise<RsvpResponse> {
-    await this.responses.update({
+    const record = await this.responses.update({
       where: { id: responseId },
       data: {
+        ...mapInput(input),
         companions: {
           deleteMany: {},
           ...(input.companionNames && input.companionNames.length > 0
@@ -239,11 +248,6 @@ export class PrismaRsvpResponseRepository implements RsvpResponseRepository {
             : {}),
         },
       },
-    });
-
-    const record = await this.responses.update({
-      where: { id: responseId },
-      data: mapInput(input),
       // @ts-expect-error include is valid at runtime for Prisma client
       include: { companions: true },
     });
