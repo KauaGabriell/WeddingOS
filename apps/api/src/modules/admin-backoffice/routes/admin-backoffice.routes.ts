@@ -152,7 +152,13 @@ function serializeEligibility(entry: EventGuestEligibility) {
 
 function serializeRsvpResponse(response: RsvpResponse) {
   return {
-    ...response,
+    id: response.id,
+    eventId: response.eventId,
+    guestId: response.guestId,
+    responseStatus: response.responseStatus,
+    companionsConfirmed: response.companionsConfirmed,
+    companionNames: response.companionNames,
+    message: response.message,
     respondedAt: response.respondedAt.toISOString(),
     createdAt: response.createdAt.toISOString(),
     updatedAt: response.updatedAt.toISOString(),
