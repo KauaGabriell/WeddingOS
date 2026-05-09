@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { StorageClient } from "../../shared/index.js";
 
 export interface UploadPhotoInput {
@@ -13,15 +14,21 @@ export interface UploadPhotoResult {
 
 export interface PhotoStorageProvider {
   uploadPhoto(input: UploadPhotoInput): Promise<UploadPhotoResult>;
-  getSignedMediaUrl(storageKey: string, expiresInSeconds?: number): Promise<string>;
+  getSignedMediaUrl(
+    storageKey: string,
+    expiresInSeconds?: number,
+  ): Promise<string>;
 }
 
 export class StorageBackedPhotoStorageProvider implements PhotoStorageProvider {
   constructor(private readonly storageClient: StorageClient) {}
 
   async uploadPhoto(input: UploadPhotoInput): Promise<UploadPhotoResult> {
+    const extension = input.fileName.trim().toLowerCase().match(/\.(jpe?g|png)$/)?.[0] ?? ".jpg";
+    const key = `photos/${randomUUID()}${extension}`; // <-- key estável e única
+
     const uploaded = await this.storageClient.upload({
-      key: input.fileName,
+      key,
       body: input.body,
       contentType: input.contentType,
     });
