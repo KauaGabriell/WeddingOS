@@ -9,19 +9,13 @@ type CloudinaryStorageClientOptions = {
   defaultSignedUrlExpiresInSeconds?: number;
 };
 
-const PHOTO_PREFIX = "photos/";
-
-function toPhotoKey(key: string): string {
+function normalizeKey(key: string): string {
   const normalized = key.trim().replace(/^\/+/, "");
   if (!normalized) {
     throw new Error("Storage key is required");
   }
 
-  if (normalized.startsWith(PHOTO_PREFIX)) {
-    return normalized;
-  }
-
-  return `${PHOTO_PREFIX}${normalized}`;
+  return normalized;
 }
 
 function bufferFromBody(body: Buffer | Uint8Array): Buffer {
@@ -45,7 +39,7 @@ export class CloudinaryStorageClient implements StorageClient {
   }
 
   async upload(input: StorageUploadInput): Promise<StorageUploadResult> {
-    const key = toPhotoKey(input.key);
+    const key = normalizeKey(input.key);
     const publicId = `${this.folder}/${key}`.replace(/\/{2,}/g, "/");
     const payload = bufferFromBody(input.body);
     const dataUri = `data:${input.contentType};base64,${payload.toString("base64")}`;
@@ -64,8 +58,8 @@ export class CloudinaryStorageClient implements StorageClient {
   }
 
   async delete(key: string): Promise<void> {
-    const photoKey = toPhotoKey(key);
-    const publicId = `${this.folder}/${photoKey}`.replace(/\/{2,}/g, "/");
+    const normalizedKey = normalizeKey(key);
+    const publicId = `${this.folder}/${normalizedKey}`.replace(/\/{2,}/g, "/");
 
     await cloudinary.uploader.destroy(publicId, {
       resource_type: "image",
@@ -75,8 +69,8 @@ export class CloudinaryStorageClient implements StorageClient {
   }
 
   async getSignedUrl(key: string, expiresInSeconds?: number): Promise<string> {
-    const photoKey = toPhotoKey(key);
-    const publicId = `${this.folder}/${photoKey}`.replace(/\/{2,}/g, "/");
+    const normalizedKey = normalizeKey(key);
+    const publicId = `${this.folder}/${normalizedKey}`.replace(/\/{2,}/g, "/");
     const ttl = expiresInSeconds ?? this.defaultSignedUrlExpiresInSeconds;
     const expiresAtSeconds = Math.floor(Date.now() / 1000) + ttl;
 

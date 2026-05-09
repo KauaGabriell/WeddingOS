@@ -14,19 +14,13 @@ export type S3StorageClientOptions = {
   clientConfig: S3ClientConfig;
 };
 
-const PHOTO_PREFIX = "photos/";
-
-function toPhotoKey(key: string): string {
+function normalizeKey(key: string): string {
   const normalized = key.trim().replace(/^\/+/, "");
   if (!normalized) {
     throw new Error("Storage key is required");
   }
 
-  if (normalized.startsWith(PHOTO_PREFIX)) {
-    return normalized;
-  }
-
-  return `${PHOTO_PREFIX}${normalized}`;
+  return normalized;
 }
 
 export class S3StorageClient implements StorageClient {
@@ -41,7 +35,7 @@ export class S3StorageClient implements StorageClient {
   }
 
   async upload(input: StorageUploadInput): Promise<StorageUploadResult> {
-    const key = toPhotoKey(input.key);
+    const key = normalizeKey(input.key);
 
     await this.client.send(
       new PutObjectCommand({
@@ -56,21 +50,21 @@ export class S3StorageClient implements StorageClient {
   }
 
   async delete(key: string): Promise<void> {
-    const photoKey = toPhotoKey(key);
+    const normalizedKey = normalizeKey(key);
 
     await this.client.send(
       new DeleteObjectCommand({
         Bucket: this.bucket,
-        Key: photoKey,
+        Key: normalizedKey,
       }),
     );
   }
 
   async getSignedUrl(key: string, expiresInSeconds?: number): Promise<string> {
-    const photoKey = toPhotoKey(key);
+    const normalizedKey = normalizeKey(key);
     const command = new GetObjectCommand({
       Bucket: this.bucket,
-      Key: photoKey,
+      Key: normalizedKey,
     });
 
     return getSignedUrl(this.client, command, {
