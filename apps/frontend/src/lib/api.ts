@@ -514,6 +514,8 @@ type ListAdminGuestsParams = {
   pageSize?: number;
   search?: string;
   status?: "active" | "inactive";
+  eventId?: string;
+  guestGroupId?: string;
 };
 
 type ListAdminRsvpsParams = {
@@ -553,7 +555,7 @@ export interface AdminPhotoWallListDto {
 
 export const adminApi = {
   getDashboard: () => apiFetch<AdminDashboardSummaryDto>("/admin/dashboard"),
-  listGuests: ({ page = 1, pageSize = 20, search, status }: ListAdminGuestsParams = {}) => {
+  listGuests: ({ page = 1, pageSize = 20, search, status, eventId, guestGroupId }: ListAdminGuestsParams = {}) => {
     const query = new URLSearchParams({
       page: String(page),
       pageSize: String(pageSize),
@@ -565,6 +567,14 @@ export const adminApi = {
 
     if (status) {
       query.set("status", status);
+    }
+
+    if (eventId) {
+      query.set("eventId", eventId);
+    }
+
+    if (guestGroupId) {
+      query.set("guestGroupId", guestGroupId);
     }
 
     return apiFetch<AdminGuestListDto>(`/admin/guests?${query.toString()}`);

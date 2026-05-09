@@ -4,20 +4,36 @@ import { useEffect, useMemo, useState } from "react";
 import { AdminBottomNav } from "../../../components/admin-bottom-nav/admin-bottom-nav";
 import { AdminFeedback } from "../../../components/admin-feedback/admin-feedback";
 import { MobileTopBar } from "../../../components/mobile-top-bar/mobile-top-bar";
-import { type AdminGuestListDto, type AdminGuestRowDto, adminApi } from "../../../lib/api";
+import { type AdminGuestListDto, type AdminGuestRowDto, adminApi, guestApi } from "../../../lib/api";
 import styles from "./page.module.css";
+
+interface Event {
+  id: string;
+  name: string;
+  slug: string;
+  eventType: string;
+  startsAt: string;
+}
 
 type FilterMode = "all" | "confirmed" | "pending" | "declined";
 type LoadState = "loading" | "ready" | "error";
 type GuestStatus = "confirmed" | "pending" | "declined";
 type ModalMode = "details" | "edit" | null;
 
-function getGuestStatus(row: AdminGuestRowDto): GuestStatus {
+function getGuestStatus(row: AdminGuestRowDto, eventId?: string): GuestStatus {
   if (!row.responses || row.responses.length === 0) {
     return "pending";
   }
 
-  const latestResponse = row.responses
+  const filteredResponses = eventId
+    ? row.responses.filter((r) => r.eventId === eventId)
+    : row.responses;
+
+  if (filteredResponses.length === 0) {
+    return "pending";
+  }
+
+  const latestResponse = filteredResponses
     .slice()
     .sort((a, b) => {
       const aTime = a.respondedAt ? new Date(a.respondedAt).getTime() : new Date(a.createdAt).getTime();
@@ -51,6 +67,8 @@ export default function AdminGuestsPage() {
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [search, setSearch] = useState("");
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
+  const [selectedEventId, setSelectedEventId] = useState<string>("all");
+  const [events, setEvents] = useState<Event[]>([]);
   const [selectedGuestId, setSelectedGuestId] = useState<string | null>(null);
   const [modalMode, setModalMode] = useState<ModalMode>(null);
   const [editFullName, setEditFullName] = useState("");
@@ -60,12 +78,28 @@ export default function AdminGuestsPage() {
 
   useEffect(() => {
     let isMounted = true;
+    async function loadEvents() {
+      try {
+        const eventData = await guestApi.listEvents({ page: 1, pageSize: 100 });
+        if (!isMounted) return;
+        setEvents(eventData.items.map((item) => ({ id: item.id, name: item.name, slug: item.slug, eventType: item.eventType, startsAt: item.startsAt })));
+      } catch (error) {
+        if (!isMounted) return;
+        console.error("Failed to load events:", error);
+      }
+    }
+    void loadEvents();
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
     async function loadGuests() {
       try {
         const response: AdminGuestListDto = await adminApi.listGuests({
           page: 1,
           pageSize: 100,
           status: "active",
+          eventId: selectedEventId !== "all" ? selectedEventId : undefined,
         });
         if (!isMounted) return;
         setRows(response.items);
@@ -80,12 +114,12 @@ export default function AdminGuestsPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [selectedEventId]);
 
   const visibleRows = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
     return rows.filter((row) => {
-      const guestStatus = getGuestStatus(row);
+      const guestStatus = getGuestStatus(row, selectedEventId !== "all" ? selectedEventId : undefined);
       if (filterMode !== "all" && guestStatus !== filterMode) return false;
       if (!normalizedSearch) return true;
       return (
@@ -94,7 +128,7 @@ export default function AdminGuestsPage() {
         (row.guest.phone ?? "").includes(normalizedSearch)
       );
     });
-  }, [filterMode, rows, search]);
+  }, [filterMode, rows, search, selectedEventId]);
 
   const selectedRow = useMemo(
     () => rows.find((row) => row.guest.id === selectedGuestId) ?? null,
@@ -192,6 +226,25 @@ export default function AdminGuestsPage() {
               value={search}
             />
           </label>
+
+          <div className={styles.eventFilterRow}>
+            <label className={styles.eventSelectLabel} htmlFor="event-select">
+              Evento:
+            </label>
+            <select
+              id="event-select"
+              className={styles.eventSelect}
+              value={selectedEventId}
+              onChange={(e) => setSelectedEventId(e.target.value)}
+            >
+              <option value="all">Todos os eventos</option>
+              {events.map((event) => (
+                <option key={event.id} value={event.id}>
+                  {event.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
           <div className={styles.filterPanel} aria-label="Filtros de convidados">
             {[

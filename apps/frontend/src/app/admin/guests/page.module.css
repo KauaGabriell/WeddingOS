@@ -1,4 +1,4 @@
-.shell {
+﻿.shell {
   --admin-bg: #131313;
   --admin-surface: #201f1f;
   --admin-surface-soft: #1c1b1b;
@@ -644,4 +644,39 @@
   background: rgba(255, 180, 171, 0.2);
   border: 1px solid rgba(255, 180, 171, 0.22);
   color: var(--admin-danger);
+}
+
+.eventFilterRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.eventSelectLabel {
+  font-size: 14px;
+  color: var(--admin-subtle);
+  font-weight: 500;
+}
+
+.eventSelect {
+  flex: 1;
+  padding: 10px 14px;
+  background: var(--admin-surface-soft);
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  color: var(--admin-text);
+  font-size: 14px;
+  font-family: var(--admin-sans);
+  cursor: pointer;
+  outline: none;
+}
+
+.eventSelect:focus {
+  border-color: var(--admin-accent);
+}
+
+.eventSelect option {
+  background: var(--admin-surface);
+  color: var(--admin-text);
 }
