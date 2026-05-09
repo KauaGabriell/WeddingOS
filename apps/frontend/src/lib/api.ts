@@ -1,4 +1,5 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3001";
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3001";
 export const GUEST_ACCESS_CODE_STORAGE_KEY = "weddingos_guest_access_code";
 export const GUEST_SESSION_TOKEN_STORAGE_KEY = "weddingos_guest_session_token";
 export const ADMIN_SESSION_TOKEN_STORAGE_KEY = "weddingos_admin_session_token";
@@ -19,7 +20,10 @@ function persistGuestSessionIfBrowser(session: AuthSessionDto) {
     return;
   }
 
-  window.localStorage.setItem(GUEST_SESSION_TOKEN_STORAGE_KEY, session.accessToken);
+  window.localStorage.setItem(
+    GUEST_SESSION_TOKEN_STORAGE_KEY,
+    session.accessToken,
+  );
 }
 
 export class ApiRequestError extends Error {
@@ -62,7 +66,10 @@ function resolveSanitizedErrorMessage(path: string, status: number): string {
   return "Nao foi possivel concluir a requisicao agora.";
 }
 
-export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+export async function apiFetch<T>(
+  path: string,
+  options: RequestInit = {},
+): Promise<T> {
   const adminToken =
     typeof window !== "undefined"
       ? window.localStorage.getItem(ADMIN_SESSION_TOKEN_STORAGE_KEY)
@@ -82,9 +89,15 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
     credentials: "include",
     ...options,
     headers: {
-      "Content-Type": "application/json",
-      ...(shouldAttachAdminBearer ? { Authorization: `Bearer ${adminToken}` } : {}),
-      ...(shouldAttachGuestBearer ? { Authorization: `Bearer ${guestToken}` } : {}),
+      ...(options.body !== undefined
+        ? { "Content-Type": "application/json" }
+        : {}),
+      ...(shouldAttachAdminBearer
+        ? { Authorization: `Bearer ${adminToken}` }
+        : {}),
+      ...(shouldAttachGuestBearer
+        ? { Authorization: `Bearer ${guestToken}` }
+        : {}),
       ...options.headers,
     },
   });
@@ -426,7 +439,11 @@ export const authApi = {
 
 export const guestApi = {
   getHome: () => apiFetch<GuestHomeDto>("/guest/home"),
-  listEvents: ({ eventType, page = 1, pageSize = 10 }: ListEventsParams = {}) => {
+  listEvents: ({
+    eventType,
+    page = 1,
+    pageSize = 10,
+  }: ListEventsParams = {}) => {
     const query = new URLSearchParams({
       page: String(page),
       pageSize: String(pageSize),
@@ -555,7 +572,14 @@ export interface AdminPhotoWallListDto {
 
 export const adminApi = {
   getDashboard: () => apiFetch<AdminDashboardSummaryDto>("/admin/dashboard"),
-  listGuests: ({ page = 1, pageSize = 20, search, status, eventId, guestGroupId }: ListAdminGuestsParams = {}) => {
+  listGuests: ({
+    page = 1,
+    pageSize = 20,
+    search,
+    status,
+    eventId,
+    guestGroupId,
+  }: ListAdminGuestsParams = {}) => {
     const query = new URLSearchParams({
       page: String(page),
       pageSize: String(pageSize),
@@ -687,7 +711,9 @@ export const adminApi = {
       query.set("maxEstimatedValue", String(maxEstimatedValue));
     }
 
-    return apiFetch<GiftCatalogListDto>(`/admin/gifts/reservations?${query.toString()}`);
+    return apiFetch<GiftCatalogListDto>(
+      `/admin/gifts/reservations?${query.toString()}`,
+    );
   },
   createGift: (input: {
     name: string;
@@ -734,7 +760,9 @@ export const adminApi = {
       query.set("moderationStatus", moderationStatus);
     }
 
-    return apiFetch<AdminPhotoWallListDto>(`/admin/photo-wall?${query.toString()}`);
+    return apiFetch<AdminPhotoWallListDto>(
+      `/admin/photo-wall?${query.toString()}`,
+    );
   },
   moderatePhotoPost: (
     photoPostId: string,
