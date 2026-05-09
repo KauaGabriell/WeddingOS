@@ -119,7 +119,9 @@ export const GUESTS_RSVP_HTTP_SCHEMAS = defineHttpSchemaCatalog({
     eventId: z.object({
       eventId: uuidSchema,
     }),
-    adminGuestId: uuidSchema,
+    adminGuestId: z.object({
+      guestId: uuidSchema,
+    }),
   },
   queries: {
     guestList: paginationQuerySchema.extend({
