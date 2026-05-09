@@ -4,7 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import { AdminBottomNav } from "../../../components/admin-bottom-nav/admin-bottom-nav";
 import { AdminFeedback } from "../../../components/admin-feedback/admin-feedback";
 import { MobileTopBar } from "../../../components/mobile-top-bar/mobile-top-bar";
-import { type AdminGuestListDto, type AdminGuestRowDto, adminApi, guestApi } from "../../../lib/api";
+import {
+  type AdminGuestListDto,
+  type AdminGuestRowDto,
+  adminApi,
+  guestApi,
+} from "../../../lib/api";
 import styles from "./page.module.css";
 
 interface Event {
@@ -20,8 +25,22 @@ type LoadState = "loading" | "ready" | "error";
 type GuestStatus = "confirmed" | "pending" | "declined";
 type ModalMode = "details" | "edit" | null;
 
-function getGuestStatus(row: AdminGuestRowDto, eventId?: string): GuestStatus {
+function getGuestStatus(
+  row: AdminGuestRowDto,
+  eventId?: string,
+  allRows?: AdminGuestRowDto[], // <-- novo parâmetro
+): GuestStatus {
   if (!row.responses || row.responses.length === 0) {
+    // Acompanhante sem resposta própria → herda do primário do grupo
+    if (allRows) {
+      const primary = allRows.find(
+        (r) =>
+          r.guest.guestGroupId === row.guest.guestGroupId &&
+          r.guest.isPrimary &&
+          r.guest.id !== row.guest.id,
+      );
+      if (primary) return getGuestStatus(primary, eventId); // sem allRows para evitar recursão infinita
+    }
     return "pending";
   }
 
@@ -29,30 +48,21 @@ function getGuestStatus(row: AdminGuestRowDto, eventId?: string): GuestStatus {
     ? row.responses.filter((r) => r.eventId === eventId)
     : row.responses;
 
-  if (filteredResponses.length === 0) {
-    return "pending";
-  }
+  if (filteredResponses.length === 0) return "pending";
 
-  const latestResponse = filteredResponses
-    .slice()
-    .sort((a, b) => {
-      const aTime = a.respondedAt ? new Date(a.respondedAt).getTime() : new Date(a.createdAt).getTime();
-      const bTime = b.respondedAt ? new Date(b.respondedAt).getTime() : new Date(b.createdAt).getTime();
-      return bTime - aTime;
-    })[0];
+  const latestResponse = filteredResponses.slice().sort((a, b) => {
+    const aTime = a.respondedAt
+      ? new Date(a.respondedAt).getTime()
+      : new Date(a.createdAt).getTime();
+    const bTime = b.respondedAt
+      ? new Date(b.respondedAt).getTime()
+      : new Date(b.createdAt).getTime();
+    return bTime - aTime;
+  })[0];
 
-  if (!latestResponse) {
-    return "pending";
-  }
-
-  if (latestResponse.responseStatus === "yes") {
-    return "confirmed";
-  }
-  
-  if (latestResponse.responseStatus === "no") {
-    return "declined";
-  }
-
+  if (!latestResponse) return "pending";
+  if (latestResponse.responseStatus === "yes") return "confirmed";
+  if (latestResponse.responseStatus === "no") return "declined";
   return "pending";
 }
 
@@ -82,7 +92,15 @@ export default function AdminGuestsPage() {
       try {
         const eventData = await guestApi.listEvents({ page: 1, pageSize: 100 });
         if (!isMounted) return;
-        setEvents(eventData.items.map((item) => ({ id: item.id, name: item.name, slug: item.slug, eventType: item.eventType, startsAt: item.startsAt })));
+        setEvents(
+          eventData.items.map((item) => ({
+            id: item.id,
+            name: item.name,
+            slug: item.slug,
+            eventType: item.eventType,
+            startsAt: item.startsAt,
+          })),
+        );
       } catch (error) {
         if (!isMounted) return;
         console.error("Failed to load events:", error);
@@ -119,7 +137,9 @@ export default function AdminGuestsPage() {
   const visibleRows = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
     return rows.filter((row) => {
-      const guestStatus = getGuestStatus(row, selectedEventId !== "all" ? selectedEventId : undefined);
+      const eventIdFilter =
+        selectedEventId !== "all" ? selectedEventId : undefined;
+      const guestStatus = getGuestStatus(row, eventIdFilter, rows); // <-- passa rows
       if (filterMode !== "all" && guestStatus !== filterMode) return false;
       if (!normalizedSearch) return true;
       return (
@@ -138,7 +158,9 @@ export default function AdminGuestsPage() {
   const familyMembers = useMemo(() => {
     if (!selectedRow) return [];
     return rows
-      .filter((row) => row.guest.guestGroupId === selectedRow.guest.guestGroupId)
+      .filter(
+        (row) => row.guest.guestGroupId === selectedRow.guest.guestGroupId,
+      )
       .sort((a, b) => Number(b.guest.isPrimary) - Number(a.guest.isPrimary));
   }, [rows, selectedRow]);
 
@@ -176,7 +198,10 @@ export default function AdminGuestsPage() {
             ? {
                 ...row,
                 guest: updated,
-                guestGroup: { ...row.guestGroup, allowedCompanions: editAllowedCompanions },
+                guestGroup: {
+                  ...row.guestGroup,
+                  allowedCompanions: editAllowedCompanions,
+                },
               }
             : row,
         ),
@@ -193,7 +218,9 @@ export default function AdminGuestsPage() {
     setIsSubmitting(true);
     try {
       await adminApi.deleteGuest(selectedRow.guest.id);
-      setRows((current) => current.filter((row) => row.guest.id !== selectedRow.guest.id));
+      setRows((current) =>
+        current.filter((row) => row.guest.id !== selectedRow.guest.id),
+      );
       closeModal();
     } catch (error) {
       console.error("Failed to delete guest:", error);
@@ -246,7 +273,10 @@ export default function AdminGuestsPage() {
             </select>
           </div>
 
-          <div className={styles.filterPanel} aria-label="Filtros de convidados">
+          <div
+            className={styles.filterPanel}
+            aria-label="Filtros de convidados"
+          >
             {[
               { id: "all", label: "Todos" },
               { id: "confirmed", label: "Confirmados" },
@@ -267,7 +297,10 @@ export default function AdminGuestsPage() {
           </div>
         </section>
 
-        <section className={styles.listSection} aria-label="Lista de convidados">
+        <section
+          className={styles.listSection}
+          aria-label="Lista de convidados"
+        >
           {loadState === "loading" ? (
             <AdminFeedback
               variant="loading"
@@ -302,13 +335,25 @@ export default function AdminGuestsPage() {
                     {row.guest.phone ?? row.guestGroup.displayName}
                   </p>
                 </div>
-                <span className={`${styles.badge} ${styles[`badge${getGuestStatus(row)}`]}`}>
-                  {getStatusLabel(getGuestStatus(row))}
+                <span
+                  className={`${styles.badge} ${styles[`badge${getGuestStatus(row, selectedEventId !== "all" ? selectedEventId : undefined, rows)}`]}`}
+                >
+                  {getStatusLabel(
+                    getGuestStatus(
+                      row,
+                      selectedEventId !== "all" ? selectedEventId : undefined,
+                      rows,
+                    ),
+                  )}
                 </span>
               </div>
 
               <div className={styles.cardActions}>
-                <button className={styles.warmAction} onClick={() => openEdit(row)} type="button">
+                <button
+                  className={styles.warmAction}
+                  onClick={() => openEdit(row)}
+                  type="button"
+                >
                   <span className={styles.actionIcon} aria-hidden="true" />
                   Editar
                 </button>
@@ -334,7 +379,11 @@ export default function AdminGuestsPage() {
         </section>
       </main>
 
-      <button className={styles.fabButton} type="button" aria-label="Adicionar convidado">
+      <button
+        className={styles.fabButton}
+        type="button"
+        aria-label="Adicionar convidado"
+      >
         <span className={styles.fabIcon} aria-hidden="true" />
       </button>
 
@@ -351,11 +400,23 @@ export default function AdminGuestsPage() {
           <dialog
             className={styles.modalCard}
             open
-            aria-label={modalMode === "details" ? "Dados do convidado" : "Editar convidado"}
+            aria-label={
+              modalMode === "details"
+                ? "Dados do convidado"
+                : "Editar convidado"
+            }
           >
             <header className={styles.modalHeader}>
-              <h2>{modalMode === "details" ? "Dados do convidado" : "Editar convidado"}</h2>
-              <button className={styles.modalClose} type="button" onClick={closeModal}>
+              <h2>
+                {modalMode === "details"
+                  ? "Dados do convidado"
+                  : "Editar convidado"}
+              </h2>
+              <button
+                className={styles.modalClose}
+                type="button"
+                onClick={closeModal}
+              >
                 Fechar
               </button>
             </header>
@@ -366,7 +427,8 @@ export default function AdminGuestsPage() {
                   <strong>Nome:</strong> {selectedRow.guest.fullName}
                 </p>
                 <p>
-                  <strong>Telefone:</strong> {selectedRow.guest.phone ?? "Nao informado"}
+                  <strong>Telefone:</strong>{" "}
+                  {selectedRow.guest.phone ?? "Nao informado"}
                 </p>
                 <p>
                   <strong>Grupo:</strong> {selectedRow.guestGroup.displayName}
@@ -382,13 +444,16 @@ export default function AdminGuestsPage() {
                     ))}
                   </ul>
                 </div>
-                {selectedRow.responses.length > 0 && selectedRow.responses[0].companionNames.length > 0 ? (
+                {selectedRow.responses.length > 0 &&
+                selectedRow.responses[0].companionNames.length > 0 ? (
                   <div className={styles.companionsBlock}>
                     <strong>Acompanhantes confirmados</strong>
                     <ul>
-                      {selectedRow.responses[0].companionNames.map((name, i) => (
-                        <li key={i}>{name}</li>
-                      ))}
+                      {selectedRow.responses[0].companionNames.map(
+                        (name, i) => (
+                          <li key={i}>{name}</li>
+                        ),
+                      )}
                     </ul>
                   </div>
                 ) : null}
@@ -418,7 +483,9 @@ export default function AdminGuestsPage() {
                     min="0"
                     max="20"
                     value={editAllowedCompanions}
-                    onChange={(event) => setEditAllowedCompanions(Number(event.target.value))}
+                    onChange={(event) =>
+                      setEditAllowedCompanions(Number(event.target.value))
+                    }
                   />
                 </label>
 
