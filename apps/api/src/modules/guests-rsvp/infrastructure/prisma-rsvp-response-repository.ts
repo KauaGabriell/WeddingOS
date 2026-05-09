@@ -1,7 +1,10 @@
 import type { RsvpResponseRepository, RsvpResponseRepositoryFilters } from "../domain/index.js";
 import type { RsvpResponse, RsvpResponseStatus } from "../domain/entities/rsvp-response.js";
 import type { SubmitRsvpResponseInput } from "../domain/rsvp-idempotency.js";
-import type { RsvpResponse as PrismaRsvpResponse } from "../../../generated/prisma/client.js";
+import type {
+  RsvpResponse as PrismaRsvpResponse,
+  Companion as PrismaCompanion,
+} from "../../../generated/prisma/client.js";
 import { RsvpResponseStatus as PrismaRsvpResponseStatus } from "../../../generated/prisma/enums.js";
 
 interface RsvpResponseWhereInput {
@@ -23,25 +26,27 @@ interface RsvpResponseWhereInput {
 }
 
 interface RsvpResponseModelDelegate {
-  findUnique(args: {
-    where: { id?: string; eventId_guestId?: { eventId: string; guestId: string } };
-  }): Promise<PrismaRsvpResponse | null>;
-  findMany(args: {
+  findUnique<T extends object>(
+    args: { where: { id?: string; eventId_guestId?: { eventId: string; guestId: string } } } & {
+      include?: T;
+    },
+  ): Promise<({ companions?: { fullName: string }[] } & Omit<PrismaRsvpResponse, "companions">) | null>;
+  findMany<T extends object>(args: {
     where: RsvpResponseWhereInput;
     orderBy: { respondedAt: "asc" | "desc" };
     skip?: number;
     take?: number;
-  }): Promise<PrismaRsvpResponse[]>;
+    include?: T;
+  }): Promise<({ companions?: { fullName: string }[] } & Omit<PrismaRsvpResponse, "companions">)[]>;
   upsert(args: {
     where: { id: string };
     create: RsvpResponsePersistenceData;
     update: RsvpResponsePersistenceData;
   }): Promise<PrismaRsvpResponse>;
-  create(args: { data: SubmitRsvpResponsePersistenceData }): Promise<PrismaRsvpResponse>;
-  update(args: {
-    where: { id: string };
-    data: SubmitRsvpResponsePersistenceData;
-  }): Promise<PrismaRsvpResponse>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  create(args: { data: any }): Promise<PrismaRsvpResponse>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  update(args: { where: { id: string }; data: any }): Promise<PrismaRsvpResponse>;
 }
 
 interface RsvpResponsePersistenceData {
@@ -75,13 +80,16 @@ function mapStatusToPersistence(
   return status.toUpperCase() as keyof typeof PrismaRsvpResponseStatus;
 }
 
-function mapRecord(record: PrismaRsvpResponse): RsvpResponse {
+function mapRecord(
+  record: PrismaRsvpResponse & { companions?: { fullName: string }[] },
+): RsvpResponse {
   return {
     id: record.id,
     eventId: record.eventId,
     guestId: record.guestId,
     responseStatus: mapStatusToDomain(record.responseStatus),
     companionsConfirmed: record.companionsConfirmed,
+    companionNames: record.companions?.map((c: { fullName: string }) => c.fullName) ?? [],
     message: record.message,
     respondedAt: record.respondedAt,
     createdAt: record.createdAt,
@@ -194,23 +202,48 @@ export class PrismaRsvpResponseRepository implements RsvpResponseRepository {
           guestId,
         },
       },
+      include: { companions: true },
     });
 
     return record ? mapRecord(record) : null;
   }
 
   async createResponse(input: SubmitRsvpResponseInput): Promise<RsvpResponse> {
+    const companionData =
+      input.companionNames?.map((name) => ({ fullName: name.trim() })) ?? [];
+
     const record = await this.responses.create({
-      data: mapInput(input),
+      data: {
+        ...mapInput(input),
+        ...(companionData.length > 0 ? { companions: { create: companionData } } : {}),
+      },
+      // @ts-expect-error include is valid at runtime for Prisma client
+      include: { companions: true },
     });
 
     return mapRecord(record);
   }
 
   async updateResponse(responseId: string, input: SubmitRsvpResponseInput): Promise<RsvpResponse> {
+    await this.responses.update({
+      where: { id: responseId },
+      data: {
+        companions: {
+          deleteMany: {},
+          ...(input.companionNames && input.companionNames.length > 0
+            ? {
+                create: input.companionNames.map((name) => ({ fullName: name.trim() })),
+              }
+            : {}),
+        },
+      },
+    });
+
     const record = await this.responses.update({
       where: { id: responseId },
       data: mapInput(input),
+      // @ts-expect-error include is valid at runtime for Prisma client
+      include: { companions: true },
     });
 
     return mapRecord(record);

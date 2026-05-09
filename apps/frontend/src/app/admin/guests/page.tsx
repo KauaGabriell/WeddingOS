@@ -316,6 +316,16 @@ export default function AdminGuestsPage() {
                     ))}
                   </ul>
                 </div>
+                {selectedRow.responses.length > 0 && selectedRow.responses[0].companionNames.length > 0 ? (
+                  <div className={styles.companionsBlock}>
+                    <strong>Acompanhantes confirmados</strong>
+                    <ul>
+                      {selectedRow.responses[0].companionNames.map((name, i) => (
+                        <li key={i}>{name}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
               </div>
             ) : (
               <div className={styles.modalBody}>

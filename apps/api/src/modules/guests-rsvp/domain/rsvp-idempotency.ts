@@ -5,6 +5,7 @@ export interface SubmitRsvpResponseInput {
   readonly guestId: string;
   readonly responseStatus: RsvpResponseStatus;
   readonly companionsConfirmed: number;
+  readonly companionNames?: readonly string[];
   readonly message?: string;
 }
 

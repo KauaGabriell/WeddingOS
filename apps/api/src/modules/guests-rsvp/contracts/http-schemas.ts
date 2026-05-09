@@ -76,6 +76,7 @@ const rsvpResponseSchema = z.object({
   guestId: uuidSchema,
   responseStatus: z.enum(RSVP_RESPONSE_STATUSES),
   companionsConfirmed: z.number().int().min(0),
+  companionNames: z.array(z.string().min(1)).default([]),
   message: z.string().min(1).nullable(),
   respondedAt: isoDateTimeSchema,
   createdAt: isoDateTimeSchema,
@@ -150,6 +151,7 @@ export const GUESTS_RSVP_HTTP_SCHEMAS = defineHttpSchemaCatalog({
       eventId: uuidSchema,
       responseStatus: z.enum(RSVP_RESPONSE_STATUSES),
       companionsConfirmed: z.number().int().min(0),
+      companionNames: z.array(z.string().trim().min(1)).default([]),
       message: z.string().trim().max(500).optional(),
     }),
     adminUpdateGuest: z

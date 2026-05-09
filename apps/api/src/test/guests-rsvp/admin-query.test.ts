@@ -61,6 +61,7 @@ function createGuestFixtures(): {
     guestId: activeGuest.id,
     responseStatus: "yes",
     companionsConfirmed: 1,
+    companionNames: [],
     message: "Confirmado",
     respondedAt: new Date("2026-04-04T10:00:00.000Z"),
     createdAt: new Date("2026-04-04T10:00:00.000Z"),

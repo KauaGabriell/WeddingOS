@@ -200,12 +200,23 @@ model RsvpResponse {
   respondedAt         DateTime           @default(now())
   event               Event              @relation(fields: [eventId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   guest               Guest              @relation(fields: [guestId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  companions          Companion[]
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
 
   @@unique([eventId, guestId])
   @@index([guestId])
   @@index([eventId, responseStatus])
+}
+
+model Companion {
+  id              String       @id @default(uuid()) @db.Uuid
+  rsvpResponseId  String       @db.Uuid
+  fullName        String
+  rsvpResponse    RsvpResponse @relation(fields: [rsvpResponseId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  createdAt       DateTime     @default(now())
+
+  @@index([rsvpResponseId])
 }
 
 model Gift {

@@ -5,9 +5,19 @@ import type {
 import { PrismaGiftReservationRepository } from "./prisma-gift-reservation-repository.js";
 
 interface GiftReservationTransactionCapableClient {
+  readonly gift: {
+    update(args: {
+      where: { id: string };
+      data: {
+        status: "AVAILABLE" | "RESERVED" | "ARCHIVED";
+        updatedAt: Date;
+      };
+    }): Promise<unknown>;
+  };
   readonly giftReservation: ConstructorParameters<typeof PrismaGiftReservationRepository>[0];
   $transaction<T>(
     operation: (transactionClient: {
+      gift: GiftReservationTransactionCapableClient["gift"];
       giftReservation: ConstructorParameters<typeof PrismaGiftReservationRepository>[0];
     }) => Promise<T>,
   ): Promise<T>;
@@ -36,6 +46,12 @@ export class PrismaGiftReservationTransactionRunner
         },
         releaseActiveReservation(input) {
           return repository.releaseActiveReservation(input);
+        },
+        updateGiftStatus(giftId, status) {
+          return transactionClient.gift.update({
+            where: { id: giftId },
+            data: { status: status.toUpperCase() as "AVAILABLE" | "RESERVED" | "ARCHIVED", updatedAt: new Date() },
+          }) as Promise<void>;
         },
       });
     });

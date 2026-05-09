@@ -30,6 +30,7 @@ export default function GuestRsvpPage() {
   const [selectedEventId, setSelectedEventId] = useState<string>("");
   const [responseStatus, setResponseStatus] = useState<RsvpResponseStatus>("yes");
   const [companionsConfirmed, setCompanionsConfirmed] = useState<number>(0);
+  const [companionNames, setCompanionNames] = useState<string[]>([]);
   const [message, setMessage] = useState<string>("");
 
   useEffect(() => {
@@ -108,6 +109,7 @@ export default function GuestRsvpPage() {
     }
     setResponseStatus(existing.responseStatus);
     setCompanionsConfirmed(existing.companionsConfirmed);
+    setCompanionNames(existing.companionNames ?? []);
     setMessage(existing.message ?? "");
   }, [selectedEventId, responseByEvent, canSubmitSelectedEvent, loadState]);
 
@@ -135,6 +137,7 @@ export default function GuestRsvpPage() {
         eventId: selectedEventId,
         responseStatus,
         companionsConfirmed: responseStatus === "no" ? 0 : companionsConfirmed,
+        companionNames: responseStatus === "no" ? [] : companionNames.filter((n) => n.trim() !== ""),
         message: message.trim() ? message.trim() : undefined,
       });
 
@@ -273,6 +276,26 @@ export default function GuestRsvpPage() {
                     +
                   </button>
                 </div>
+
+                {companionsConfirmed > 0 && responseStatus !== "no" ? (
+                  <div className={styles.companionNames}>
+                    {Array.from({ length: companionsConfirmed }).map((_, index) => (
+                      <input
+                        key={index}
+                        type="text"
+                        className={styles.input}
+                        placeholder={`Nome do acompanhante ${index + 1}`}
+                        value={companionNames[index] ?? ""}
+                        maxLength={100}
+                        onChange={(event) => {
+                          const updated = [...companionNames];
+                          updated[index] = event.target.value;
+                          setCompanionNames(updated);
+                        }}
+                      />
+                    ))}
+                  </div>
+                ) : null}
               </div>
 
               <label className={styles.fieldLabel} htmlFor="message">

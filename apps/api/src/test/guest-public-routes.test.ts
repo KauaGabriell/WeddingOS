@@ -219,6 +219,7 @@ function createPrismaStub() {
       guestId: GUEST_ID,
       responseStatus: "YES",
       companionsConfirmed: 1,
+      companionNames: [],
       message: "Confirmado",
       respondedAt: new Date("2026-05-10T12:00:00.000Z"),
       createdAt: new Date("2026-05-10T12:00:00.000Z"),
@@ -622,18 +623,21 @@ function createPrismaStub() {
       },
     },
     rsvpResponse: {
-      async findUnique(args: { where: { id?: string; eventId_guestId?: { eventId: string; guestId: string } } }) {
+      async findUnique(args: {
+        where: { id?: string; eventId_guestId?: { eventId: string; guestId: string } };
+        include?: { companions?: boolean };
+      }) {
         if (args.where.id) {
-          return responses.find((entry) => entry.id === args.where.id) ?? null;
+          const entry = responses.find((entry) => entry.id === args.where.id) ?? null;
+          return entry ? { ...entry, companions: entry.companionNames?.map((n: string) => ({ fullName: n })) ?? [] } : null;
         }
         if (args.where.eventId_guestId) {
-          return (
-            responses.find(
-              (entry) =>
-                entry.eventId === args.where.eventId_guestId?.eventId &&
-                entry.guestId === args.where.eventId_guestId?.guestId,
-            ) ?? null
+          const entry = responses.find(
+            (entry) =>
+              entry.eventId === args.where.eventId_guestId?.eventId &&
+              entry.guestId === args.where.eventId_guestId?.guestId,
           );
+          return entry ? { ...entry, companions: entry.companionNames?.map((n: string) => ({ fullName: n })) ?? [] } : null;
         }
         return null;
       },
@@ -660,6 +664,7 @@ function createPrismaStub() {
           guestId: args.data.guestId,
           responseStatus: args.data.responseStatus,
           companionsConfirmed: args.data.companionsConfirmed,
+          companionNames: args.data.companionNames ?? [],
           message: args.data.message ?? null,
           respondedAt: timestamp,
           createdAt: timestamp,
@@ -694,6 +699,12 @@ function createPrismaStub() {
         return [];
       },
       async upsert(args: { create: any }) {
+        return {
+          ...args.create,
+          metadata: args.create.metadata ?? null,
+        };
+      },
+      async save(args: { create: any }) {
         return {
           ...args.create,
           metadata: args.create.metadata ?? null,
@@ -835,6 +846,7 @@ async function testGuestLoginRoutesAndProtectedGuestPages(): Promise<void> {
         eventId: EVENT_ONE_ID,
         responseStatus: "yes",
         companionsConfirmed: 2,
+        companionNames: [],
         message: " Estaremos la ",
       },
     });
@@ -843,6 +855,7 @@ async function testGuestLoginRoutesAndProtectedGuestPages(): Promise<void> {
     assert.equal(submitYes.json().persistedResponse.guestId, GUEST_ID);
     assert.equal(submitYes.json().persistedResponse.responseStatus, "yes");
     assert.equal(submitYes.json().persistedResponse.companionsConfirmed, 2);
+    assert.equal(submitYes.json().persistedResponse.companionNames.length, 0);
     assert.equal(submitYes.json().persistedResponse.message, "Estaremos la");
 
     const replayYes = await app.inject({
@@ -855,6 +868,7 @@ async function testGuestLoginRoutesAndProtectedGuestPages(): Promise<void> {
         eventId: EVENT_ONE_ID,
         responseStatus: "yes",
         companionsConfirmed: 2,
+        companionNames: [],
         message: "Estaremos la",
       },
     });
@@ -871,6 +885,7 @@ async function testGuestLoginRoutesAndProtectedGuestPages(): Promise<void> {
         eventId: EVENT_ONE_ID,
         responseStatus: "pending",
         companionsConfirmed: 1,
+        companionNames: [],
         message: "Ainda decidindo",
       },
     });
@@ -888,6 +903,7 @@ async function testGuestLoginRoutesAndProtectedGuestPages(): Promise<void> {
         eventId: EVENT_TWO_ID,
         responseStatus: "no",
         companionsConfirmed: 0,
+        companionNames: [],
         message: "Nao vou conseguir",
       },
     });
@@ -905,6 +921,7 @@ async function testGuestLoginRoutesAndProtectedGuestPages(): Promise<void> {
       payload: {
         eventId: EVENT_ONE_ID,
         responseStatus: "yes",
+        companionNames: [],
       },
     });
     assert.equal(invalidPayload.statusCode, 400);
@@ -916,6 +933,7 @@ async function testGuestLoginRoutesAndProtectedGuestPages(): Promise<void> {
         eventId: EVENT_ONE_ID,
         responseStatus: "yes",
         companionsConfirmed: 1,
+        companionNames: [],
       },
     });
     assert.equal(missingRsvpAuth.statusCode, 401);
@@ -1162,6 +1180,7 @@ async function testGuestLoginRoutesAndProtectedGuestPages(): Promise<void> {
         eventId: EVENT_ONE_ID,
         responseStatus: "yes",
         companionsConfirmed: 1,
+        companionNames: [],
       },
     });
     assert.equal(forbiddenRsvp.statusCode, 403);

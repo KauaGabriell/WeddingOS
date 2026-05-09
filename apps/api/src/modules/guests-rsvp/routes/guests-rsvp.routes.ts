@@ -104,6 +104,7 @@ function serializeRsvpResponse(response: {
   guestId: string;
   responseStatus: string;
   companionsConfirmed: number;
+  companionNames: readonly string[];
   message: string | null;
   respondedAt: Date;
   createdAt: Date;
@@ -139,7 +140,9 @@ export const registerGuestsRsvpRoutes: FastifyPluginAsync<RegisterGuestsRsvpRout
     const inviteTokenRepository = new PrismaInviteTokenRepository(
       app.prisma.inviteToken as unknown as ConstructorParameters<typeof PrismaInviteTokenRepository>[0],
     );
-    const rsvpResponseTransactionRunner = new PrismaRsvpResponseTransactionRunner(app.prisma);
+    const rsvpResponseTransactionRunner = new PrismaRsvpResponseTransactionRunner(
+      app.prisma as unknown as ConstructorParameters<typeof PrismaRsvpResponseTransactionRunner>[0],
+    );
     const auditLogRepository = new PrismaAuditLogRepository(
       app.prisma.auditLog as unknown as ConstructorParameters<typeof PrismaAuditLogRepository>[0],
     );
@@ -306,6 +309,7 @@ export const registerGuestsRsvpRoutes: FastifyPluginAsync<RegisterGuestsRsvpRout
                     guestId: auth.guestId,
                     responseStatus: body.responseStatus,
                     companionsConfirmed: body.companionsConfirmed,
+                    companionNames: body.companionNames ?? [],
                     message: body.message,
                     requestId: request.correlationId,
                   });

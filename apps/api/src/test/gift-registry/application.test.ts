@@ -452,6 +452,9 @@ async function testManageGiftReservationReleasesReservation(): Promise<void> {
               updatedAt: new Date("2026-01-04T00:00:00.000Z"),
             };
           },
+          async updateGiftStatus() {
+            return Promise.resolve();
+          },
         });
       },
     },
@@ -532,6 +535,9 @@ async function testManageGiftReservationReassignsReservation(): Promise<void> {
               id: "reservation-2",
               guestId: "guest-2",
             };
+          },
+          async updateGiftStatus() {
+            return Promise.resolve();
           },
         });
       },
@@ -731,6 +737,9 @@ async function testManageGiftReservationPropagatesReservationConflict(): Promise
           async createActiveReservation() {
             throw new GiftReservationConflictError("gift-1");
           },
+          async updateGiftStatus() {
+            return Promise.resolve();
+          },
         });
       },
     },
@@ -884,6 +893,9 @@ async function testReserveGiftCreatesActiveReservation(): Promise<void> {
           async releaseActiveReservation() {
             throw new Error("not used");
           },
+          async updateGiftStatus() {
+            return Promise.resolve();
+          },
         });
       },
     },
@@ -1036,6 +1048,9 @@ async function testReserveGiftPropagatesReservationConflict(): Promise<void> {
           },
           async releaseActiveReservation() {
             throw new Error("not used");
+          },
+          async updateGiftStatus() {
+            return Promise.resolve();
           },
         });
       },

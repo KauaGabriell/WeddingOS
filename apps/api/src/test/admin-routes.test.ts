@@ -118,6 +118,7 @@ function createPrismaStub() {
       guestId: GUEST_ONE_ID,
       responseStatus: "YES",
       companionsConfirmed: 1,
+      companionNames: [],
       message: "Confirmado",
       respondedAt: new Date("2026-05-04T12:00:00.000Z"),
       createdAt: new Date("2026-05-04T12:00:00.000Z"),

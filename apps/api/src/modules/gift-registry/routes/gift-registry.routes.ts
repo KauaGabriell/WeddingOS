@@ -90,7 +90,9 @@ export const registerGiftRegistryRoutes: FastifyPluginAsync<RegisterGiftRegistry
       typeof PrismaGiftReservationRepository
     >[0],
   );
-  const giftReservationTransactionRunner = new PrismaGiftReservationTransactionRunner(app.prisma);
+  const giftReservationTransactionRunner = new PrismaGiftReservationTransactionRunner(
+    app.prisma as unknown as ConstructorParameters<typeof PrismaGiftReservationTransactionRunner>[0],
+  );
   const auditLogWriter = createAuditLogWriter({
     auditLogRepository: new PrismaAuditLogRepository(
       app.prisma.auditLog as unknown as ConstructorParameters<typeof PrismaAuditLogRepository>[0],

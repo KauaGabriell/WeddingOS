@@ -9,6 +9,7 @@ export interface GiftReservationTransactionContext {
     readonly reservationId: string;
     readonly releasedByAdminUserId: string;
   }): Promise<GiftReservation>;
+  updateGiftStatus(giftId: string, status: "available" | "reserved"): Promise<void>;
 }
 
 export interface GiftReservationTransactionRunner {

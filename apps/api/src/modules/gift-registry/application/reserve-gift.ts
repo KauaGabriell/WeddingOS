@@ -79,11 +79,15 @@ export function createReserveGiftUseCase(
           throw new GiftReservationConflictError(gift.id);
         }
 
-        return context.createActiveReservation({
+        const newReservation = await context.createActiveReservation({
           giftId: gift.id,
           guestId: guest.id,
           purchaseNotes,
         });
+
+        await context.updateGiftStatus(gift.id, "reserved");
+
+        return newReservation;
       });
 
       await dependencies.auditLogWriter.write({

@@ -165,6 +165,7 @@ function testDomainEntitiesAreExportedByModuleBarrels(): void {
     guestId: "guest-1",
     responseStatus: "yes",
     companionsConfirmed: 1,
+    companionNames: [],
     message: null,
     respondedAt: new Date(),
     createdAt: new Date(),

@@ -136,6 +136,7 @@ export function createManageGiftReservationUseCase(
         });
 
         if (targetGuest === null) {
+          await context.updateGiftStatus(currentReservation.giftId, "available");
           return {
             releasedReservation,
             newActiveReservation: null,
@@ -153,6 +154,8 @@ export function createManageGiftReservationUseCase(
             newActiveReservation,
           };
         } catch (error) {
+          await context.updateGiftStatus(currentReservation.giftId, "available");
+
           if (error instanceof GiftReservationConflictError) {
             throw error;
           }

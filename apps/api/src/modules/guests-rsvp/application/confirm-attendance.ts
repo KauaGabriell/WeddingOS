@@ -66,6 +66,8 @@ function isReplay(
   return (
     existingResponse.responseStatus === normalizedInput.responseStatus &&
     existingResponse.companionsConfirmed === normalizedInput.companionsConfirmed &&
+    existingResponse.companionNames.join(",") ===
+      (normalizedInput.companionNames ?? []).join(",") &&
     existingResponse.message === normalizeMessage(normalizedInput.message)
   );
 }

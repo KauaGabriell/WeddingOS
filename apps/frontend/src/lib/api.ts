@@ -181,6 +181,7 @@ export interface RsvpResponseDto {
   guestId: string;
   responseStatus: RsvpResponseStatus;
   companionsConfirmed: number;
+  companionNames: string[];
   message: string | null;
   respondedAt: string;
   createdAt: string;
@@ -441,6 +442,7 @@ export const guestApi = {
     eventId: string;
     responseStatus: RsvpResponseStatus;
     companionsConfirmed: number;
+    companionNames: string[];
     message?: string;
   }) =>
     apiFetch<SubmitRsvpResultDto>("/rsvp/respond", {
