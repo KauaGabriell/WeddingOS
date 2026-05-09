@@ -178,6 +178,7 @@ export class PrismaRsvpResponseRepository implements RsvpResponseRepository {
       where: { id: entity.id },
       create: mapEntity(entity),
       update: mapEntity(entity),
+      include: { companions: true },
     });
 
     return mapRecord(record);
@@ -189,6 +190,7 @@ export class PrismaRsvpResponseRepository implements RsvpResponseRepository {
       where,
       orderBy: { respondedAt: "desc" },
       ...(take > 0 ? { skip, take } : {}),
+      include: { companions: true },
     });
 
     return records.map(mapRecord);
