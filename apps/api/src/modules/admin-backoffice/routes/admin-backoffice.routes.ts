@@ -443,6 +443,7 @@ export const registerAdminBackofficeRoutes: FastifyPluginAsync<RegisterAdminBack
             401: errorResponseSchema,
             403: errorResponseSchema,
             404: errorResponseSchema,
+            500: errorResponseSchema,
           },
         },
         handler: async (request, reply) => {
