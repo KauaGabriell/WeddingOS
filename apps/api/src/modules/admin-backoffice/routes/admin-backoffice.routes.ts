@@ -453,70 +453,79 @@ export const registerAdminBackofficeRoutes: FastifyPluginAsync<RegisterAdminBack
             return sendGuestsError(new GuestsRsvpApplicationError("guest_not_found"), reply);
           }
 
-          await app.prisma.$transaction(async (transactionClient: any) => {
-            const activeReservations = await transactionClient.giftReservation.findMany({
-              where: {
-                guestId: params.guestId,
-                reservationStatus: "ACTIVE",
-              },
-              select: {
-                giftId: true,
-              },
-            });
-            const activeReservedGiftIds = activeReservations.map(
-              (reservation: { giftId: string }) => reservation.giftId,
-            );
-
-            await transactionClient.auditLog.updateMany({
-              where: { actorGuestId: params.guestId },
-              data: { actorGuestId: null },
-            });
-            await transactionClient.giftReservation.deleteMany({
-              where: { guestId: params.guestId },
-            });
-
-            if (activeReservedGiftIds.length > 0) {
-              await transactionClient.gift.updateMany({
+          try {
+            await app.prisma.$transaction(async (transactionClient: any) => {
+              const activeReservations = await transactionClient.giftReservation.findMany({
                 where: {
-                  id: { in: activeReservedGiftIds },
-                  status: "RESERVED",
+                  guestId: params.guestId,
+                  reservationStatus: "ACTIVE",
                 },
-                data: {
-                  status: "AVAILABLE",
-                  updatedAt: new Date(),
+                select: {
+                  giftId: true,
                 },
               });
-            }
+              const activeReservedGiftIds = activeReservations.map(
+                (reservation: { giftId: string }) => reservation.giftId,
+              );
 
-            await transactionClient.photoPost.deleteMany({
-              where: { guestId: params.guestId },
-            });
-            await transactionClient.rsvpResponse.deleteMany({
-              where: { guestId: params.guestId },
-            });
-            await transactionClient.eventGuestEligibility.deleteMany({
-              where: { guestId: params.guestId },
-            });
-            await transactionClient.inviteToken.deleteMany({
-              where: { guestId: params.guestId },
-            });
-            await transactionClient.guest.delete({
-              where: { id: params.guestId },
-            });
+              await transactionClient.auditLog.updateMany({
+                where: { actorGuestId: params.guestId },
+                data: { actorGuestId: null },
+              });
+              await transactionClient.giftReservation.deleteMany({
+                where: { guestId: params.guestId },
+              });
 
-            const remainingGuestsInGroup = await transactionClient.guest.count({
-              where: { guestGroupId: guest.guestGroupId },
-            });
+              if (activeReservedGiftIds.length > 0) {
+                await transactionClient.gift.updateMany({
+                  where: {
+                    id: { in: activeReservedGiftIds },
+                    status: "RESERVED",
+                  },
+                  data: {
+                    status: "AVAILABLE",
+                    updatedAt: new Date(),
+                  },
+                });
+              }
 
-            if (remainingGuestsInGroup === 0) {
+              await transactionClient.photoPost.deleteMany({
+                where: { guestId: params.guestId },
+              });
+              await transactionClient.rsvpResponse.deleteMany({
+                where: { guestId: params.guestId },
+              });
+              await transactionClient.eventGuestEligibility.deleteMany({
+                where: { guestId: params.guestId },
+              });
               await transactionClient.inviteToken.deleteMany({
+                where: { guestId: params.guestId },
+              });
+
+              const remainingGuestsInGroup = await transactionClient.guest.count({
                 where: { guestGroupId: guest.guestGroupId },
               });
-              await transactionClient.guestGroup.delete({
-                where: { id: guest.guestGroupId },
+
+              if (remainingGuestsInGroup === 0) {
+                await transactionClient.inviteToken.deleteMany({
+                  where: { guestGroupId: guest.guestGroupId },
+                });
+                await transactionClient.guestGroup.delete({
+                  where: { id: guest.guestGroupId },
+                });
+              }
+
+              await transactionClient.guest.delete({
+                where: { id: params.guestId },
               });
-            }
-          });
+            });
+          } catch (error) {
+            request.log.error({ error, guestId: params.guestId }, "Failed to delete guest");
+            return reply.code(500).send({
+              code: "DELETE_FAILED",
+              message: "Request could not be completed",
+            });
+          }
 
           return reply.code(200).send({ success: true });
         },
