@@ -72,10 +72,7 @@ interface RegisterAdminBackofficeRoutesOptions {
   readonly preHandler?: preHandlerHookHandler;
 }
 
-function sendGuestsError(
-  error: GuestsRsvpApplicationError,
-  reply: any,
-) {
+function sendGuestsError(error: GuestsRsvpApplicationError, reply: any) {
   const codeByReason: Record<GuestsRsvpApplicationError["reason"], string> = {
     guest_not_found: "GUEST_NOT_FOUND",
     guest_inactive: "GUEST_INACTIVE",
@@ -92,10 +89,7 @@ function sendGuestsError(
   });
 }
 
-function sendGiftsError(
-  error: AdminGiftManagementError,
-  reply: any,
-) {
+function sendGiftsError(error: AdminGiftManagementError, reply: any) {
   const codeByReason: Record<AdminGiftManagementError["reason"], string> = {
     gift_not_found: "GIFT_NOT_FOUND",
     invalid_value_range: "INVALID_VALUE_RANGE",
@@ -108,10 +102,7 @@ function sendGiftsError(
   });
 }
 
-function sendPhotoWallError(
-  error: PhotoWallModerationError,
-  reply: any,
-) {
+function sendPhotoWallError(error: PhotoWallModerationError, reply: any) {
   const codeByReason: Record<PhotoWallModerationError["reason"], string> = {
     photo_post_not_found: "PHOTO_POST_NOT_FOUND",
     admin_user_not_found: "ADMIN_USER_NOT_FOUND",
@@ -242,72 +233,98 @@ function serializeAuditLog(auditLog: any) {
   };
 }
 
-export const registerAdminBackofficeRoutes: FastifyPluginAsync<RegisterAdminBackofficeRoutesOptions> =
-  async (app, options) => {
-    const auditLogRepository = new PrismaAuditLogRepository(
-      app.prisma.auditLog as unknown as ConstructorParameters<typeof PrismaAuditLogRepository>[0],
-    );
-    const auditLogWriter = createAuditLogWriter({ auditLogRepository });
+export const registerAdminBackofficeRoutes: FastifyPluginAsync<
+  RegisterAdminBackofficeRoutesOptions
+> = async (app, options) => {
+  const auditLogRepository = new PrismaAuditLogRepository(
+    app.prisma.auditLog as unknown as ConstructorParameters<
+      typeof PrismaAuditLogRepository
+    >[0],
+  );
+  const auditLogWriter = createAuditLogWriter({ auditLogRepository });
 
-    const guestRepository = new PrismaGuestRepository(
-      app.prisma.guest as unknown as ConstructorParameters<typeof PrismaGuestRepository>[0],
-    );
-    const guestGroupRepository = new PrismaGuestGroupRepository(
-      app.prisma.guestGroup as unknown as ConstructorParameters<typeof PrismaGuestGroupRepository>[0],
-    );
-    const eventGuestEligibilityRepository = new PrismaEventGuestEligibilityRepository(
+  const guestRepository = new PrismaGuestRepository(
+    app.prisma.guest as unknown as ConstructorParameters<
+      typeof PrismaGuestRepository
+    >[0],
+  );
+  const guestGroupRepository = new PrismaGuestGroupRepository(
+    app.prisma.guestGroup as unknown as ConstructorParameters<
+      typeof PrismaGuestGroupRepository
+    >[0],
+  );
+  const eventGuestEligibilityRepository =
+    new PrismaEventGuestEligibilityRepository(
       app.prisma.eventGuestEligibility as unknown as ConstructorParameters<
         typeof PrismaEventGuestEligibilityRepository
       >[0],
     );
-    const rsvpResponseRepository = new PrismaRsvpResponseRepository(
-      app.prisma.rsvpResponse as unknown as ConstructorParameters<typeof PrismaRsvpResponseRepository>[0],
-    );
-    const listAdminGuests = createListAdminGuestsAndRsvpsUseCase({
-      guestRepository,
-      guestGroupRepository,
-      eventGuestEligibilityRepository,
-      rsvpResponseRepository,
-    });
-    const manageAdminGuest = createManageAdminGuestUseCase({
-      guestRepository,
-    });
+  const rsvpResponseRepository = new PrismaRsvpResponseRepository(
+    app.prisma.rsvpResponse as unknown as ConstructorParameters<
+      typeof PrismaRsvpResponseRepository
+    >[0],
+  );
+  const listAdminGuests = createListAdminGuestsAndRsvpsUseCase({
+    guestRepository,
+    guestGroupRepository,
+    eventGuestEligibilityRepository,
+    rsvpResponseRepository,
+  });
+  const manageAdminGuest = createManageAdminGuestUseCase({
+    guestRepository,
+  });
 
-    const giftRepository = new PrismaGiftRepository(
-      app.prisma.gift as unknown as ConstructorParameters<typeof PrismaGiftRepository>[0],
-    );
-    const giftReservationRepository = new PrismaGiftReservationRepository(
-      app.prisma
-        .giftReservation as unknown as ConstructorParameters<typeof PrismaGiftReservationRepository>[0],
-    );
-    const giftDependencies = { giftRepository, auditLogWriter };
-    const listAdminGifts = createListAdminGiftsUseCase(giftDependencies);
-    const listPublicGiftCatalog = createListPublicGiftCatalogUseCase({
-      giftRepository,
-      giftReservationRepository,
-    });
-    const createGift = createCreateGiftUseCase(giftDependencies);
-    const updateGift = createUpdateGiftUseCase(giftDependencies);
+  const giftRepository = new PrismaGiftRepository(
+    app.prisma.gift as unknown as ConstructorParameters<
+      typeof PrismaGiftRepository
+    >[0],
+  );
+  const giftReservationRepository = new PrismaGiftReservationRepository(
+    app.prisma.giftReservation as unknown as ConstructorParameters<
+      typeof PrismaGiftReservationRepository
+    >[0],
+  );
+  const giftDependencies = { giftRepository, auditLogWriter };
+  const listAdminGifts = createListAdminGiftsUseCase(giftDependencies);
+  const listPublicGiftCatalog = createListPublicGiftCatalogUseCase({
+    giftRepository,
+    giftReservationRepository,
+  });
+  const createGift = createCreateGiftUseCase(giftDependencies);
+  const updateGift = createUpdateGiftUseCase(giftDependencies);
 
-    const photoPostRepository = new PrismaPhotoPostRepository(
-      app.prisma.photoPost as unknown as ConstructorParameters<typeof PrismaPhotoPostRepository>[0],
-    );
-    const photoStorageProvider = new StorageBackedPhotoStorageProvider(app.storageClient);
-    const adminUserRepository = new PrismaAdminUserRepository(
-      app.prisma.adminUser as unknown as ConstructorParameters<typeof PrismaAdminUserRepository>[0],
-    );
-    const photoWallDependencies = {
-      photoPostRepository,
-      adminUserRepository,
-      auditLogWriter,
-    };
-    const listModerationPhotoPosts = createListModerationPhotoPostsUseCase(photoWallDependencies);
-    const moderatePhotoPost = createModeratePhotoPostUseCase(photoWallDependencies);
+  const photoPostRepository = new PrismaPhotoPostRepository(
+    app.prisma.photoPost as unknown as ConstructorParameters<
+      typeof PrismaPhotoPostRepository
+    >[0],
+  );
+  const photoStorageProvider = new StorageBackedPhotoStorageProvider(
+    app.storageClient,
+  );
+  const adminUserRepository = new PrismaAdminUserRepository(
+    app.prisma.adminUser as unknown as ConstructorParameters<
+      typeof PrismaAdminUserRepository
+    >[0],
+  );
+  const photoWallDependencies = {
+    photoPostRepository,
+    adminUserRepository,
+    auditLogWriter,
+  };
+  const listModerationPhotoPosts = createListModerationPhotoPostsUseCase(
+    photoWallDependencies,
+  );
+  const moderatePhotoPost = createModeratePhotoPostUseCase(
+    photoWallDependencies,
+  );
 
-    const getDashboardSummary = createGetDashboardSummaryUseCase({ prisma: app.prisma });
-    const listAuditTrail = createListAuditTrailUseCase({ auditLogRepository });
+  const getDashboardSummary = createGetDashboardSummaryUseCase({
+    prisma: app.prisma,
+  });
+  const listAuditTrail = createListAuditTrailUseCase({ auditLogRepository });
 
-    await app.register(async (protectedRoutes) => {
+  await app.register(
+    async (protectedRoutes) => {
       protectedRoutes.setErrorHandler((error, _request, reply) => {
         const httpError = error as Partial<HttpStatusError>;
 
@@ -451,20 +468,24 @@ export const registerAdminBackofficeRoutes: FastifyPluginAsync<RegisterAdminBack
           const guest = await guestRepository.findById(params.guestId);
 
           if (!guest) {
-            return sendGuestsError(new GuestsRsvpApplicationError("guest_not_found"), reply);
+            return sendGuestsError(
+              new GuestsRsvpApplicationError("guest_not_found"),
+              reply,
+            );
           }
 
           try {
             await app.prisma.$transaction(async (transactionClient: any) => {
-              const activeReservations = await transactionClient.giftReservation.findMany({
-                where: {
-                  guestId: params.guestId,
-                  reservationStatus: "ACTIVE",
-                },
-                select: {
-                  giftId: true,
-                },
-              });
+              const activeReservations =
+                await transactionClient.giftReservation.findMany({
+                  where: {
+                    guestId: params.guestId,
+                    reservationStatus: "ACTIVE",
+                  },
+                  select: {
+                    giftId: true,
+                  },
+                });
               const activeReservedGiftIds = activeReservations.map(
                 (reservation: { giftId: string }) => reservation.giftId,
               );
@@ -503,9 +524,13 @@ export const registerAdminBackofficeRoutes: FastifyPluginAsync<RegisterAdminBack
                 where: { guestId: params.guestId },
               });
 
-              const remainingGuestsInGroup = await transactionClient.guest.count({
-                where: { guestGroupId: guest.guestGroupId },
-              });
+              const remainingGuestsInGroup =
+                await transactionClient.guest.count({
+                  where: {
+                    guestGroupId: guest.guestGroupId,
+                    id: { not: params.guestId },
+                  },
+                });
 
               if (remainingGuestsInGroup === 0) {
                 await transactionClient.inviteToken.deleteMany({
@@ -521,7 +546,10 @@ export const registerAdminBackofficeRoutes: FastifyPluginAsync<RegisterAdminBack
               });
             });
           } catch (error) {
-            request.log.error({ error, guestId: params.guestId }, "Failed to delete guest");
+            request.log.error(
+              { error, guestId: params.guestId },
+              "Failed to delete guest",
+            );
             return reply.code(500).send({
               code: "DELETE_FAILED",
               message: "Request could not be completed",
@@ -765,7 +793,9 @@ export const registerAdminBackofficeRoutes: FastifyPluginAsync<RegisterAdminBack
               }
 
               try {
-                const mediaUrl = await photoStorageProvider.getSignedMediaUrl(serialized.mediaStorageKey);
+                const mediaUrl = await photoStorageProvider.getSignedMediaUrl(
+                  serialized.mediaStorageKey,
+                );
                 return {
                   ...serialized,
                   mediaUrl,
@@ -820,7 +850,9 @@ export const registerAdminBackofficeRoutes: FastifyPluginAsync<RegisterAdminBack
             }
 
             try {
-              const mediaUrl = await photoStorageProvider.getSignedMediaUrl(serialized.mediaStorageKey);
+              const mediaUrl = await photoStorageProvider.getSignedMediaUrl(
+                serialized.mediaStorageKey,
+              );
               return reply.code(200).send({
                 ...serialized,
                 mediaUrl,
@@ -868,7 +900,9 @@ export const registerAdminBackofficeRoutes: FastifyPluginAsync<RegisterAdminBack
           });
         },
       });
-    }, {
+    },
+    {
       prefix: ADMIN_BACKOFFICE_HTTP_CONTRACT.routePrefix,
-    });
-  };
+    },
+  );
+};
