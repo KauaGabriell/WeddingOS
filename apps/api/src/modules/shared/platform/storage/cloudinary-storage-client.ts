@@ -75,7 +75,19 @@ export class CloudinaryStorageClient implements StorageClient {
 
   async getSignedUrl(key: string, expiresInSeconds?: number): Promise<string> {
     const normalizedKey = normalizeKey(key);
-    const publicId = `${this.folder}/${normalizedKey}`.replace(/\/{2,}/g, "/");
+
+    let idWithoutExtension = normalizedKey;
+    let format: string | undefined;
+    const extMatch = normalizedKey.toLowerCase().match(/\.(jpe?g|png)$/);
+    if (extMatch) {
+      idWithoutExtension = normalizedKey.slice(0, -extMatch[0].length);
+      format = extMatch[1] === "jpeg" ? "jpg" : extMatch[1];
+    }
+
+    const publicId = `${this.folder}/${idWithoutExtension}`.replace(
+      /\/{2,}/g,
+      "/",
+    );
     const ttl = expiresInSeconds ?? this.defaultSignedUrlExpiresInSeconds;
     const expiresAtSeconds = Math.floor(Date.now() / 1000) + ttl;
 
@@ -85,6 +97,7 @@ export class CloudinaryStorageClient implements StorageClient {
       secure: true,
       sign_url: true,
       expires_at: expiresAtSeconds,
+      ...(format ? { format } : {}),
     });
   }
 }
