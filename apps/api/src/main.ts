@@ -48,7 +48,9 @@ const booleanFromEnv = z.preprocess((value) => {
 }, z.boolean());
 
 const envSchema = z.object({
-  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  NODE_ENV: z
+    .enum(["development", "test", "production"])
+    .default("development"),
   API_HOST: z.string().min(1).default("0.0.0.0"),
   API_PORT: z.coerce.number().int().min(1).max(65535).default(3001),
   CORS_ORIGIN: z.string().default("http://localhost:3000"),
@@ -59,14 +61,33 @@ const envSchema = z.object({
   S3_ACCESS_KEY_ID: z.string().min(1).default("minioadmin"),
   S3_SECRET_ACCESS_KEY: z.string().min(1).default("minioadmin"),
   S3_FORCE_PATH_STYLE: booleanFromEnv.default(true),
-  S3_SIGNED_URL_EXPIRES_IN_SECONDS: z.coerce.number().int().min(60).default(900),
-  CLOUDINARY_CLOUD_NAME: z.string().min(1).default("CHANGE_ME_CLOUDINARY_CLOUD_NAME"),
+  S3_SIGNED_URL_EXPIRES_IN_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(60)
+    .default(900),
+  CLOUDINARY_CLOUD_NAME: z
+    .string()
+    .min(1)
+    .default("CHANGE_ME_CLOUDINARY_CLOUD_NAME"),
   CLOUDINARY_API_KEY: z.string().min(1).default("CHANGE_ME_CLOUDINARY_API_KEY"),
-  CLOUDINARY_API_SECRET: z.string().min(1).default("CHANGE_ME_CLOUDINARY_API_SECRET"),
+  CLOUDINARY_API_SECRET: z
+    .string()
+    .min(1)
+    .default("CHANGE_ME_CLOUDINARY_API_SECRET"),
   CLOUDINARY_FOLDER: z.string().min(1).default("weddingos"),
-  CLOUDINARY_SIGNED_URL_EXPIRES_IN_SECONDS: z.coerce.number().int().min(60).default(900),
+  CLOUDINARY_SIGNED_URL_EXPIRES_IN_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(60)
+    .default(900),
   JWT_SECRET: z.string().min(32).default("CHANGE_ME_JWT_SECRET_MIN_32_CHARS"),
-  DATABASE_URL: z.string().min(1).default("postgresql://postgres:postgres@localhost:5432/weddingos?schema=public"),
+  DATABASE_URL: z
+    .string()
+    .min(1)
+    .default(
+      "postgresql://postgres:postgres@localhost:5432/weddingos?schema=public",
+    ),
 });
 
 export type AppEnv = z.infer<typeof envSchema> & { corsOrigins: string[] };
@@ -127,7 +148,11 @@ function createNoopPrismaClient(): PrismaClient {
     eventGuestEligibility: noopDelegate,
     rsvpResponse: noopDelegate,
     auditLog: noopDelegate,
-    async $transaction<T>(operation: (transactionClient: { inviteToken: typeof noopDelegate }) => Promise<T>) {
+    async $transaction<T>(
+      operation: (transactionClient: {
+        inviteToken: typeof noopDelegate;
+      }) => Promise<T>,
+    ) {
       return operation({
         inviteToken: noopDelegate,
       });
@@ -141,7 +166,8 @@ export function loadEnv(): AppEnv {
   const rawOrigins = parsed.CORS_ORIGIN.split(",")
     .map((origin) => origin.trim())
     .filter(Boolean);
-  const corsOrigins = rawOrigins.length > 0 ? rawOrigins : ["http://localhost:3000"];
+  const corsOrigins =
+    rawOrigins.length > 0 ? rawOrigins : ["http://localhost:3000"];
 
   return {
     ...parsed,
@@ -151,22 +177,32 @@ export function loadEnv(): AppEnv {
 
 export async function buildApp(env: AppEnv, options: BuildAppOptions = {}) {
   const app = Fastify({
+    bodyLimit: 30 * 1024 * 1024,
     ...requestContextConfig,
     loggerInstance: createApiLogger({
-      level: options.loggerStream ? "info" : env.NODE_ENV === "test" ? "silent" : "info",
+      level: options.loggerStream
+        ? "info"
+        : env.NODE_ENV === "test"
+          ? "silent"
+          : "info",
       stream: options.loggerStream,
     }),
   });
   const storageClient = options.storageClient ?? createStorageClient(env);
   const prisma =
     options.prisma ??
-    (env.NODE_ENV === "test" ? createNoopPrismaClient() : await createDefaultPrismaClient(env));
+    (env.NODE_ENV === "test"
+      ? createNoopPrismaClient()
+      : await createDefaultPrismaClient(env));
   const guestSessionService =
-    options.guestSessionService ?? new SignedGuestSessionService(env.JWT_SECRET);
+    options.guestSessionService ??
+    new SignedGuestSessionService(env.JWT_SECRET);
   const adminMagicLinkService =
-    options.adminMagicLinkService ?? new SignedAdminMagicLinkService(env.JWT_SECRET);
+    options.adminMagicLinkService ??
+    new SignedAdminMagicLinkService(env.JWT_SECRET);
   const adminSessionVerifier =
-    options.adminSessionVerifier ?? new SignedAdminSessionService(env.JWT_SECRET);
+    options.adminSessionVerifier ??
+    new SignedAdminSessionService(env.JWT_SECRET);
   const adminSessionService = adminSessionVerifier;
   app.decorate("prisma", prisma);
   app.decorate("storageClient", storageClient);
@@ -249,7 +285,8 @@ export async function bootstrap(): Promise<void> {
 }
 
 const isMainModule =
-  typeof process.argv[1] === "string" && import.meta.url === pathToFileURL(process.argv[1]).href;
+  typeof process.argv[1] === "string" &&
+  import.meta.url === pathToFileURL(process.argv[1]).href;
 
 if (isMainModule) {
   void bootstrap();
