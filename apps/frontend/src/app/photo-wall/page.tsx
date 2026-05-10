@@ -42,7 +42,8 @@ const fallbackItems: PhotoGalleryItemDto[] = [
   },
 ];
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3001";
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3001";
 
 export default function PhotoWallPage() {
   const [items, setItems] = useState<PhotoGalleryItemDto[]>(fallbackItems);
@@ -59,7 +60,10 @@ export default function PhotoWallPage() {
 
     async function loadPhotoWall() {
       try {
-        const response = await guestApi.listPhotoWall({ page: 1, pageSize: 30 });
+        const response = await guestApi.listPhotoWall({
+          page: 1,
+          pageSize: 30,
+        });
 
         if (!isMounted) {
           return;
@@ -99,8 +103,8 @@ export default function PhotoWallPage() {
           <p className={styles.eyebrow}>Mural de Fotos</p>
           <h1>Mural de Fotos</h1>
           <p>
-            Capture e compartilhe os momentos magicos da nossa celebracao. Suas memorias tornam
-            nossa historia ainda mais completa.
+            Capture e compartilhe os momentos magicos da nossa celebracao. Suas
+            memorias tornam nossa historia ainda mais completa.
           </p>
         </section>
 
@@ -131,7 +135,10 @@ export default function PhotoWallPage() {
           ) : null}
           {featured ? (
             <article className={styles.featuredPost}>
-              <img src={getFullMediaUrl(featured.mediaUrl)} alt={featured.message} />
+              <img
+                src={getFullMediaUrl(featured.mediaUrl)}
+                alt={featured.message}
+              />
               <div className={styles.featuredGradient} />
               <div className={styles.featuredContent}>
                 <p>Por {featured.authorName}</p>
@@ -147,7 +154,21 @@ export default function PhotoWallPage() {
                 key={item.id}
                 className={`${styles.photoCard} ${index % 3 === 0 ? styles.photoCardWide : ""}`}
               >
-                <img src={getFullMediaUrl(item.mediaUrl)} alt={item.message} />
+                <img
+                  src={getFullMediaUrl(item.mediaUrl)}
+                  alt={item.message || `Post de ${item.authorName}`}
+                  onError={(e) => {
+                    // oculta a imagem ou substitui por um texto/ícone
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = "none";
+                    // Opcionalmente, você pode acrescentar um placeholder ao elemento pai.
+                    const parent = target.parentElement;
+                    if (parent) {
+                      parent.innerHTML =
+                        '<div class="image-placeholder"><span>Imagem indisponível</span></div>';
+                    }
+                  }}
+                />
                 <div className={styles.photoOverlay}>
                   <p>{item.authorName}</p>
                   <span>{item.message}</span>
