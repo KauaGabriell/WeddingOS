@@ -41,7 +41,8 @@ export interface CreatePhotoPostDependencies {
   readonly auditLogWriter: AuditLogWriter;
 }
 
-const PHOTO_WALL_MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024;
+// Aumentado de 10 MB para 18 MB.
+const PHOTO_WALL_MAX_UPLOAD_SIZE_BYTES = 18 * 1024 * 1024;
 const ALLOWED_MEDIA_TYPES = ["image/jpeg", "image/png"] as const;
 const ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png"] as const;
 

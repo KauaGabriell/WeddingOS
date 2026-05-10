@@ -9,6 +9,8 @@ import styles from "./page.module.css";
 type SubmitState = "idle" | "submitting" | "success" | "error";
 
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png"];
+// Limite local de 18MB para validação rápida no cliente.
+const MAX_FILE_SIZE_BYTES = 18 * 1024 * 1024;
 
 export default function NewPhotoPostPage() {
   const [authorName, setAuthorName] = useState("");
@@ -24,6 +26,7 @@ export default function NewPhotoPostPage() {
   }, [file, submitState]);
 
   function handleSelectFile(nextFile: File | null) {
+    // Limpa qualquer estado anterior
     setFile(nextFile);
     setSubmitState("idle");
     setResultUrl(null);
@@ -37,6 +40,23 @@ export default function NewPhotoPostPage() {
       return;
     }
 
+    // Se o nome não possuir extensão .jpg/.jpeg/.png, anexa conforme o tipo MIME
+    const extRegex = /\.(jpe?g|png)$/i;
+    if (!extRegex.test(nextFile.name) && ACCEPTED_IMAGE_TYPES.includes(nextFile.type)) {
+      const ext = nextFile.type === "image/png" ? ".png" : ".jpg";
+      nextFile = new File([nextFile], `${nextFile.name}${ext}`, {
+        type: nextFile.type,
+      });
+    }
+
+    // Validação de tamanho local
+    if (nextFile.size > MAX_FILE_SIZE_BYTES) {
+      setSubmitState("error");
+      setFeedback("Arquivo muito grande. Use uma imagem de até 18MB.");
+      return;
+    }
+
+    setFile(nextFile);
     const objectUrl = URL.createObjectURL(nextFile);
     setPreviewUrl(objectUrl);
   }
@@ -52,6 +72,13 @@ export default function NewPhotoPostPage() {
     if (!file) {
       setSubmitState("error");
       setFeedback("Selecione uma imagem para continuar.");
+      return;
+    }
+
+    // Repetimos a validação de tamanho aqui para garantir que o usuário não manipulou o estado.
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      setSubmitState("error");
+      setFeedback("Arquivo muito grande. Use uma imagem de até 18MB.");
       return;
     }
 
@@ -180,7 +207,8 @@ function resolveUploadError(error: unknown): string {
   }
 
   if (error.code === "FILE_TOO_LARGE") {
-    return "Arquivo muito grande. Selecione uma imagem menor.";
+    // Mensagem ajustada para 18MB
+    return "Arquivo muito grande. Use uma imagem de até 18MB.";
   }
 
   if (error.code === "UNSUPPORTED_MEDIA_TYPE" || error.code === "UNSUPPORTED_FILE_EXTENSION") {
