@@ -761,7 +761,6 @@ export const registerAdminBackofficeRoutes: FastifyPluginAsync<
       });
 
       protectedRoutes.get("/photo-wall", {
-        ...ADMIN_BACKOFFICE_ROUTE_ACCESS.listPhotoWallPosts,
         preHandler: options.preHandler,
         schema: {
           tags: [...ADMIN_BACKOFFICE_HTTP_CONTRACT.tags],
@@ -788,20 +787,38 @@ export const registerAdminBackofficeRoutes: FastifyPluginAsync<
           const items = await Promise.all(
             result.items.map(async (item) => {
               const serialized = serializePhotoPost(item);
+
               if (!serialized.mediaStorageKey) {
-                return serialized;
+                return {
+                  ...serialized,
+                  mediaUrl: null,
+                };
               }
 
               try {
                 const mediaUrl = await photoStorageProvider.getSignedMediaUrl(
                   serialized.mediaStorageKey,
+                  60 * 60 * 24,
                 );
+
                 return {
                   ...serialized,
                   mediaUrl,
                 };
-              } catch {
-                return serialized;
+              } catch (error) {
+                request.log.warn(
+                  {
+                    error,
+                    photoPostId: serialized.id,
+                    mediaStorageKey: serialized.mediaStorageKey,
+                  },
+                  "Failed to generate signed photo wall media URL",
+                );
+
+                return {
+                  ...serialized,
+                  mediaUrl: null,
+                };
               }
             }),
           );
@@ -819,8 +836,6 @@ export const registerAdminBackofficeRoutes: FastifyPluginAsync<
         preHandler: options.preHandler,
         schema: {
           tags: [...ADMIN_BACKOFFICE_HTTP_CONTRACT.tags],
-          params: PHOTO_WALL_HTTP_SCHEMAS.params.photoPostId,
-          body: PHOTO_WALL_HTTP_SCHEMAS.bodies.moderatePhotoPost,
           response: {
             200: PHOTO_WALL_HTTP_SCHEMAS.responses.photoPost,
             401: errorResponseSchema,
@@ -845,20 +860,38 @@ export const registerAdminBackofficeRoutes: FastifyPluginAsync<
             });
 
             const serialized = serializePhotoPost(photoPost);
+
             if (!serialized.mediaStorageKey) {
-              return reply.code(200).send(serialized);
+              return reply.code(200).send({
+                ...serialized,
+                mediaUrl: null,
+              });
             }
 
             try {
               const mediaUrl = await photoStorageProvider.getSignedMediaUrl(
                 serialized.mediaStorageKey,
+                60 * 60 * 24,
               );
+
               return reply.code(200).send({
                 ...serialized,
                 mediaUrl,
               });
-            } catch {
-              return reply.code(200).send(serialized);
+            } catch (error) {
+              request.log.warn(
+                {
+                  error,
+                  photoPostId: serialized.id,
+                  mediaStorageKey: serialized.mediaStorageKey,
+                },
+                "Failed to generate signed photo wall media URL after moderation",
+              );
+
+              return reply.code(200).send({
+                ...serialized,
+                mediaUrl: null,
+              });
             }
           } catch (error) {
             if (error instanceof PhotoWallModerationError) {

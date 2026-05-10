@@ -1,5 +1,9 @@
 import { v2 as cloudinary, type UploadApiOptions } from "cloudinary";
-import type { StorageClient, StorageUploadInput, StorageUploadResult } from "./storage-client.js";
+import type {
+  StorageClient,
+  StorageUploadInput,
+  StorageUploadResult,
+} from "./storage-client.js";
 
 type CloudinaryStorageClientOptions = {
   cloudName: string;
@@ -35,7 +39,8 @@ export class CloudinaryStorageClient implements StorageClient {
     });
 
     this.folder = options.folder.trim().replace(/^\/+|\/+$/g, "");
-    this.defaultSignedUrlExpiresInSeconds = options.defaultSignedUrlExpiresInSeconds ?? 900;
+    this.defaultSignedUrlExpiresInSeconds =
+      options.defaultSignedUrlExpiresInSeconds ?? 60 * 60 * 24;
   }
 
   async upload(input: StorageUploadInput): Promise<StorageUploadResult> {

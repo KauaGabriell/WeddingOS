@@ -67,7 +67,6 @@ export const PHOTO_WALL_HTTP_SCHEMAS = defineHttpSchemaCatalog({
     }),
     moderatePhotoPost: z.object({
       moderationStatus: z.enum(["approved", "hidden", "removed"]),
-      moderatedByAdminUserId: uuidSchema,
     }),
   },
   responses: {
@@ -85,21 +84,27 @@ export const PHOTO_WALL_HTTP_SCHEMAS = defineHttpSchemaCatalog({
 export type PhotoWallPhotoPostResponseDto = z.infer<
   typeof PHOTO_WALL_HTTP_SCHEMAS.responses.photoPost
 >;
+
 export type PhotoWallPhotoGalleryItemResponseDto = z.infer<
   typeof PHOTO_WALL_HTTP_SCHEMAS.responses.photoGalleryItem
 >;
+
 export type PhotoWallPhotoGalleryListResponseDto = z.infer<
   typeof PHOTO_WALL_HTTP_SCHEMAS.responses.photoGalleryList
 >;
+
 export type PhotoWallModerationQueueListResponseDto = z.infer<
   typeof PHOTO_WALL_HTTP_SCHEMAS.responses.moderationQueueList
 >;
+
 export type PhotoWallPhotoPostSubmissionResponseDto = z.infer<
   typeof PHOTO_WALL_HTTP_SCHEMAS.responses.photoPostSubmission
 >;
+
 export type PhotoWallCreatePhotoPostRequestDto = z.infer<
   typeof PHOTO_WALL_HTTP_SCHEMAS.bodies.createPhotoPost
 >;
+
 export type PhotoWallModeratePhotoPostRequestDto = z.infer<
   typeof PHOTO_WALL_HTTP_SCHEMAS.bodies.moderatePhotoPost
 >;
