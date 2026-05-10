@@ -20,7 +20,7 @@ const COMPRESSION_QUALITY = 0.85; // JPEG quality
 const MAX_RAW_BYTES = 25 * 1024 * 1024;
 
 // Tamanho final teto (alinhado com o backend = 10MB).
-const MAX_COMPRESSED_BYTES = 9 * 1024 * 1024;
+const MAX_COMPRESSED_BYTES = 25 * 1024 * 1024;
 
 export default function NewPhotoPostPage() {
   const [authorName, setAuthorName] = useState("");
