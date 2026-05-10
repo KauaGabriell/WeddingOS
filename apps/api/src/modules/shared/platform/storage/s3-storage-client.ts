@@ -1,0 +1,74 @@
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+  type S3ClientConfig,
+} from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import type { StorageClient, StorageUploadInput, StorageUploadResult } from "./storage-client.js";
+
+export type S3StorageClientOptions = {
+  bucket: string;
+  defaultSignedUrlExpiresInSeconds?: number;
+  clientConfig: S3ClientConfig;
+};
+
+function normalizeKey(key: string): string {
+  const normalized = key.trim().replace(/^\/+/, "");
+  if (!normalized) {
+    throw new Error("Storage key is required");
+  }
+
+  return normalized;
+}
+
+export class S3StorageClient implements StorageClient {
+  private readonly client: S3Client;
+  private readonly bucket: string;
+  private readonly defaultSignedUrlExpiresInSeconds: number;
+
+  constructor(options: S3StorageClientOptions) {
+    this.client = new S3Client(options.clientConfig);
+    this.bucket = options.bucket;
+    this.defaultSignedUrlExpiresInSeconds = options.defaultSignedUrlExpiresInSeconds ?? 900;
+  }
+
+  async upload(input: StorageUploadInput): Promise<StorageUploadResult> {
+    const key = normalizeKey(input.key);
+
+    await this.client.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: input.body,
+        ContentType: input.contentType,
+      }),
+    );
+
+    return { key };
+  }
+
+  async delete(key: string): Promise<void> {
+    const normalizedKey = normalizeKey(key);
+
+    await this.client.send(
+      new DeleteObjectCommand({
+        Bucket: this.bucket,
+        Key: normalizedKey,
+      }),
+    );
+  }
+
+  async getSignedUrl(key: string, expiresInSeconds?: number): Promise<string> {
+    const normalizedKey = normalizeKey(key);
+    const command = new GetObjectCommand({
+      Bucket: this.bucket,
+      Key: normalizedKey,
+    });
+
+    return getSignedUrl(this.client, command, {
+      expiresIn: expiresInSeconds ?? this.defaultSignedUrlExpiresInSeconds,
+    });
+  }
+}

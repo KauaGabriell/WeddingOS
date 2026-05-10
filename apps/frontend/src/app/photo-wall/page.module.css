@@ -1,0 +1,265 @@
+.shell {
+  --bg: #131313;
+  --surface: #1c1b1b;
+  --text-main: #e5e2e1;
+  --text-soft: #dcbed4;
+  --accent: #ffabf3;
+  --accent-strong: #ff00ff;
+  --warm: #edbbac;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--text-main);
+  margin: 0 auto;
+  overflow-x: hidden;
+  position: relative;
+  width: min(100%, 430px);
+}
+
+.topBar {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  width: min(100%, 430px);
+  height: 64px;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgb(10 10 10 / 60%);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgb(255 255 255 / 8%);
+}
+
+.brandGroup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.avatarButton {
+  width: 32px;
+  height: 32px;
+  border: 1px solid rgb(255 171 243 / 30%);
+  background: #2a2129;
+  border-radius: 999px;
+  padding: 0;
+}
+
+.avatarButton img {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  display: block;
+}
+
+.brand {
+  color: #f5f5f5;
+  font: 400 20px / 1.4 "Noto Serif", Georgia, serif;
+  text-decoration: none;
+  letter-spacing: -0.05em;
+}
+
+.menuDots {
+  width: 4px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--accent-strong);
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 96px 24px 128px;
+}
+
+.hero {
+  display: grid;
+  gap: 16px;
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--warm);
+  font: 700 12px / 16px Manrope, "Segoe UI", sans-serif;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.hero h1 {
+  margin: 0;
+  font: 400 36px / 40px "Noto Serif", Georgia, serif;
+  letter-spacing: -0.025em;
+}
+
+.hero p {
+  margin: 0;
+  color: var(--text-soft);
+  font: 300 18px / 28px Manrope, "Segoe UI", sans-serif;
+}
+
+.actions {
+  display: flex;
+}
+
+.uploadButton {
+  height: 52px;
+  border: 0;
+  border-radius: 8px;
+  background: linear-gradient(104deg, var(--accent) 0%, var(--accent-strong) 100%);
+  color: #380038;
+  font: 700 14px / 20px Manrope, "Segoe UI", sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 24px;
+  opacity: 0.7;
+}
+
+.uploadButton img {
+  width: 20px;
+  height: 20px;
+  filter: brightness(0) saturate(100%) invert(15%) sepia(40%) saturate(3164%) hue-rotate(287deg)
+    brightness(86%) contrast(106%);
+}
+
+.noticeCard {
+  border: 1px solid rgb(255 255 255 / 8%);
+  border-radius: 12px;
+  padding: 20px;
+  background: rgb(23 23 23 / 40%);
+  display: grid;
+  gap: 10px;
+}
+
+.noticeCard strong {
+  font: 600 15px / 22px Manrope, "Segoe UI", sans-serif;
+}
+
+.noticeCard p {
+  margin: 0;
+  color: var(--text-soft);
+  font: 400 14px / 20px Manrope, "Segoe UI", sans-serif;
+}
+
+.noticeCard a {
+  color: var(--accent);
+  font: 700 12px / 16px Manrope, "Segoe UI", sans-serif;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-decoration: none;
+}
+
+.gallery {
+  display: grid;
+  gap: 16px;
+}
+
+.featuredPost {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  min-height: 320px;
+  background: var(--surface);
+}
+
+.featuredPost img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  position: absolute;
+  inset: 0;
+}
+
+.featuredGradient {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgb(10 10 10 / 5%) 30%, rgb(10 10 10 / 90%) 100%);
+}
+
+.featuredContent {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 20px;
+  display: grid;
+  gap: 6px;
+}
+
+.featuredContent p {
+  margin: 0;
+  color: var(--accent);
+  font: 400 12px / 16px Manrope, "Segoe UI", sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.featuredContent h2 {
+  margin: 0;
+  color: var(--text-main);
+  font: 300 14px / 20px Manrope, "Segoe UI", sans-serif;
+}
+
+.featuredContent span {
+  color: rgb(229 226 225 / 75%);
+  font: 400 11px / 16px Manrope, "Segoe UI", sans-serif;
+}
+
+.grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.photoCard {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  min-height: 186px;
+  background: var(--surface);
+}
+
+.photoCardWide {
+  grid-column: 1 / -1;
+  min-height: 172px;
+}
+
+.photoCard img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.photoOverlay {
+  position: absolute;
+  inset: auto 0 0;
+  padding: 10px 12px;
+  background: linear-gradient(180deg, rgb(10 10 10 / 0%) 0%, rgb(10 10 10 / 78%) 100%);
+  display: grid;
+  gap: 2px;
+}
+
+.photoOverlay p {
+  margin: 0;
+  color: #ffabf3;
+  font: 700 10px / 15px Manrope, "Segoe UI", sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.photoOverlay span {
+  color: #e5e2e1;
+  font: 300 12px / 16px Manrope, "Segoe UI", sans-serif;
+}
+
+@media (min-width: 431px) {
+  .shell {
+    box-shadow: 0 0 80px rgb(0 0 0 / 35%);
+  }
+}

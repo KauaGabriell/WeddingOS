@@ -1,13 +1,16 @@
 # dependencies
 node_modules/
-.pnpm-store/
+.npm-cache/
 docs
-
 # build output
 dist/
 out/
 .next/
+.turbo/
+.vercel/
 coverage/
+playwright-report/
+test-results/
 *.tsbuildinfo
 
 # env files
@@ -17,6 +20,7 @@ coverage/
 
 # logs
 *.log
+npm-debug.log*
 pnpm-debug.log*
 
 # local/editor

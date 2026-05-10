@@ -3,9 +3,19 @@
   "compilerOptions": {
     "composite": true,
     "jsx": "preserve",
-    "lib": ["DOM", "ES2022"],
-    "types": ["node"]
+    "moduleResolution": "nodenext",
+    "allowJs": true,
+    "noEmit": true,
+    "lib": ["dom", "dom.iterable", "es2022"],
+    "types": ["node"],
+    "isolatedModules": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "incremental": true
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx"],
-  "exclude": ["node_modules", "dist", ".next"]
+  "include": ["next-env.d.ts", "src/**/*.ts", "src/**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
 }

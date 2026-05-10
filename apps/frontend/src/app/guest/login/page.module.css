@@ -1,0 +1,436 @@
+.shell {
+  --login-bg: #131313;
+  --login-surface: rgba(32, 31, 31, 0.92);
+  --login-surface-soft: rgba(53, 53, 52, 0.42);
+  --login-text: #e5e2e1;
+  --login-muted: #dcbed4;
+  --login-subtle: rgba(220, 190, 212, 0.72);
+  --login-accent: #ffabf3;
+  --login-accent-strong: #ff00ff;
+  --login-accent-dark: #380038;
+  --login-warm: #edbbac;
+  --login-danger: #f87171;
+  --login-success: #86efac;
+  --login-border: rgba(86, 64, 82, 0.18);
+  --login-serif: "Noto Serif", Georgia, "Times New Roman", serif;
+  --login-sans: Manrope, Inter, Arial, sans-serif;
+  --login-brand: "Liberation Serif", Georgia, "Times New Roman", serif;
+
+  background: radial-gradient(circle at 30% 0%, rgba(255, 171, 243, 0.13), transparent 32%),
+    linear-gradient(180deg, rgba(255, 171, 243, 0.04), transparent 34%), var(--login-bg);
+  color: var(--login-text);
+  font-family: var(--login-sans);
+  left: 50%;
+  min-height: 100svh;
+  overflow-x: hidden;
+  position: relative;
+  transform: translateX(-50%);
+  width: min(100vw, 430px);
+}
+
+.shell,
+.shell * {
+  box-sizing: border-box;
+}
+
+.shell a {
+  text-decoration: none;
+}
+
+.shell::before {
+  background: linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-size: 32px 32px;
+  content: "";
+  inset: 0;
+  mask-image: linear-gradient(180deg, #000, transparent 72%);
+  opacity: 0.45;
+  pointer-events: none;
+  position: fixed;
+}
+
+.topBar {
+  align-items: center;
+  backdrop-filter: blur(12px);
+  background: rgba(10, 10, 10, 0.62);
+  display: flex;
+  height: 72px;
+  justify-content: space-between;
+  left: 50%;
+  padding: 16px 24px;
+  position: fixed;
+  top: 0;
+  transform: translateX(-50%);
+  width: min(100%, 430px);
+  z-index: 20;
+}
+
+.brand {
+  color: var(--login-text);
+  font-family: var(--login-brand);
+  font-size: 24px;
+  font-style: italic;
+  letter-spacing: 2.4px;
+  line-height: 32px;
+}
+
+.securePill {
+  align-items: center;
+  background: rgba(255, 171, 243, 0.1);
+  border: 1px solid rgba(255, 171, 243, 0.18);
+  border-radius: 999px;
+  color: var(--login-accent);
+  display: flex;
+  font-size: 10px;
+  font-weight: 700;
+  height: 32px;
+  letter-spacing: 1px;
+  line-height: 15px;
+  padding: 0 12px;
+  text-transform: uppercase;
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  min-height: 100svh;
+  padding: 112px 24px 40px;
+  position: relative;
+}
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 8px;
+}
+
+.eyebrow,
+.statusLabel,
+.inputLabel,
+.sectionTitle span,
+.codeBlock span {
+  color: var(--login-warm);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  line-height: 16px;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.hero h1 {
+  color: var(--login-text);
+  font-family: var(--login-serif);
+  font-size: clamp(42px, 11.8vw, 52px);
+  font-style: italic;
+  font-weight: 700;
+  letter-spacing: -1.8px;
+  line-height: 1.08;
+  margin: 0;
+  max-width: 342px;
+}
+
+.hero p:not(.eyebrow) {
+  color: var(--login-muted);
+  font-size: 14px;
+  line-height: 23px;
+  margin: 0;
+  max-width: 320px;
+}
+
+.statusCard {
+  background: var(--login-surface);
+  border: 1px solid var(--login-border);
+  border-radius: 12px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.32);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  overflow: hidden;
+  padding: 32px;
+  position: relative;
+}
+
+.statusCard::after {
+  background: linear-gradient(90deg, var(--login-accent), var(--login-accent-strong));
+  bottom: 0;
+  content: "";
+  height: 4px;
+  left: 0;
+  opacity: 0.85;
+  position: absolute;
+  width: 100%;
+}
+
+.successCard::after {
+  background: var(--login-success);
+}
+
+.errorCard::after {
+  background: var(--login-danger);
+}
+
+.statusVisual {
+  align-items: center;
+  background: rgba(255, 171, 243, 0.1);
+  border: 1px solid rgba(255, 171, 243, 0.14);
+  border-radius: 999px;
+  display: flex;
+  height: 72px;
+  justify-content: center;
+  width: 72px;
+}
+
+.spinner {
+  animation: spin 850ms linear infinite;
+  border: 2px solid rgba(255, 171, 243, 0.24);
+  border-radius: 999px;
+  border-top-color: var(--login-accent);
+  display: block;
+  height: 34px;
+  width: 34px;
+}
+
+.successMark,
+.inviteMark {
+  display: block;
+  height: 34px;
+  position: relative;
+  width: 34px;
+}
+
+.successMark::before {
+  border-bottom: 3px solid var(--login-success);
+  border-right: 3px solid var(--login-success);
+  content: "";
+  height: 22px;
+  left: 12px;
+  position: absolute;
+  top: 3px;
+  transform: rotate(45deg);
+  width: 12px;
+}
+
+.inviteMark {
+  border: 3px solid var(--login-accent);
+  border-radius: 999px;
+}
+
+.inviteMark::before {
+  background: var(--login-accent);
+  border-radius: 2px;
+  content: "";
+  height: 8px;
+  left: 50%;
+  position: absolute;
+  top: -9px;
+  transform: translateX(-50%) rotate(45deg);
+  width: 8px;
+}
+
+.statusBody {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.statusBody h2 {
+  color: var(--login-text);
+  font-family: var(--login-serif);
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 34px;
+  margin: 0;
+}
+
+.statusBody p,
+.successMeta p {
+  color: var(--login-subtle);
+  font-size: 14px;
+  line-height: 23px;
+  margin: 0;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.fieldGroup,
+.companionsSection {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.companionsSection {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  margin-top: 4px;
+  padding-top: 16px;
+}
+
+.textInput {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 171, 243, 0.18);
+  border-radius: 8px;
+  color: var(--login-text);
+  font-family: var(--login-sans);
+  font-size: 16px;
+  height: 56px;
+  line-height: 22px;
+  outline: none;
+  padding: 0 16px;
+  width: 100%;
+}
+
+.textInput::placeholder {
+  color: rgba(220, 190, 212, 0.35);
+}
+
+.textInput:focus {
+  border-color: var(--login-accent);
+  box-shadow: 0 0 0 3px rgba(255, 171, 243, 0.13);
+}
+
+.textInput:disabled {
+  opacity: 0.6;
+}
+
+.fieldError {
+  color: #ffb4ab;
+  font-size: 13px;
+  line-height: 20px;
+  margin: 0;
+}
+
+.successPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.codeBlock {
+  background: rgba(255, 171, 243, 0.08);
+  border: 1px solid rgba(255, 171, 243, 0.18);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+}
+
+.codeBlock strong {
+  color: var(--login-text);
+  font-family: var(--login-serif);
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: 6px;
+  line-height: 40px;
+}
+
+.successMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.primaryButton,
+.secondaryButton {
+  align-items: center;
+  border-radius: 8px;
+  display: flex;
+  font-size: 14px;
+  font-weight: 700;
+  height: 52px;
+  justify-content: center;
+  letter-spacing: 0;
+  line-height: 20px;
+  min-height: 44px;
+  text-transform: uppercase;
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.primaryButton {
+  background: linear-gradient(90deg, var(--login-accent), var(--login-accent-strong));
+  border: 0;
+  box-shadow: 0 10px 15px -3px rgba(255, 171, 243, 0.2), 0 4px 6px -4px rgba(255, 171, 243, 0.2);
+  color: var(--login-accent-dark);
+  cursor: pointer;
+  width: 100%;
+}
+
+.secondaryButton {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--login-text);
+}
+
+.primaryButton:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.quoteCard {
+  border-bottom: 1px solid rgba(86, 64, 82, 0.14);
+  border-top: 1px solid rgba(86, 64, 82, 0.14);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 32px 0;
+  text-align: center;
+}
+
+.quoteCard span {
+  align-self: center;
+  background: var(--login-warm);
+  border-radius: 999px;
+  height: 1px;
+  opacity: 0.8;
+  width: 56px;
+}
+
+.quoteCard blockquote {
+  color: var(--login-muted);
+  font-family: var(--login-serif);
+  font-size: 22px;
+  font-style: italic;
+  line-height: 34px;
+  margin: 0;
+}
+
+.quoteCard cite {
+  color: rgba(237, 187, 172, 0.74);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+
+.fallback {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  justify-content: center;
+  min-height: 100svh;
+}
+
+.fallback p {
+  color: var(--login-muted);
+  font-size: 14px;
+  margin: 0;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}

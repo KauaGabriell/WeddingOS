@@ -1,7 +1,4 @@
 {
   "files": [],
-  "references": [
-    { "path": "./apps/api" },
-    { "path": "./apps/frontend" }
-  ]
+  "references": [{ "path": "./apps/api" }, { "path": "./apps/frontend" }]
 }

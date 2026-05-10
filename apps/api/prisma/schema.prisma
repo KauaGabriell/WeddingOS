@@ -1,0 +1,303 @@
+generator client {
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["partialIndexes"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum AdminUserRole {
+  SUPER_ADMIN @map("super_admin")
+  EDITOR      @map("editor")
+}
+
+enum AdminUserStatus {
+  ACTIVE   @map("active")
+  DISABLED @map("disabled")
+}
+
+enum InviteTokenChannel {
+  WHATSAPP @map("whatsapp")
+  EMAIL    @map("email")
+  MANUAL   @map("manual")
+}
+
+enum InviteTokenStatus {
+  ISSUED  @map("issued")
+  USED    @map("used")
+  REVOKED @map("revoked")
+  EXPIRED @map("expired")
+}
+
+enum GuestStatus {
+  ACTIVE   @map("active")
+  INACTIVE @map("inactive")
+}
+
+enum EventType {
+  BRIDAL_SHOWER @map("bridal_shower")
+  WEDDING       @map("wedding")
+}
+
+enum RsvpResponseStatus {
+  YES     @map("yes")
+  NO      @map("no")
+  PENDING @map("pending")
+}
+
+enum GiftStatus {
+  AVAILABLE @map("available")
+  RESERVED  @map("reserved")
+  ARCHIVED  @map("archived")
+}
+
+enum GiftReservationStatus {
+  ACTIVE    @map("active")
+  RELEASED  @map("released")
+  CANCELLED @map("cancelled")
+}
+
+enum PhotoPostModerationStatus {
+  PENDING  @map("pending")
+  APPROVED @map("approved")
+  HIDDEN   @map("hidden")
+  REMOVED  @map("removed")
+}
+
+enum AuditLogActorType {
+  ADMIN  @map("admin")
+  GUEST  @map("guest")
+  SYSTEM @map("system")
+}
+
+model AdminUser {
+  id                       String            @id @default(uuid()) @db.Uuid
+  name                     String
+  email                    String            @unique
+  authProvider             String
+  role                     AdminUserRole     @default(SUPER_ADMIN)
+  status                   AdminUserStatus   @default(ACTIVE)
+  lastLoginAt              DateTime?
+  releasedGiftReservations GiftReservation[] @relation("GiftReservationReleasedByAdminUser")
+  moderatedPhotoPosts      PhotoPost[]       @relation("PhotoPostModeratedByAdminUser")
+  auditLogs                AuditLog[]        @relation("AuditLogActorAdminUser")
+  createdAt                DateTime          @default(now())
+  updatedAt                DateTime          @updatedAt
+}
+
+model GuestGroup {
+  id                  String        @id @default(uuid()) @db.Uuid
+  displayName         String
+  groupCode           String        @unique
+  allowedCompanions   Int           @default(0)
+  primaryContactName  String?
+  primaryContactPhone String?
+  primaryContactEmail String?
+  notes               String?
+  guests              Guest[]
+  inviteTokens        InviteToken[]
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+}
+
+model Guest {
+  id                 String                 @id @default(uuid()) @db.Uuid
+  guestGroupId       String                 @db.Uuid
+  fullName           String
+  phone              String?
+  email              String?
+  isPrimary          Boolean                @default(false)
+  status             GuestStatus            @default(ACTIVE)
+  lastAccessAt       DateTime?
+  guestGroup         GuestGroup             @relation(fields: [guestGroupId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  inviteTokens       InviteToken[]
+  eventEligibilities EventGuestEligibility[]
+  rsvpResponses      RsvpResponse[]
+  giftReservations   GiftReservation[]
+  photoPosts         PhotoPost[]
+  auditLogs          AuditLog[]             @relation("AuditLogActorGuest")
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  @@index([guestGroupId])
+  @@index([status])
+}
+
+model InviteToken {
+  id            String            @id @default(uuid()) @db.Uuid
+  guestGroupId  String?           @db.Uuid
+  guestId       String?           @db.Uuid
+  tokenHash     String            @unique
+  shortCode     String?
+  channel       InviteTokenChannel
+  status        InviteTokenStatus @default(ISSUED)
+  issuedAt      DateTime          @default(now())
+  expiresAt     DateTime
+  usedAt        DateTime?
+  revokedAt     DateTime?
+  revokedReason String?
+  guestGroup    GuestGroup?       @relation(fields: [guestGroupId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  guest         Guest?            @relation(fields: [guestId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@index([guestGroupId])
+  @@index([guestId])
+  @@index([shortCode])
+  @@index([status, expiresAt])
+  /// NOTE: a SQL CHECK constraint will be added in 2.4 so exactly one of guestGroupId or guestId is set.
+}
+
+model Event {
+  id                 String                 @id @default(uuid()) @db.Uuid
+  slug               String                 @unique
+  name               String
+  eventType          EventType
+  startsAt           DateTime
+  venueName          String
+  addressLine        String
+  addressNumber      String?
+  neighborhood       String?
+  city               String
+  state              String
+  postalCode         String?
+  latitude           Decimal?               @db.Decimal(9, 6)
+  longitude          Decimal?               @db.Decimal(9, 6)
+  mapUrl             String?
+  notes              String?
+  isActive           Boolean                @default(true)
+  eventEligibilities EventGuestEligibility[]
+  rsvpResponses      RsvpResponse[]
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  @@index([eventType, startsAt])
+  @@index([isActive, startsAt])
+}
+
+model EventGuestEligibility {
+  id        String   @id @default(uuid()) @db.Uuid
+  eventId   String   @db.Uuid
+  guestId   String   @db.Uuid
+  canRsvp   Boolean  @default(true)
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  guest     Guest    @relation(fields: [guestId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([eventId, guestId])
+  @@index([guestId])
+}
+
+model RsvpResponse {
+  id                  String             @id @default(uuid()) @db.Uuid
+  eventId             String             @db.Uuid
+  guestId             String             @db.Uuid
+  responseStatus      RsvpResponseStatus @default(PENDING)
+  companionsConfirmed Int                @default(0)
+  message             String?
+  respondedAt         DateTime           @default(now())
+  event               Event              @relation(fields: [eventId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  guest               Guest              @relation(fields: [guestId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  companions          Companion[]
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  @@unique([eventId, guestId])
+  @@index([guestId])
+  @@index([eventId, responseStatus])
+}
+
+model Companion {
+  id              String       @id @default(uuid()) @db.Uuid
+  rsvpResponseId  String       @db.Uuid
+  fullName        String
+  rsvpResponse    RsvpResponse @relation(fields: [rsvpResponseId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  createdAt       DateTime     @default(now())
+
+  @@index([rsvpResponseId])
+}
+
+model Gift {
+  id               String            @id @default(uuid()) @db.Uuid
+  name             String
+  category         String
+  description      String?
+  estimatedValue   Decimal?          @db.Decimal(10, 2)
+  imageUrl         String?
+  displayOrder     Int               @default(0)
+  status           GiftStatus        @default(AVAILABLE)
+  isActive         Boolean           @default(true)
+  giftReservations GiftReservation[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@index([category, status])
+  @@index([isActive, displayOrder])
+}
+
+model GiftReservation {
+  id                      String                @id @default(uuid()) @db.Uuid
+  giftId                  String                @db.Uuid
+  guestId                 String                @db.Uuid
+  reservationStatus       GiftReservationStatus @default(ACTIVE)
+  purchaseNotes           String?
+  reservedAt              DateTime              @default(now())
+  releasedAt              DateTime?
+  releasedByAdminUserId   String?               @db.Uuid
+  gift                    Gift                  @relation(fields: [giftId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  guest                   Guest                 @relation(fields: [guestId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  releasedByAdminUser     AdminUser?            @relation("GiftReservationReleasedByAdminUser", fields: [releasedByAdminUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+
+  @@index([guestId])
+  @@index([reservationStatus, reservedAt])
+  @@unique([giftId], where: raw("\"reservationStatus\" = 'active'"))
+}
+
+model PhotoPost {
+  id                      String                    @id @default(uuid()) @db.Uuid
+  guestId                 String                    @db.Uuid
+  authorName              String
+  message                 String
+  mediaStorageKey         String
+  mediaUrl                String?
+  mediaMimeType           String
+  mediaSizeBytes          Int
+  mediaWidth              Int?
+  mediaHeight             Int?
+  moderationStatus        PhotoPostModerationStatus @default(PENDING)
+  submittedAt             DateTime                  @default(now())
+  approvedAt              DateTime?
+  hiddenAt                DateTime?
+  moderatedByAdminUserId  String?                   @db.Uuid
+  guest                   Guest                     @relation(fields: [guestId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  moderatedByAdminUser    AdminUser?                @relation("PhotoPostModeratedByAdminUser", fields: [moderatedByAdminUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
+
+  @@index([guestId])
+  @@index([moderationStatus, submittedAt])
+  @@index([moderatedByAdminUserId])
+}
+
+model AuditLog {
+  id               String           @id @default(uuid()) @db.Uuid
+  entityType       String
+  entityId         String           @db.Uuid
+  actionType       String
+  actorAdminUserId String?          @db.Uuid
+  actorGuestId     String?          @db.Uuid
+  actorType        AuditLogActorType
+  requestId        String?
+  metadata         Json?
+  actorAdminUser   AdminUser?       @relation("AuditLogActorAdminUser", fields: [actorAdminUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  actorGuest       Guest?           @relation("AuditLogActorGuest", fields: [actorGuestId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdAt        DateTime         @default(now())
+
+  @@index([entityType, entityId])
+  @@index([actorType, createdAt])
+  @@index([requestId])
+}
