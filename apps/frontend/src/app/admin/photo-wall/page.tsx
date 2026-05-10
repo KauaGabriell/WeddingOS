@@ -19,7 +19,8 @@ const filters: Array<{ id: ModerationFilter; label: string }> = [
   { id: "removed", label: "Removidos" },
 ];
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3001";
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3001";
 
 export default function AdminPhotoWallPage() {
   const [items, setItems] = useState<PhotoPostDto[]>([]);
@@ -27,15 +28,15 @@ export default function AdminPhotoWallPage() {
   const [activeFilter, setActiveFilter] = useState<ModerationFilter>("pending");
   const [processingId, setProcessingId] = useState<string | null>(null);
 
-  function getFullMediaUrl(path: string | null) {
-    if (!path) {
-      return null;
-    }
-    if (path.startsWith("http")) {
-      return path;
-    }
-    return `${API_BASE_URL}${path.startsWith("/") ? "" : "/"}${path}`;
+  const getFullMediaUrl = (path: string | null) => {
+  if (!path) return null;
+
+  if (/^https?:\/\//.test(path) || !path.startsWith("/")) {
+    return path;
   }
+
+  return `${API_BASE_URL}${path}`;
+};
 
   useEffect(() => {
     let mounted = true;
@@ -80,12 +81,19 @@ export default function AdminPhotoWallPage() {
     return totals;
   }, [items]);
 
-  async function handleModeration(photoPostId: string, moderationStatus: ModerationAction) {
+  async function handleModeration(
+    photoPostId: string,
+    moderationStatus: ModerationAction,
+  ) {
     setProcessingId(photoPostId);
 
     try {
-      const updated = await adminApi.moderatePhotoPost(photoPostId, { moderationStatus });
-      setItems((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      const updated = await adminApi.moderatePhotoPost(photoPostId, {
+        moderationStatus,
+      });
+      setItems((current) =>
+        current.map((item) => (item.id === updated.id ? updated : item)),
+      );
     } catch (error) {
       console.error("Failed to moderate post:", error);
       alert("Nao foi possivel moderar este post agora.");
