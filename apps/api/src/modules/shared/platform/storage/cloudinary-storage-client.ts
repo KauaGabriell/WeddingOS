@@ -45,7 +45,15 @@ export class CloudinaryStorageClient implements StorageClient {
 
   async upload(input: StorageUploadInput): Promise<StorageUploadResult> {
     const key = normalizeKey(input.key);
-    const publicId = `${this.folder}/${key}`.replace(/\/{2,}/g, "/");
+
+    // Remove the extension from the key when constructing the public_id.
+    let idWithoutExtension = key;
+    const extMatch = key.toLowerCase().match(/\.(jpe?g|png)$/);
+    if (extMatch) {
+      idWithoutExtension = key.slice(0, -extMatch[0].length);
+    }
+    const publicId = `${this.folder}/${idWithoutExtension}`.replace(/\/{2,}/g, "/");
+
     const payload = bufferFromBody(input.body);
     const dataUri = `data:${input.contentType};base64,${payload.toString("base64")}`;
 
@@ -59,12 +67,20 @@ export class CloudinaryStorageClient implements StorageClient {
 
     await cloudinary.uploader.upload(dataUri, uploadOptions);
 
+    // Retorne a chave original (incluindo a extensão) para manter compatibilidade com o restante da aplicação.
     return { key };
   }
 
   async delete(key: string): Promise<void> {
     const normalizedKey = normalizeKey(key);
-    const publicId = `${this.folder}/${normalizedKey}`.replace(/\/{2,}/g, "/");
+
+    // Remova a extensão ao construir o public_id
+    let idWithoutExtension = normalizedKey;
+    const extMatch = normalizedKey.toLowerCase().match(/\.(jpe?g|png)$/);
+    if (extMatch) {
+      idWithoutExtension = normalizedKey.slice(0, -extMatch[0].length);
+    }
+    const publicId = `${this.folder}/${idWithoutExtension}`.replace(/\/{2,}/g, "/");
 
     await cloudinary.uploader.destroy(publicId, {
       resource_type: "image",
@@ -76,6 +92,7 @@ export class CloudinaryStorageClient implements StorageClient {
   async getSignedUrl(key: string, expiresInSeconds?: number): Promise<string> {
     const normalizedKey = normalizeKey(key);
 
+    // Remova a extensão e determine o formato para passar ao Cloudinary.
     let idWithoutExtension = normalizedKey;
     let format: string | undefined;
     const extMatch = normalizedKey.toLowerCase().match(/\.(jpe?g|png)$/);
@@ -84,10 +101,7 @@ export class CloudinaryStorageClient implements StorageClient {
       format = extMatch[1] === "jpeg" ? "jpg" : extMatch[1];
     }
 
-    const publicId = `${this.folder}/${idWithoutExtension}`.replace(
-      /\/{2,}/g,
-      "/",
-    );
+    const publicId = `${this.folder}/${idWithoutExtension}`.replace(/\/{2,}/g, "/");
     const ttl = expiresInSeconds ?? this.defaultSignedUrlExpiresInSeconds;
     const expiresAtSeconds = Math.floor(Date.now() / 1000) + ttl;
 
